@@ -385,3 +385,141 @@ button.wiki-arrange.on {
     padding-block: 0.35em;
   }
 }
+
+/* The wiki's start page. */
+.wiki-home {
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: 2rem clamp(1rem, 4vw, 2.5rem) 4rem;
+  display: grid;
+  gap: 1.6rem;
+}
+
+.wiki-home h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 5vw, 2.6rem);
+  font-weight: 600;
+  line-height: 1;
+}
+
+.wiki-home h3 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+input.wiki-home-search {
+  width: 100%;
+  max-width: 28rem;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+}
+
+.wiki-home ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.wiki-home-section {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.wiki-home-recent,
+.wiki-home-results {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: 0.6rem;
+}
+
+.wiki-home-recent li,
+.wiki-home-results li {
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: inset 3px 0 0 var(--folder, var(--border));
+}
+
+.wiki-home-recent .wiki-home-entry,
+.wiki-home-results .wiki-home-entry {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.7rem 0.9rem;
+}
+
+.wiki-home-entry {
+  display: block;
+  padding: 0.3rem 0.4rem;
+  border-radius: 6px;
+}
+
+.wiki-home-entry:hover .wiki-home-entry-name {
+  color: var(--accent);
+}
+
+.wiki-home-entry-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.wiki-home-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.wiki-home-folders {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+
+.wiki-home-folder {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.wiki-home-folder header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.55rem 0.5rem 0.55rem 0.9rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.wiki-home-folder.coloured header {
+  background: color-mix(in srgb, var(--folder) 60%, var(--surface));
+  border-bottom-color: transparent;
+}
+
+.wiki-home-folder.coloured h3 {
+  color: var(--text);
+}
+
+.wiki-home-folder > ul,
+.wiki-home-folder > .wiki-home-sub,
+.wiki-home-folder > p {
+  margin: 0.4rem 0.5rem;
+}
+
+.wiki-home-sub {
+  padding-left: 0.6rem;
+  border-left: 2px solid color-mix(in srgb, var(--folder, var(--border)) 50%, transparent);
+}
+
+.wiki-home-sub h4 {
+  margin: 0.5rem 0 0.1rem 0.4rem;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}

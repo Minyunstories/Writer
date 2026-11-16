@@ -14,6 +14,7 @@ import {
   listFolders,
   removeImage,
   changeTemplate,
+  setFolderColor,
   moveTemplateField,
   moveWikiItem,
   stepWikiItem,
@@ -208,4 +209,15 @@ test('template fields move up and down', async () => {
   expect((await listFolders(book.id))[0].template).toEqual(['A', 'C', 'B'])
   await moveTemplateField(folder.id, 'A', 'up')
   expect((await listFolders(book.id))[0].template).toEqual(['A', 'C', 'B'])
+})
+
+test('a folder colour can be set and cleared; junk is ignored', async () => {
+  const book = await createBook('B')
+  const folder = await createFolder(book.id, 'Orte')
+  await setFolderColor(folder.id, '#1f4a4f')
+  expect((await listFolders(book.id))[0].color).toBe('#1f4a4f')
+  await setFolderColor(folder.id, 'url(x)')
+  expect((await listFolders(book.id))[0].color).toBe('#1f4a4f')
+  await setFolderColor(folder.id, null)
+  expect((await listFolders(book.id))[0].color).toBeUndefined()
 })

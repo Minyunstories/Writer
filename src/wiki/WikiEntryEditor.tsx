@@ -44,6 +44,8 @@ interface Props {
   chapters?: Chapter[]
   onOpenEntry?: (entryId: string) => void
   onOpenChapter?: (chapterId: string, range: { from: number; to: number }) => void
+  /** A new entry: put the cursor in its name, with the placeholder name selected. */
+  focusName?: boolean
 }
 
 /** Folders as a flat list with their full path, e.g. "Welt / Orte". */
@@ -111,8 +113,18 @@ export function WikiEntryEditor({
   chapters,
   onOpenEntry,
   onOpenChapter,
+  focusName = false,
 }: Props) {
   const [entry, setEntry] = useState<WikiEntry | null | undefined>(undefined)
+  const nameRef = useRef<HTMLInputElement>(null)
+  const nameFocused = useRef(false)
+  const loaded = Boolean(entry)
+  useEffect(() => {
+    if (!focusName || !loaded || nameFocused.current) return
+    nameFocused.current = true
+    nameRef.current?.focus()
+    nameRef.current?.select()
+  }, [focusName, loaded])
   const [aliasDraft, setAliasDraft] = useState('')
   const [saveFailed, setSaveFailed] = useState(false)
   const [imageError, setImageError] = useState(false)
@@ -429,6 +441,7 @@ export function WikiEntryEditor({
       )}
 
       <input
+        ref={nameRef}
         className="wiki-entry-name"
         type="text"
         aria-label="Name"

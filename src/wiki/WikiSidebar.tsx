@@ -1,4 +1,5 @@
-import { useState, type DragEvent, type ReactNode } from 'react'
+import { useState, type CSSProperties, type DragEvent, type ReactNode } from 'react'
+import { COVERS } from '../lib/bookStyle'
 import { Link } from 'react-router-dom'
 import type { WikiItem } from '../storage/wiki'
 import type { WikiEntry, WikiFolder } from '../types'
@@ -22,6 +23,8 @@ interface Props {
   /** Into a folder (null: top level), before an item of the same kind or at the end. */
   onMove?: (item: WikiItem, target: { parentId: string | null; beforeId: string | null }) => void
   onStep?: (item: WikiItem, direction: 'up' | 'down') => void
+  /** Sets or clears (null) the colour of a top-level folder. */
+  onColor?: (folderId: string, color: string | null) => void
 }
 
 export function WikiSidebar({
@@ -37,8 +40,10 @@ export function WikiSidebar({
   onDeleteFolder,
   onMove,
   onStep,
+  onColor,
 }: Props) {
   const [arranging, setArranging] = useState(false)
+  const [palette, setPalette] = useState<string | null>(null)
   const [dragging, setDragging] = useState<WikiItem | null>(null)
   const [over, setOver] = useState<string | null>(null)
   const folderIds = new Set(folders.map((folder) => folder.id))
@@ -99,11 +104,11 @@ export function WikiSidebar({
     </>
   )
 
-  const renderChildren = (parentId: string | null, depth: number): ReactNode => {
+  const renderChildren = (parentId: string | null, depth: number, color?: string): ReactNode => {
     const kids = orderedChildren(parentId, folders, entries, order)
     return (
       <>
-        {kids.folders.map((folder, index) => renderFolder(folder, depth, index, kids.folders.length))}
+        {kids.folders.map((folder, index) => renderFolder(folder, depth, index, kids.folders.length, color))}
         {kids.entries.map((entry, index) => {
           const active = entry.id === activeEntryId
           const item: WikiItem = { kind: 'entry', id: entry.id }
@@ -130,15 +135,30 @@ export function WikiSidebar({
     )
   }
 
-  const renderFolder = (folder: WikiFolder, depth: number, index: number, count: number) => {
+  const renderFolder = (folder: WikiFolder, depth: number, index: number, count: number, color?: string) => {
     const item: WikiItem = { kind: 'folder', id: folder.id }
+    // Subfolders take the colour of their top-level folder.
+    const tint = depth === 0 ? folder.color : color
+    const label = `Farbe für „${folder.name}"`
     return (
-      <li key={folder.id} data-folder={folder.id} className="wiki-tree-folder">
+      <li key={folder.id} data-folder={folder.id} className={`wiki-tree-folder depth-${Math.min(depth, 2)}`}>
         <div
-          className={`wiki-tree-row${over === folder.id ? ' drop-into' : ''}`}
+          className={`wiki-tree-row${over === folder.id ? ' drop-into' : ''}${tint ? ' coloured' : ''}`}
+          style={tint ? ({ '--folder': tint } as CSSProperties) : undefined}
           {...dragProps(item, () => ({ parentId: folder.id, beforeId: null }))}
         >
           <span className="wiki-tree-name">{folder.name}</span>
+          {depth === 0 && onColor && !arranging && (
+            <button
+              className="ghost icon wiki-folder-color"
+              aria-label={label}
+              title="Farbe"
+              aria-expanded={palette === folder.id}
+              onClick={() => setPalette((open) => (open === folder.id ? null : folder.id))}
+            >
+              <span className="wiki-folder-dot" aria-hidden="true" />
+            </button>
+          )}
           {arranging ? (
             arrows(item, folder.name, index, count)
           ) : (
@@ -180,7 +200,34 @@ export function WikiSidebar({
             </>
           )}
         </div>
-        <ul>{renderChildren(folder.id, depth + 1)}</ul>
+        {palette === folder.id && (
+          <div className="wiki-folder-palette" role="dialog" aria-label={label}>
+            {COVERS.map((swatch) => (
+              <button
+                key={swatch.color}
+                className="book-menu-swatch"
+                aria-label={swatch.name}
+                title={swatch.name}
+                aria-pressed={folder.color === swatch.color}
+                style={{ background: swatch.color }}
+                onClick={() => {
+                  setPalette(null)
+                  onColor?.(folder.id, swatch.color)
+                }}
+              />
+            ))}
+            <button
+              className="ghost wiki-folder-nocolor"
+              onClick={() => {
+                setPalette(null)
+                onColor?.(folder.id, null)
+              }}
+            >
+              Keine Farbe
+            </button>
+          </div>
+        )}
+        <ul>{renderChildren(folder.id, depth + 1, tint)}</ul>
       </li>
     )
   }

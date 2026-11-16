@@ -76,7 +76,7 @@ button.icon.danger:hover {
 }
 
 .sidebar-wrap {
-  width: 260px;
+  width: var(--sidebar-width, 260px);
   flex: none;
   border-right: 1px solid var(--border);
   background: var(--surface);
@@ -90,6 +90,28 @@ button.icon.danger:hover {
 
 .sidebar-scrim {
   display: none;
+}
+
+/* The grip on the sidebar's right edge. */
+.sidebar-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 7px;
+  z-index: 15;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.sidebar-handle:hover,
+.sidebar-handle:focus-visible {
+  background: linear-gradient(90deg, transparent 2px, var(--accent) 2px, var(--accent) 4px, transparent 4px);
+  outline: none;
+}
+
+body.resizing {
+  cursor: col-resize;
+  user-select: none;
 }
 
 .sidebar {
@@ -275,14 +297,68 @@ button.icon.danger:hover {
 .wiki-tree-name {
   flex: 1;
   min-width: 0;
-  padding: 0.45rem 0.5rem;
+  padding: 0.45rem 0.6rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  color: var(--text);
+}
+
+/* Folders carry their colour as a soft band; subfolders a lighter one. */
+.wiki-tree-folder {
+  position: relative;
+  margin-top: 0.3rem;
+}
+
+.wiki-tree-row.coloured {
+  background: color-mix(in srgb, var(--folder) 55%, var(--surface));
+  box-shadow: inset 3px 0 0 var(--folder);
+}
+
+.wiki-tree-folder:not(.depth-0) > .wiki-tree-row.coloured {
+  background: color-mix(in srgb, var(--folder) 22%, var(--surface));
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--folder) 70%, var(--surface));
+}
+
+.wiki-tree-row.coloured:hover {
+  background: color-mix(in srgb, var(--folder) 70%, var(--surface));
+}
+
+.wiki-tree-folder:not(.depth-0) > .wiki-tree-row .wiki-tree-name {
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.wiki-folder-dot {
+  display: block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--text-muted);
+  background: var(--folder, transparent);
+}
+
+.wiki-folder-palette {
+  position: absolute;
+  top: 2.4rem;
+  left: 0.4rem;
+  right: 0.4rem;
+  z-index: 5;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+button.wiki-folder-nocolor {
+  grid-column: 1 / -1;
+  font-size: 13px;
   color: var(--text-muted);
 }
 
@@ -299,10 +375,10 @@ button.icon.danger:hover {
 
 .wiki-tree-entry a {
   display: block;
-  padding: 0.45rem 0.6rem;
+  padding: 0.4rem 0.6rem;
   border-radius: 8px;
-  font-family: var(--font-display);
-  font-size: 1.15rem;
+  font-family: var(--font-ui);
+  font-size: 14px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -449,6 +525,10 @@ button.wiki-tree-arrange.on {
 }
 
 @media (max-width: 720px) {
+  .sidebar-handle {
+    display: none;
+  }
+
   .sidebar-wrap {
     position: absolute;
     inset: 0 auto 0 0;

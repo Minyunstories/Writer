@@ -1,6 +1,6 @@
 import { beforeEach, expect, test } from 'vitest'
 import { createBook, createChapter, getBook, getChapter, listBooks, listChapters, resetDatabaseForTests, savePlace, setBookStyle, setChapterDate, updateChapter } from '../storage/db'
-import { addImage, createEntry, createFolder, getEntry, getImage, listEntries, listFolders, moveWikiItem, setFolderTemplate, updateEntry } from '../storage/wiki'
+import { addImage, createEntry, createFolder, getEntry, getImage, listEntries, listFolders, moveWikiItem, setFolderColor, setFolderTemplate, updateEntry } from '../storage/wiki'
 import type { FileSet } from './files'
 import { applyRemoteFiles, clearSyncState, loadSyncState, readLocalFiles, saveSyncState } from './local'
 
@@ -385,4 +385,19 @@ test('wiki order: taken over, kept when changed here during the run, cleared whe
 
   await apply({ remove: [`${p}wiki/order.json`], snapshot: await readLocalFiles() })
   expect((await getBook(book.id))!.wikiOrder).toBeUndefined()
+})
+
+test('folder colours: taken over from their file, kept by a pulled folders.json, cleared when removed', async () => {
+  const { p, book, folder } = await seed()
+  await apply({ write: new Map([[`${p}wiki/colors.json`, JSON.stringify({ [folder.id]: '#1f4a4f' })]]), snapshot: await readLocalFiles() })
+  expect((await listFolders(book.id))[0].color).toBe('#1f4a4f')
+  const now = await readLocalFiles()
+  await apply({ write: new Map([[`${p}wiki/folders.json`, now.get(`${p}wiki/folders.json`)!]]), snapshot: now })
+  expect((await listFolders(book.id))[0].color).toBe('#1f4a4f')
+  const planned = await readLocalFiles()
+  await setFolderColor(folder.id, '#6e2a26')
+  await apply({ write: new Map([[`${p}wiki/colors.json`, JSON.stringify({ [folder.id]: '#1f4a4f' })]]), snapshot: planned })
+  expect((await listFolders(book.id))[0].color).toBe('#6e2a26')
+  await apply({ remove: [`${p}wiki/colors.json`], snapshot: await readLocalFiles() })
+  expect((await listFolders(book.id))[0].color).toBeUndefined()
 })

@@ -5,7 +5,9 @@ import type { Book, Chapter, FontId, WikiEntry, WikiFolder, WikiImage } from '..
 import {
   bundleToFiles,
   classifyPath,
+  colorsFile as colorsText,
   orderFile as orderText,
+  parseColors,
   parseOrder,
   placeFile as placeText,
   styleFile as styleText,
@@ -72,7 +74,7 @@ export async function readLocalFiles(): Promise<FileSet> {
   return files
 }
 
-const KIND_ORDER = ['book', 'style', 'place', 'folders', 'templates', 'chapter', 'outline', 'tags', 'dates', 'entry', 'wikiOrder', 'image']
+const KIND_ORDER = ['book', 'style', 'place', 'folders', 'templates', 'chapter', 'outline', 'tags', 'dates', 'entry', 'wikiOrder', 'folderColors', 'image']
 
 /**
  * Applies changes from the repository to this device, file by file, in one transaction.
@@ -307,6 +309,24 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
     await books.put(next)
   }
 
+  /** Folder colours: the repository's, unless changed here after the run was planned. */
+  async function writeColors(path: string, bookId: string, data: FileData | undefined, conflict: boolean) {
+    const colors = parseColors(data)
+    if (!colors) {
+      skipped.push(path)
+      return
+    }
+    const own = await folders.index('bookId').getAll(bookId)
+    if (!conflict && (snapshotText(path) ?? '') !== (colorsText(own) ?? '')) return
+    for (const folder of own) {
+      if ((folder.color ?? undefined) === colors[folder.id]) continue
+      const next: WikiFolder = { ...folder }
+      if (colors[folder.id]) next.color = colors[folder.id]
+      else delete next.color
+      await folders.put(next)
+    }
+  }
+
   /** The last place: the newer one wins, from wherever it comes. */
   async function writePlace(path: string, bookId: string, data: FileData) {
     const place = cleanPlace(parseJson<unknown>(data))
@@ -382,8 +402,10 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
         createdAt: Number(folder.createdAt) || now,
       }
       // Templates live in wiki/templates.json; folders.json never changes them.
-      const template = (await folders.get(folder.id))?.template
-      if (template?.length) next.template = template
+      const existing = await folders.get(folder.id)
+      if (existing?.template?.length) next.template = existing.template
+      // Colours live in wiki/colors.json.
+      if (existing?.color) next.color = existing.color
       await folders.put(next)
     }
   }
@@ -498,6 +520,7 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
       else if (info.kind === 'place') await writePlace(path, info.bookId, data)
       else if (info.kind === 'dates') await writeDates(path, info.bookId, data, conflict)
       else if (info.kind === 'wikiOrder') await writeOrder(path, info.bookId, data, conflict)
+      else if (info.kind === 'folderColors') await writeColors(path, info.bookId, data, conflict)
       else if (info.kind === 'templates') await writeTemplates(path, info.bookId, data, conflict)
       else await writeImage(path, info.bookId, info.id, data)
     }
@@ -520,6 +543,7 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
       else if (info.kind === 'style') await removeStyle(item.path, info.bookId)
       else if (info.kind === 'place') await removePlace(item.path, info.bookId)
       else if (info.kind === 'wikiOrder') await writeOrder(item.path, info.bookId, '{}', false)
+      else if (info.kind === 'folderColors') await writeColors(item.path, info.bookId, '{}', false)
       else if (info.kind === 'templates') await writeTemplates(item.path, info.bookId, '{}', false)
       else if (info.kind === 'folders') {
         for (const key of await folders.index('bookId').getAllKeys(info.bookId)) await folders.delete(key)

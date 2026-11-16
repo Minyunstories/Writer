@@ -48,6 +48,8 @@ export interface WikiFolder {
   name: string
   /** Field names every entry in this folder (and below) shows. Only used on top-level folders. */
   template?: string[]
+  /** Colour of the folder in the wiki, chosen by the writer. Only used on top-level folders. */
+  color?: string
   createdAt: number
 }
 

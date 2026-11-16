@@ -189,3 +189,19 @@ test('the wiki order lives in its own file', () => {
   files.set('books/b1/wiki/order.json', JSON.stringify({ _root: 'x', f1: ['a', 3] }))
   expect(filesToBundle('b1', files).book.wikiOrder).toEqual({ f1: ['a'] })
 })
+
+test('folder colours live in their own file', () => {
+  const plain = bundleToFiles(bundle)
+  const coloured: BookBundle = { ...bundle, folders: bundle.folders.map((f) => (f.id === 'f1' ? { ...f, color: '#1f4a4f' } : f)) }
+  const files = bundleToFiles(coloured)
+  expect(files.get('books/b1/wiki/folders.json')).toBe(plain.get('books/b1/wiki/folders.json'))
+  expect(JSON.parse(files.get('books/b1/wiki/colors.json') as string)).toEqual({ f1: '#1f4a4f' })
+  expect(classifyPath('books/b1/wiki/colors.json')).toEqual({ bookId: 'b1', kind: 'folderColors', id: 'b1' })
+  const back = filesToBundle('b1', files)
+  expect(back.folders.find((f) => f.id === 'f1')!.color).toBe('#1f4a4f')
+  expect(back.folders.find((f) => f.id === 'f2')!.color).toBeUndefined()
+  files.set('books/b1/wiki/colors.json', JSON.stringify({ f1: 'url(x)', f2: '#4d5a2b' }))
+  const junk = filesToBundle('b1', files)
+  expect(junk.folders.find((f) => f.id === 'f1')!.color).toBeUndefined()
+  expect(junk.folders.find((f) => f.id === 'f2')!.color).toBe('#4d5a2b')
+})

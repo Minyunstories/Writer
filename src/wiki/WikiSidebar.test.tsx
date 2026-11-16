@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, expect, test } from 'vitest'
 import { createBook, getBook, resetDatabaseForTests } from '../storage/db'
-import { createEntry, createFolder, getEntry, listEntries, listFolders, moveWikiItem, stepWikiItem } from '../storage/wiki'
+import { createEntry, createFolder, getEntry, listEntries, listFolders, moveWikiItem, setFolderColor, stepWikiItem } from '../storage/wiki'
 import { WikiSidebar } from './WikiSidebar'
 
 async function setup() {
@@ -29,6 +29,10 @@ async function setup() {
         onDeleteFolder={() => {}}
         onMove={async (item, target) => {
           await moveWikiItem(book.id, item, target)
+          await refresh()
+        }}
+        onColor={async (folderId, color) => {
+          await setFolderColor(folderId, color)
           await refresh()
         }}
         onStep={async (item, direction) => {
@@ -101,4 +105,16 @@ test('dragging: onto a folder moves inside, onto an entry places before it; neve
   await new Promise((resolve) => setTimeout(resolve, 50))
   expect((await listFolders(orte.bookId)).find((f) => f.id === orte.id)!.parentId).toBeNull()
   expect(within(document.querySelector('.wiki-tree')!).getAllByText(/Orte|Leute/)).toHaveLength(2)
+})
+
+test('a folder colour is chosen from the palette and can be removed', async () => {
+  const { orte, user } = await setup()
+  await user.click(screen.getByRole('button', { name: 'Farbe für „Orte"' }))
+  const palette = screen.getByRole('dialog', { name: 'Farbe für „Orte"' })
+  await user.click(within(palette).getByRole('button', { name: 'Petrol' }))
+  await waitFor(async () => expect((await listFolders(orte.bookId)).find((f) => f.id === orte.id)!.color).toBe('#1f4a4f'))
+  await waitFor(() => expect(screen.getByText('Orte').closest('.wiki-tree-row')).toHaveStyle({ '--folder': '#1f4a4f' }))
+  await user.click(screen.getByRole('button', { name: 'Farbe für „Orte"' }))
+  await user.click(within(screen.getByRole('dialog', { name: 'Farbe für „Orte"' })).getByRole('button', { name: 'Keine Farbe' }))
+  await waitFor(async () => expect((await listFolders(orte.bookId)).find((f) => f.id === orte.id)!.color).toBeUndefined())
 })

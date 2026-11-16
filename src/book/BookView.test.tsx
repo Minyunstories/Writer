@@ -185,11 +185,11 @@ test('wiki: nested folders render nested and loose entries at the top', async ()
   await createEntry(book.id, 'Hafen', orte.id)
   await createEntry(book.id, 'Lose Notiz')
   renderAt(`/book/${book.id}/wiki`)
-  const hafen = await screen.findByRole('link', { name: 'Hafen' })
+  const hafen = await within(await screen.findByRole('navigation', { name: 'Buchnavigation' })).findByRole('link', { name: 'Hafen' })
   const orteGroup = hafen.closest('[data-folder]')!
   expect(orteGroup).toHaveAttribute('data-folder', orte.id)
   expect(orteGroup.parentElement!.closest('[data-folder]')).toHaveAttribute('data-folder', welt.id)
-  expect(screen.getByRole('link', { name: 'Lose Notiz' }).closest('[data-folder]')).toBeNull()
+  expect(within(screen.getByRole('navigation', { name: 'Buchnavigation' })).getByRole('link', { name: 'Lose Notiz' }).closest('[data-folder]')).toBeNull()
 })
 
 test('wiki: deleting a folder keeps its entries', async () => {
@@ -203,7 +203,7 @@ test('wiki: deleting a folder keeps its entries', async () => {
   expect(screen.getByText('Die Einträge darin bleiben erhalten.')).toBeInTheDocument()
   await user.click(screen.getByRole('button', { name: 'Ordner löschen' }))
   await waitFor(() => expect(screen.queryByText('Orte')).not.toBeInTheDocument())
-  expect(screen.getByRole('link', { name: 'Hafen' })).toBeInTheDocument()
+  expect(within(screen.getByRole('navigation', { name: 'Buchnavigation' })).getByRole('link', { name: 'Hafen' })).toBeInTheDocument()
   expect((await getEntry(hafen.id))!.folderId).toBeNull()
 })
 
@@ -505,9 +505,59 @@ test('wiki: "Anordnen" in the book reorders entries and keeps the order', async 
   await createEntry(book.id, 'Anna')
   await createEntry(book.id, 'Ben')
   renderAt(`/book/${book.id}/wiki`)
-  await screen.findByRole('link', { name: 'Ben' })
+  await within(await screen.findByRole('navigation', { name: 'Buchnavigation' })).findByRole('link', { name: 'Ben' })
   await user.click(screen.getByRole('button', { name: 'Anordnen' }))
   await user.click(screen.getByRole('button', { name: 'Ben nach oben' }))
   await waitFor(async () => expect((await db.getBook(book.id))!.wikiOrder?._root).toEqual([expect.any(String), expect.any(String)]))
   await waitFor(() => expect([...document.querySelectorAll('.wiki-tree-entry a')].map((a) => a.textContent)).toEqual(['Ben', 'Anna']))
+})
+
+test('wiki: a new entry puts the cursor in its name, ready to type', async () => {
+  const user = userEvent.setup()
+  const book = await createBook('Sturmlied')
+  await createEntry(book.id, 'Anna')
+  renderAt(`/book/${book.id}/wiki`)
+  await user.click(await screen.findByRole('button', { name: 'Neuer Eintrag' }))
+  const name = await screen.findByLabelText('Name')
+  await waitFor(() => expect(name).toHaveFocus())
+  await user.keyboard('Marlow')
+  await waitFor(() => expect(name).toHaveValue('Marlow'))
+})
+
+test('wiki: the start page shows the last edited entries, a search and every folder', async () => {
+  const user = userEvent.setup()
+  const book = await createBook('Sturmlied')
+  const orte = await createFolder(book.id, 'Orte')
+  await createEntry(book.id, 'Hafen', orte.id)
+  for (const name of ['A1', 'A2', 'A3', 'A4', 'A5', 'A6']) {
+    await createEntry(book.id, name)
+    await new Promise((resolve) => setTimeout(resolve, 2))
+  }
+  renderAt(`/book/${book.id}/wiki`)
+  const recent = await screen.findByRole('list', { name: 'Zuletzt bearbeitet' })
+  expect(within(recent).getAllByRole('link').map((link) => link.textContent)).toEqual(
+    expect.arrayContaining([expect.stringContaining('A6')]),
+  )
+  expect(within(recent).getAllByRole('link')).toHaveLength(5)
+  expect(within(recent).getAllByRole('link')[0]).toHaveTextContent('A6')
+  const block = screen.getByRole('region', { name: 'Orte' })
+  expect(within(block).getByRole('link', { name: 'Hafen' })).toBeInTheDocument()
+  await user.type(screen.getByRole('searchbox', { name: 'Wiki durchsuchen' }), 'haf')
+  const results = screen.getByRole('list', { name: 'Suchergebnisse' })
+  expect(within(results).getAllByRole('link').map((link) => link.textContent)).toEqual([expect.stringContaining('Hafen')])
+  await user.click(within(results).getByRole('link', { name: /Hafen/ }))
+  await waitFor(() => expect(screen.getByLabelText('Name')).toHaveValue('Hafen'))
+})
+
+test('the sidebar width can be changed with the handle and is remembered', async () => {
+  const book = await createBook('Sturmlied')
+  const { unmount } = renderAt(`/book/${book.id}/wiki`)
+  const handle = await screen.findByRole('separator', { name: 'Breite der Seitenleiste' })
+  const start = Number(handle.getAttribute('aria-valuenow'))
+  fireEvent.keyDown(handle, { key: 'ArrowRight' })
+  fireEvent.keyDown(handle, { key: 'ArrowRight' })
+  expect(Number(handle.getAttribute('aria-valuenow'))).toBe(start + 32)
+  unmount()
+  renderAt(`/book/${book.id}/wiki`)
+  expect(Number((await screen.findByRole('separator', { name: 'Breite der Seitenleiste' })).getAttribute('aria-valuenow'))).toBe(start + 32)
 })

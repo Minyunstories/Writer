@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { SYNCED_EVENT } from '../storage/connection'
 import { createChapter, deleteChapter, getBook, listChapters, updateChapter } from '../storage/db'
-import { createEntry, createFolder, deleteFolder, listEntries, listFolders, moveWikiItem, renameFolder, stepWikiItem } from '../storage/wiki'
+import { createEntry, createFolder, deleteFolder, listEntries, listFolders, moveWikiItem, renameFolder, setFolderColor, stepWikiItem } from '../storage/wiki'
 import type { Book, Chapter, WikiEntry, WikiFolder } from '../types'
 import { Outline } from '../outline/Outline'
 import { SyncStatus } from '../sync/SyncStatus'
@@ -13,7 +13,9 @@ import { ConfirmDialog, PromptDialog } from '../ui/Dialogs'
 import { buildMatcher } from '../wiki/linker'
 import { WikiEntryEditor } from '../wiki/WikiEntryEditor'
 import { createWikiLinks } from '../wiki/wikiLinks'
+import { WikiHome } from '../wiki/WikiHome'
 import { WikiSidebar } from '../wiki/WikiSidebar'
+import { SidebarHandle, useSidebarWidth } from './SidebarHandle'
 import { Sidebar, type Section } from './Sidebar'
 import { FEATHER } from '../dashboard/Dashboard'
 import { highlightOf } from '../lib/bookStyle'
@@ -80,6 +82,9 @@ export function BookView({ renderChapter }: Props) {
   const [jump, setJump] = useState<(JumpTarget & { chapterId: string }) | null>(null)
   const [dialog, setDialog] = useState<DialogState>(null)
   const [sidebarOpen, setSidebarOpen] = useState(() => !isNarrow())
+  /** The entry just created here: its name gets the cursor. */
+  const [freshEntryId, setFreshEntryId] = useState<string | null>(null)
+  const [sidebarWidth, setSidebarWidth] = useSidebarWidth()
 
   /** Reloads folders and entries only; cheap enough to run after every wiki edit. */
   const reloadWiki = useCallback(async () => {
@@ -258,6 +263,7 @@ export function BookView({ renderChapter }: Props) {
     attempt(async () => {
       if (!book) return
       const entry = await createEntry(book.id, 'Unbenannt', folderId)
+      setFreshEntryId(entry.id)
       navigate(`/book/${book.id}/wiki/${entry.id}`)
       closeSidebarOnPhone()
     })
@@ -350,7 +356,7 @@ export function BookView({ renderChapter }: Props) {
       )}
 
       <div className="book-body">
-        <div className="sidebar-wrap">
+        <div className="sidebar-wrap" style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties}>
           <Sidebar
             book={book}
             chapters={chapters}
@@ -401,10 +407,16 @@ export function BookView({ renderChapter }: Props) {
                   })
                 }
                 onStep={(item, direction) => void attempt(() => stepWikiItem(book.id, item, direction))}
+                onColor={(folderId, color) =>
+                  void attempt(async () => {
+                    await setFolderColor(folderId, color)
+                  })
+                }
               />
             }
           />
         </div>
+        {sidebarOpen && <SidebarHandle width={sidebarWidth} onWidth={setSidebarWidth} />}
         <div className="sidebar-scrim" onClick={() => setSidebarOpen(false)} />
 
         <main className="book-main">
@@ -441,6 +453,7 @@ export function BookView({ renderChapter }: Props) {
                 zoomArea="wiki"
                 onOpenEntry={(entryId) => navigate(`/book/${book.id}/wiki/${entryId}`)}
                 onOpenChapter={openChapterAt}
+                focusName={activeEntry.id === freshEntryId}
                 onChanged={reloadWiki}
                 onSaveFailed={() => setActionError(true)}
                 onDeleted={() => {
@@ -450,7 +463,18 @@ export function BookView({ renderChapter }: Props) {
               />
             </div>
           )}
-          {section === 'wiki' && !activeEntry && (
+          {section === 'wiki' && !activeEntry && entries.length > 0 && (
+            <div className="book-scroll">
+              <WikiHome
+                bookId={book.id}
+                folders={folders}
+                entries={entries}
+                order={book.wikiOrder}
+                onCreateEntry={(folderId) => void handleCreateEntry(folderId)}
+              />
+            </div>
+          )}
+          {section === 'wiki' && !activeEntry && entries.length === 0 && (
             <div className="book-message">
               <p className="muted">
                 {entries.length === 0

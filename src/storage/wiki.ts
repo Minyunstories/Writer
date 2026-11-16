@@ -1,5 +1,6 @@
 import type { IDBPTransaction } from 'idb'
 import type { Book, WikiEntry, WikiFolder, WikiImage } from '../types'
+import { isColor } from '../lib/bookStyle'
 import { orderedChildren, orderKey } from '../wiki/order'
 import { announceChange, cleanList, cleanTitle, ConflictError, db, newId, type Schema } from './connection'
 
@@ -76,6 +77,24 @@ export async function changeTemplate(id: string, change: { add?: string; remove?
   const next: WikiFolder = { ...current }
   if (template.length > 0) next.template = template
   else delete next.template
+  await tx.store.put(next)
+  await tx.done
+  announceChange()
+  return next
+}
+
+/** Sets or clears (null) the colour of a folder. Values that are not colours are ignored. */
+export async function setFolderColor(id: string, color: string | null): Promise<WikiFolder> {
+  const tx = (await db()).transaction('wikiFolders', 'readwrite')
+  const current = await tx.store.get(id)
+  if (!current) throw new Error(`Folder not found: ${id}`)
+  if (color !== null && !isColor(color)) {
+    await tx.done
+    return current
+  }
+  const next: WikiFolder = { ...current }
+  if (color) next.color = color.trim()
+  else delete next.color
   await tx.store.put(next)
   await tx.done
   announceChange()
