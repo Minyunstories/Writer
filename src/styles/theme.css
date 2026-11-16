@@ -1,15 +1,25 @@
 :root {
   color-scheme: dark;
-  --bg: #101114;
-  --surface: #17181c;
-  --surface-2: #1d1f24;
-  --border: #26282e;
-  --text: #d9dbe1;
-  --text-muted: #8a8d98;
-  --accent: #8fa7ff;
-  --danger: #ff8f8f;
+  /* B2: near-neutral anthracite, copper accent, gold for the main action. */
+  --bg: #171615;
+  --surface: #1f1e1c;
+  --surface-2: #292725;
+  --border: #383532;
+  --border-strong: #4a4642;
+  --text: #efe9e2;
+  --text-muted: #aaa29a;
+  --accent: #d58d62;
+  --accent-soft: rgba(213, 141, 98, 0.18);
+  --link-line: rgba(213, 141, 98, 0.65);
+  --primary: #d9b26a;
+  --primary-hover: #e4c385;
+  --primary-ink: #1b150c;
+  --danger: #e59a8c;
+  --ok: #8fbf8a;
   --font-ui: 'Inter', system-ui, sans-serif;
-  --radius: 10px;
+  --font-display: 'EB Garamond', Georgia, serif;
+  --font-text: 'Literata', Georgia, serif;
+  --radius: 12px;
 }
 
 * {
@@ -55,7 +65,7 @@ button {
 
 button:hover:not(:disabled) {
   background: var(--surface-2);
-  border-color: #353841;
+  border-color: var(--border-strong);
 }
 
 button:disabled {
@@ -64,15 +74,17 @@ button:disabled {
 }
 
 button.primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #0d0f14;
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-ink);
   font-weight: 600;
+  border-radius: 999px;
+  padding-inline: 1.1rem;
 }
 
 button.primary:hover:not(:disabled) {
-  background: #a5b8ff;
-  border-color: #a5b8ff;
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
 }
 
 button.ghost {

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ZoomControl } from '../book/ZoomControl'
+import { MAX_DATE_LENGTH } from '../lib/bookStyle'
 import { useAutosave } from '../lib/useAutosave'
 import { countWords, formatWordCount } from '../lib/wordCount'
 import { useZoom } from '../lib/zoom'
 import { SYNCED_EVENT } from '../storage/connection'
-import { changeChapterTags, ConflictError, getChapter, moveChapter, updateChapter } from '../storage/db'
+import { changeChapterTags, ConflictError, getChapter, moveChapter, setChapterDate, updateChapter } from '../storage/db'
 import type { Book, Chapter, WikiEntry, WikiFolder } from '../types'
 import { buildMatcher, type Matcher } from '../wiki/linker'
 import { MarkdownField } from '../wiki/MarkdownField'
@@ -49,6 +50,79 @@ interface CardProps {
   entries: WikiEntry[]
   folders: WikiFolder[]
   onOpenEntry?: (entryId: string) => void
+}
+
+/** The free-text date left of a chapter on the timeline, saved while typing, and its dot on the rail. */
+function DateField({ chapter, onError }: { chapter: Chapter; onError: () => void }) {
+  const [value, setValue] = useState(chapter.date ?? '')
+  /** What is in the field and not yet stored. */
+  const typed = useRef<string | null>(null)
+
+  const { change } = useAutosave<{ date: string }>(
+    async (patch) => {
+      if (patch.date === undefined) return
+      await setChapterDate(chapter.id, patch.date)
+      if (typed.current === patch.date) typed.current = null
+    },
+    { onFailedAfterClose: onError },
+  )
+
+  // Pick up a date changed elsewhere (another tab, a sync run) unless one is being typed.
+  useEffect(() => {
+    const refresh = async () => {
+      if (typed.current !== null) return
+      try {
+        const stored = await getChapter(chapter.id)
+        if (stored && typed.current === null) setValue(stored.date ?? '')
+      } catch {
+        // Not reachable right now.
+      }
+    }
+    const onFocus = () => void refresh()
+    window.addEventListener('focus', onFocus)
+    window.addEventListener(SYNCED_EVENT, onFocus)
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      window.removeEventListener(SYNCED_EVENT, onFocus)
+    }
+  }, [chapter.id])
+
+  useEffect(() => {
+    if (typed.current === null) setValue(chapter.date ?? '')
+  }, [chapter.date])
+
+  return (
+    <>
+      <div className="outline-date">
+        {/* A text area, so a long date wraps in the narrow phone column; Enter finishes it. */}
+        <textarea
+          rows={1}
+          className={value.trim() ? 'filled' : ''}
+          value={value}
+          maxLength={MAX_DATE_LENGTH}
+          placeholder="Datum"
+          aria-label={`Datum für ${chapter.title}`}
+          enterKeyHint="done"
+          onChange={(event) => {
+            // Pasted line breaks become spaces: a date is one line.
+            const next = event.target.value.replace(/\n/g, ' ')
+            typed.current = next
+            setValue(next)
+            change({ date: next })
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault()
+              event.currentTarget.blur()
+            }
+          }}
+        />
+      </div>
+      <div className="outline-rail" aria-hidden="true">
+        <span className={`outline-dot${value.trim() ? ' filled' : ''}`} />
+      </div>
+    </>
+  )
 }
 
 function OutlineCard({
@@ -175,7 +249,7 @@ function OutlineCard({
   return (
     <li
       id={`outline-${chapter.id}`}
-      className={`outline-card${dragging ? ' dragging' : ''}${over ? ' drop-target' : ''}`}
+      className={`outline-row${dragging ? ' dragging' : ''}${over ? ' drop-target' : ''}`}
       // Capture phase: while a card is dragged, the note field inside must not
       // treat the drop as text to insert.
       onDragOverCapture={(event) => {
@@ -193,97 +267,100 @@ function OutlineCard({
         onDropHere()
       }}
     >
-      <header className="outline-card-header">
-        <span
-          className="outline-handle"
-          draggable={!busy}
-          title="Ziehen zum Umsortieren"
-          aria-hidden="true"
-          onDragStart={(event) => {
-            // A private type: nothing that accepts text will take it.
-            event.dataTransfer?.setData('application/x-minyunwriter-chapter', chapter.id)
-            if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'
-            onDragStart()
-          }}
-          onDragEnd={onDragEnd}
-        >
-          ⠿
-        </span>
-        <span className="outline-number">{index + 1}</span>
-        <Link to={`/book/${book.id}/chapters/${chapter.id}`} className="outline-title">
-          {chapter.title}
-        </Link>
-        <span className="outline-words muted">{formatWordCount(countWords(chapter.content))}</span>
-        <button
-          className="ghost icon"
-          aria-label={`${chapter.title} nach oben`}
-          title="Nach oben"
-          disabled={busy || index === 0}
-          onClick={() => onMove('up')}
-        >
-          ↑
-        </button>
-        <button
-          className="ghost icon"
-          aria-label={`${chapter.title} nach unten`}
-          title="Nach unten"
-          disabled={busy || index === count - 1}
-          onClick={() => onMove('down')}
-        >
-          ↓
-        </button>
-      </header>
-      <Tags tags={chapter.tags ?? []} suggestions={tagSuggestions} onChange={onTagsChange} onFilter={onFilter} />
-      {mentionGroups.length > 0 && (
-        <div className="outline-mentions">
-          {mentionGroups.map((group) => {
-            const label = group.folder?.name ?? 'Weitere'
-            return (
-              <div key={group.folder?.id ?? 'none'} role="group" aria-label={label} className="outline-mentions-group">
-                <span className="outline-mentions-folder" aria-hidden="true">
-                  {label}
-                </span>
-                {group.entries.map((entry) => (
-                  <button key={entry.id} className="outline-mention" onClick={() => onOpenEntry?.(entry.id)}>
-                    {entry.name}
-                  </button>
-                ))}
-              </div>
-            )
-          })}
-        </div>
-      )}
-      {failed && !conflict && (
-        <p className="status-error" role="alert">
-          Speichern fehlgeschlagen, neuer Versuch läuft.
-        </p>
-      )}
-      {conflict && (
-        <div className="outline-conflict" role="alertdialog" aria-label="Notiz wurde an anderer Stelle geändert">
-          <p>
-            <strong>Diese Notiz wurde an anderer Stelle geändert.</strong>
-          </p>
-          <p className="muted">Deine Fassung hier ist noch nicht gespeichert. Es wird nichts überschrieben.</p>
-          <div className="outline-conflict-actions">
-            <button onClick={() => void keepMine()}>Meine Fassung behalten</button>
-            <button onClick={() => void loadOther()}>Andere Fassung laden</button>
+      <DateField chapter={chapter} onError={onError} />
+      <div className="outline-card">
+        <header className="outline-card-header">
+          <span
+            className="outline-handle"
+            draggable={!busy}
+            title="Ziehen zum Umsortieren"
+            aria-hidden="true"
+            onDragStart={(event) => {
+              // A private type: nothing that accepts text will take it.
+              event.dataTransfer?.setData('application/x-minyunwriter-chapter', chapter.id)
+              if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'
+              onDragStart()
+            }}
+            onDragEnd={onDragEnd}
+          >
+            ⠿
+          </span>
+          <span className="outline-number">{index + 1}</span>
+          <Link to={`/book/${book.id}/chapters/${chapter.id}`} className="outline-title">
+            {chapter.title}
+          </Link>
+          <span className="outline-words muted">{formatWordCount(countWords(chapter.content))}</span>
+          <button
+            className="ghost icon"
+            aria-label={`${chapter.title} nach oben`}
+            title="Nach oben"
+            disabled={busy || index === 0}
+            onClick={() => onMove('up')}
+          >
+            ↑
+          </button>
+          <button
+            className="ghost icon"
+            aria-label={`${chapter.title} nach unten`}
+            title="Nach unten"
+            disabled={busy || index === count - 1}
+            onClick={() => onMove('down')}
+          >
+            ↓
+          </button>
+        </header>
+        <Tags tags={chapter.tags ?? []} suggestions={tagSuggestions} onChange={onTagsChange} onFilter={onFilter} />
+        {mentionGroups.length > 0 && (
+          <div className="outline-mentions">
+            {mentionGroups.map((group) => {
+              const label = group.folder?.name ?? 'Weitere'
+              return (
+                <div key={group.folder?.id ?? 'none'} role="group" aria-label={label} className="outline-mentions-group">
+                  <span className="outline-mentions-folder" aria-hidden="true">
+                    {label}
+                  </span>
+                  {group.entries.map((entry) => (
+                    <button key={entry.id} className="outline-mention" onClick={() => onOpenEntry?.(entry.id)}>
+                      {entry.name}
+                    </button>
+                  ))}
+                </div>
+              )
+            })}
           </div>
-        </div>
-      )}
-      {loaded && (
-        // The field takes its text once per load; list reloads never reset what is being typed.
-        <MarkdownField
-          key={loaded.version}
-          value={loaded.text}
-          ariaLabel={`Notizen zu ${chapter.title}`}
-          placeholder="Was passiert hier? Wetter, Ort, Stimmung …"
-          onChange={(outline) => {
-            mine.current = outline
-            dirty.current = true
-            change({ outline })
-          }}
-        />
-      )}
+        )}
+        {failed && !conflict && (
+          <p className="status-error" role="alert">
+            Speichern fehlgeschlagen, neuer Versuch läuft.
+          </p>
+        )}
+        {conflict && (
+          <div className="outline-conflict" role="alertdialog" aria-label="Notiz wurde an anderer Stelle geändert">
+            <p>
+              <strong>Diese Notiz wurde an anderer Stelle geändert.</strong>
+            </p>
+            <p className="muted">Deine Fassung hier ist noch nicht gespeichert. Es wird nichts überschrieben.</p>
+            <div className="outline-conflict-actions">
+              <button onClick={() => void keepMine()}>Meine Fassung behalten</button>
+              <button onClick={() => void loadOther()}>Andere Fassung laden</button>
+            </div>
+          </div>
+        )}
+        {loaded && (
+          // The field takes its text once per load; list reloads never reset what is being typed.
+          <MarkdownField
+            key={loaded.version}
+            value={loaded.text}
+            ariaLabel={`Notizen zu ${chapter.title}`}
+            placeholder="Was passiert hier? Wetter, Ort, Stimmung …"
+            onChange={(outline) => {
+              mine.current = outline
+              dirty.current = true
+              change({ outline })
+            }}
+          />
+        )}
+      </div>
     </li>
   )
 }

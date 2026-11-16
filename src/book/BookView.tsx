@@ -1,5 +1,5 @@
 import type { Extension } from '@codemirror/state'
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { SYNCED_EVENT } from '../storage/connection'
 import { createChapter, deleteChapter, getBook, listChapters, updateChapter } from '../storage/db'
@@ -22,6 +22,8 @@ import { WikiEntryEditor } from '../wiki/WikiEntryEditor'
 import { createWikiLinks } from '../wiki/wikiLinks'
 import { WikiSidebar } from '../wiki/WikiSidebar'
 import { Sidebar, type Section } from './Sidebar'
+import { FEATHER } from '../dashboard/Dashboard'
+import { highlightOf } from '../lib/bookStyle'
 import './book.css'
 
 export interface ChapterRenderProps {
@@ -58,6 +60,11 @@ function nextChapterTitle(chapters: Chapter[]): string {
 }
 
 const SECTIONS: Section[] = ['chapters', 'wiki', 'outline']
+
+/** A mouse or trackpad: focusing the text does not open an on-screen keyboard. */
+function canHover(): boolean {
+  return typeof window.matchMedia === 'function' && window.matchMedia('(hover: hover)').matches
+}
 
 function isNarrow(): boolean {
   return typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 720px)').matches
@@ -184,15 +191,20 @@ export function BookView({ renderChapter }: Props) {
 
   const activeChapter = section === 'chapters' ? chapters.find((c) => c.id === itemId) : undefined
 
-  // Keep the URL pointing at an existing chapter.
+  // Keep the URL pointing at an existing chapter. Opening the book itself continues where text
+  // was last changed; the chapter list and links open what they point at.
   useEffect(() => {
     if (!book || section !== 'chapters' || activeChapter) return
-    if (chapters.length > 0) {
+    const place = rawSection === undefined ? book.place : undefined
+    if (place && chapters.some((chapter) => chapter.id === place.chapterId)) {
+      setJump({ chapterId: place.chapterId, from: place.offset, to: place.offset, key: Date.now(), focus: canHover() })
+      navigate(`/book/${book.id}/chapters/${place.chapterId}`, { replace: true })
+    } else if (chapters.length > 0) {
       navigate(`/book/${book.id}/chapters/${chapters[0].id}`, { replace: true })
     } else if (itemId) {
       navigate(`/book/${book.id}/chapters`, { replace: true })
     }
-  }, [book, section, activeChapter, chapters, itemId, navigate])
+  }, [book, section, rawSection, activeChapter, chapters, itemId, navigate])
 
   const closeSidebarOnPhone = () => {
     if (isNarrow()) setSidebarOpen(false)
@@ -215,6 +227,8 @@ export function BookView({ renderChapter }: Props) {
       if (!book) return
       const chapter = await createChapter(book.id, nextChapterTitle(chapters))
       if (!open) return
+      // The list must know the chapter first, or the URL is "corrected" to the first chapter.
+      setChapters(await listChapters(book.id))
       navigate(`/book/${book.id}/chapters/${chapter.id}`)
       closeSidebarOnPhone()
     })
@@ -310,7 +324,11 @@ export function BookView({ renderChapter }: Props) {
   }
 
   return (
-    <div className={`book${sidebarOpen ? ' sidebar-open' : ''}`}>
+    <div
+      className={`book book-view${sidebarOpen ? ' sidebar-open' : ''}`}
+      // The book's highlight colour for every text field inside.
+      style={{ '--mw-highlight': highlightOf(book) } as CSSProperties}
+    >
       <header className="book-header">
         <button
           className="ghost icon"
@@ -323,6 +341,7 @@ export function BookView({ renderChapter }: Props) {
         <Link to="/" className="book-back" aria-label="Zurück zur Übersicht" title="Zurück zur Übersicht">
           ←
         </Link>
+        <img className="book-logo" src={FEATHER} alt="" />
         <h1>{book.title}</h1>
         <span className="book-header-space" />
         <SyncStatus />

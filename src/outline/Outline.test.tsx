@@ -28,7 +28,7 @@ async function setup(titles = ['Anfang', 'Sturm', 'Ende']) {
   )
   async function refresh() {
     state = await load()
-    utils.rerender(ui())
+    if (utils.container.isConnected) utils.rerender(ui())
   }
   const utils = render(ui())
   for (const title of titles) await screen.findByLabelText(`Notizen zu ${title}`)

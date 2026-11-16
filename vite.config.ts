@@ -11,7 +11,7 @@ export default defineConfig({
       // A new version waits until the writer accepts it (see UpdateNotice).
       registerType: 'prompt',
       injectRegister: false,
-      includeAssets: ['apple-touch-icon.png'],
+      includeAssets: ['apple-touch-icon.png', 'favicon.svg'],
       manifest: {
         name: 'MinyunWriter',
         short_name: 'Writer',
@@ -21,8 +21,8 @@ export default defineConfig({
         scope: './',
         display: 'standalone',
         orientation: 'any',
-        background_color: '#101114',
-        theme_color: '#101114',
+        background_color: '#171615',
+        theme_color: '#171615',
         icons: [
           { src: 'icon-192.png', sizes: '192x192', type: 'image/png' },
           { src: 'icon-512.png', sizes: '512x512', type: 'image/png' },

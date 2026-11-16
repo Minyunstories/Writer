@@ -131,3 +131,44 @@ test('tags and templates live in their own files; book.json and folders.json nev
   const again = bundleToFiles(back)
   for (const path of ['books/b1/tags.json', 'books/b1/wiki/templates.json']) expect(again.get(path)).toBe(files.get(path))
 })
+
+test('cover, highlight, dates and place live in their own files; book.json never changes because of them', () => {
+  const plain = bundleToFiles(bundle)
+  for (const name of ['style.json', 'dates.json', 'place.json']) expect(plain.has(`books/b1/${name}`)).toBe(false)
+
+  const styled: BookBundle = {
+    ...bundle,
+    book: { ...book, cover: '#283650', highlight: 'rgba(143, 184, 150, 0.40)', place: { chapterId: 'c1', offset: 7, at: 1234 } },
+    chapters: chapters.map((c) => (c.id === 'c1' ? { ...c, date: 'März 1204' } : c)),
+  }
+  const files = bundleToFiles(styled)
+  expect(files.get('books/b1/book.json')).toBe(plain.get('books/b1/book.json'))
+  expect(JSON.parse(files.get('books/b1/style.json') as string)).toEqual({ cover: '#283650', highlight: 'rgba(143, 184, 150, 0.40)' })
+  expect(JSON.parse(files.get('books/b1/dates.json') as string)).toEqual({ c1: 'März 1204' })
+  expect(JSON.parse(files.get('books/b1/place.json') as string)).toEqual({ chapterId: 'c1', offset: 7, at: 1234 })
+  expect(classifyPath('books/b1/style.json')).toEqual({ bookId: 'b1', kind: 'style', id: 'b1' })
+  expect(classifyPath('books/b1/dates.json')).toEqual({ bookId: 'b1', kind: 'dates', id: 'b1' })
+  expect(classifyPath('books/b1/place.json')).toEqual({ bookId: 'b1', kind: 'place', id: 'b1' })
+
+  const back = filesToBundle('b1', files)
+  expect(back.book.cover).toBe('#283650')
+  expect(back.book.highlight).toBe('rgba(143, 184, 150, 0.40)')
+  expect(back.book.place).toEqual({ chapterId: 'c1', offset: 7, at: 1234 })
+  expect(back.chapters.find((c) => c.id === 'c1')!.date).toBe('März 1204')
+  expect(back.chapters.find((c) => c.id === 'c2')!.date).toBeUndefined()
+  const again = bundleToFiles(back)
+  for (const name of ['style.json', 'dates.json', 'place.json']) expect(again.get(`books/b1/${name}`)).toBe(files.get(`books/b1/${name}`))
+})
+
+test('junk in style, dates and place is ignored field by field', () => {
+  const files = bundleToFiles(bundle)
+  files.set('books/b1/style.json', JSON.stringify({ cover: 'url(evil)', highlight: '#d58d62' }))
+  files.set('books/b1/dates.json', JSON.stringify({ c1: 5, c2: 'x'.repeat(60) }))
+  files.set('books/b1/place.json', JSON.stringify({ chapterId: 3, offset: 'a' }))
+  const back = filesToBundle('b1', files)
+  expect(back.book.cover).toBeUndefined()
+  expect(back.book.highlight).toBe('#d58d62')
+  expect(back.book.place).toBeUndefined()
+  expect(back.chapters.find((c) => c.id === 'c1')!.date).toBeUndefined()
+  expect(back.chapters.find((c) => c.id === 'c2')!.date).toBe('x'.repeat(40))
+})

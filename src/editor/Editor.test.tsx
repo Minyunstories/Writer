@@ -1,4 +1,4 @@
-import { EditorView } from '@codemirror/view'
+import { EditorView, runScopeHandlers } from '@codemirror/view'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, expect, test } from 'vitest'
@@ -165,4 +165,41 @@ test('jumpTo selects and marks a range, also when it changes while open', async 
   await waitFor(() => expect([view.state.selection.main.from, view.state.selection.main.to]).toEqual([17, 17]))
   rerender(<Editor book={book} chapter={chapter} onChanged={() => {}} jumpTo={{ from: 900, to: 950, key: 3 }} />)
   await waitFor(() => expect(view.state.selection.main.from).toBe(view.state.doc.length))
+})
+
+test('Ctrl+Shift+H and the "Markieren" button highlight the selection and remove it again', async () => {
+  const { view } = await setup('Ein Satz hier.')
+  view.dispatch({ selection: { anchor: 4, head: 8 } })
+  const handled = runScopeHandlers(view, new KeyboardEvent('keydown', { key: 'H', code: 'KeyH', keyCode: 72, ctrlKey: true, shiftKey: true }), 'editor')
+  expect(handled).toBe(true)
+  expect(view.state.doc.toString()).toBe('Ein ==Satz== hier.')
+  await userEvent.setup().click(screen.getByRole('button', { name: 'Markieren' }))
+  expect(view.state.doc.toString()).toBe('Ein Satz hier.')
+})
+
+test('typing remembers the place in the book, also when the editor closes right away', async () => {
+  const { book, chapter, view } = await setup('Ein Satz.')
+  view.dispatch({ changes: { from: 9, insert: ' Noch einer.' }, selection: { anchor: 21 } })
+  await waitFor(async () => expect((await getBook(book.id))!.place).toMatchObject({ chapterId: chapter.id, offset: 21 }), { timeout: 3000 })
+})
+
+test('the place is stored when the editor closes before the delay', async () => {
+  const book = await createBook('Sturmlied')
+  const chapter = await createChapter(book.id, 'Anfang', 'abc')
+  const { unmount } = render(<Editor book={book} chapter={chapter} onChanged={() => {}} />)
+  const view = await waitFor(() => {
+    const found = EditorView.findFromDOM(document.querySelector<HTMLElement>('.cm-editor')!)
+    if (!found) throw new Error('not mounted')
+    return found
+  })
+  view.dispatch({ changes: { from: 3, insert: 'd' }, selection: { anchor: 4 } })
+  unmount()
+  await waitFor(async () => expect((await getBook(book.id))!.place).toMatchObject({ chapterId: chapter.id, offset: 4 }))
+})
+
+test('the place is where text changed, not where the cursor went afterwards', async () => {
+  const { book, chapter, view } = await setup('Ein Satz.')
+  view.dispatch({ changes: { from: 9, insert: ' Noch einer.' }, selection: { anchor: 21 } })
+  view.dispatch({ selection: { anchor: 0 } })
+  await waitFor(async () => expect((await getBook(book.id))!.place).toMatchObject({ chapterId: chapter.id, offset: 21 }), { timeout: 3000 })
 })

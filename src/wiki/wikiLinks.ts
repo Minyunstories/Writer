@@ -113,7 +113,7 @@ export function createWikiLinks(options: { onOpen: (entryId: string) => void }):
   const theme = EditorView.baseTheme({
     '.cm-mw-link': {
       textDecoration: 'underline',
-      textDecorationColor: 'rgba(143, 167, 255, 0.55)',
+      textDecorationColor: 'var(--link-line)',
       textDecorationThickness: '1px',
       textUnderlineOffset: '0.22em',
       cursor: 'pointer',

@@ -37,7 +37,7 @@ async function setup(prepareEntry?: (ids: { pascal: WikiEntry; elena: WikiEntry 
   )
   async function refresh() {
     state = await load()
-    utils.rerender(ui())
+    if (utils.container.isConnected) utils.rerender(ui())
   }
   const utils = render(ui())
   await screen.findByLabelText('Name')

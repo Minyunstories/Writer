@@ -2,7 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, expect, test, vi } from 'vitest'
-import { createBook, createChapter, getBook, getChapter, listChapters, resetDatabaseForTests, updateChapter } from '../storage/db'
+import { createBook, createChapter, getBook, getChapter, listChapters, resetDatabaseForTests, setChapterDate, updateChapter } from '../storage/db'
 import { createEntry, createFolder, listEntries, listFolders } from '../storage/wiki'
 import type { Book } from '../types'
 import { Outline } from './Outline'
@@ -46,7 +46,8 @@ async function setup() {
   )
   async function refresh() {
     state = await load()
-    utils.rerender(ui())
+    // A save may finish after the test ended and the view was removed.
+    if (utils.container.isConnected) utils.rerender(ui())
   }
   const utils = render(ui())
   await screen.findByLabelText('Notizen zu Ende')
@@ -113,4 +114,22 @@ test('two quick tag changes both survive', async () => {
   await user.type(input, 'Nacht{Enter}')
   await user.click(within(card('Ende')).getByRole('button', { name: 'Tag „Rückblick" entfernen' }))
   await waitFor(async () => expect((await getChapter(c.id))!.tags).toEqual(['PoV: Pascal', 'Nacht']))
+})
+
+test('each chapter has a free-text date on the timeline that is saved while typing', async () => {
+  const { a, user } = await setup()
+  const date = screen.getByLabelText('Datum für Anfang')
+  expect(date).toHaveValue('')
+  expect(card('Anfang').querySelector('.outline-dot')).not.toHaveClass('filled')
+  await user.type(date, '  12. März 1204')
+  await waitFor(async () => expect((await getChapter(a.id))!.date).toBe('12. März 1204'), { timeout: 2000 })
+  await waitFor(() => expect(card('Anfang').querySelector('.outline-dot')).toHaveClass('filled'))
+  expect(date).toHaveAttribute('maxLength', '40')
+})
+
+test('a date stored elsewhere shows up', async () => {
+  const { c } = await setup()
+  await setChapterDate(c.id, 'drei Tage später')
+  window.dispatchEvent(new Event('focus'))
+  await waitFor(() => expect(screen.getByLabelText('Datum für Ende')).toHaveValue('drei Tage später'))
 })

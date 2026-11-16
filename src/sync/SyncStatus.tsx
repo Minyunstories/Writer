@@ -38,6 +38,10 @@ function describe(note: ConflictNote): string {
       return `Wiki-Ordner in ${book}: Die Ordner beider Geräte wurden zusammengeführt.`
     case 'tags':
       return `Tags in ${book}: Die Tags beider Geräte wurden zusammengeführt.`
+    case 'style':
+      return `Farben von ${book}: Es gilt der Stand des anderen Geräts.`
+    case 'dates':
+      return `Daten in der Outline von ${book}: Wo beide Geräte ein anderes Datum hatten, stehen jetzt beide da.`
     case 'templates':
       return `Vorlagenfelder in ${book}: Die Felder beider Geräte wurden zusammengeführt.`
     default:

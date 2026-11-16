@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { beforeEach, expect, test, vi } from 'vitest'
 import * as db from '../storage/db'
-import { createBook, createChapter, listChapters, resetDatabaseForTests, updateChapter } from '../storage/db'
+import { createBook, createChapter, listChapters, resetDatabaseForTests, savePlace, setBookStyle, updateChapter } from '../storage/db'
 import { Editor } from '../editor/Editor'
 import { createEntry, createFolder, getEntry, listEntries, listFolders } from '../storage/wiki'
 import { BookView } from './BookView'
@@ -429,4 +429,72 @@ test('panel: on a phone, jumping from "Erwähnt in" closes the panel so the plac
   } finally {
     window.matchMedia = original
   }
+})
+
+test('the book highlight colour reaches the text through a CSS variable', async () => {
+  const book = await createBook('Sturmlied')
+  await setBookStyle(book.id, { highlight: 'rgba(143, 184, 150, 0.40)' })
+  await createChapter(book.id, 'Anfang', 'Ein ==Satz==.')
+  renderAt(`/book/${book.id}/chapters`)
+  await screen.findByRole('heading', { name: 'Sturmlied' })
+  const root = document.querySelector<HTMLElement>('.book-view')!
+  expect(root.style.getPropertyValue('--mw-highlight')).toBe('rgba(143, 184, 150, 0.40)')
+})
+
+async function editorView() {
+  return waitFor(() => {
+    const found = EditorView.findFromDOM(document.querySelector<HTMLElement>('.editor .cm-editor')!)
+    if (!found) throw new Error('not mounted')
+    return found
+  })
+}
+
+test('opening a book continues at the last place', async () => {
+  const book = await createBook('Sturmlied')
+  await createChapter(book.id, 'Anfang', 'eins')
+  const second = await createChapter(book.id, 'Sturm', 'Erste Zeile\nzweite Zeile hier')
+  await savePlace(book.id, { chapterId: second.id, offset: 15, at: Date.now() })
+  renderAt(`/book/${book.id}`, true)
+  await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(`/chapters/${second.id}`))
+  const view = await editorView()
+  await waitFor(() => expect(view.state.selection.main.head).toBe(15))
+  expect(document.querySelector('.cm-mw-flash')?.textContent).toBe('zweite Zeile hier')
+})
+
+test('a place beyond the end of a shorter chapter lands at its end', async () => {
+  const book = await createBook('Sturmlied')
+  const chapter = await createChapter(book.id, 'Anfang', 'kurz')
+  await savePlace(book.id, { chapterId: chapter.id, offset: 999, at: Date.now() })
+  renderAt(`/book/${book.id}`, true)
+  const view = await editorView()
+  await waitFor(() => expect(view.state.selection.main.head).toBe(4))
+})
+
+test('the chapter list and a missing chapter open without jumping to the last place', async () => {
+  const book = await createBook('Sturmlied')
+  const first = await createChapter(book.id, 'Anfang', 'eins zwei')
+  const second = await createChapter(book.id, 'Sturm', 'drei vier')
+  await savePlace(book.id, { chapterId: second.id, offset: 5, at: Date.now() })
+  const { unmount } = renderAt(`/book/${book.id}/chapters`, true)
+  await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(`/chapters/${first.id}`))
+  expect((await editorView()).state.selection.main.head).toBe(0)
+  unmount()
+
+  await savePlace(book.id, { chapterId: 'weg', offset: 5, at: Date.now() + 1 })
+  renderAt(`/book/${book.id}`, true)
+  await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(`/chapters/${first.id}`))
+})
+
+test('Neues Kapitel in a book with chapters opens the new chapter, not the first', async () => {
+  const user = userEvent.setup()
+  const book = await createBook('Sturmlied')
+  const first = await createChapter(book.id, 'Anfang', 'eins')
+  renderAt(`/book/${book.id}/chapters/${first.id}`)
+  await screen.findByRole('link', { name: 'Anfang' })
+  await user.click(screen.getByRole('button', { name: 'Neues Kapitel' }))
+  await waitFor(async () => expect(await listChapters(book.id)).toHaveLength(2))
+  const created = (await listChapters(book.id)).find((chapter) => chapter.id !== first.id)!
+  await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(`/chapters/${created.id}`))
+  await new Promise((resolve) => setTimeout(resolve, 100))
+  expect(screen.getByTestId('location')).toHaveTextContent(`/chapters/${created.id}`)
 })

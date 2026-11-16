@@ -1,21 +1,22 @@
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
-import { markdown } from '@codemirror/lang-markdown'
 import { Annotation, EditorSelection, EditorState, StateEffect, StateField, type Extension } from '@codemirror/state'
-import { Decoration, EditorView, keymap, type Command, type DecorationSet } from '@codemirror/view'
+import { Decoration, EditorView, keymap, type DecorationSet } from '@codemirror/view'
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { ZoomControl } from '../book/ZoomControl'
 import { countWords } from '../lib/wordCount'
 import { useZoom, ZOOM_STEP } from '../lib/zoom'
 import { SYNCED_EVENT } from '../storage/connection'
-import { createChapter, getChapter, updateBook } from '../storage/db'
+import { createChapter, getChapter, savePlace, updateBook } from '../storage/db'
 import type { Book, Chapter, FontId } from '../types'
 import { editorTheme } from './editorTheme'
-import { livePreview } from './livePreview'
+import { toggleHighlight, writingMarkdown } from './markdownSetup'
 import { ChapterSaver, type SaveState } from './saver'
 import { StatusBar } from './StatusBar'
 import './editor.css'
 
 const COUNT_DELAY = 250
+/** The place where text changed is stored this long after the last keystroke. */
+const PLACE_DELAY = 1000
 
 /** A short highlight where the writer jumped to, e.g. from "Erwähnt in". */
 const flash = StateEffect.define<{ from: number; to: number } | null>()
@@ -40,17 +41,27 @@ export interface JumpTarget {
   to: number
   /** A new key jumps again, even to the same place. */
   key: number
+  /** Put the keyboard focus into the text, e.g. on a computer to keep writing at once. */
+  focus?: boolean
 }
 
 function jump(view: EditorView, target: JumpTarget) {
   const length = view.state.doc.length
   const from = Math.min(Math.max(target.from, 0), length)
-  const to = Math.min(Math.max(target.to, from), length)
+  let to = Math.min(Math.max(target.to, from), length)
+  let markFrom = from
+  if (to === from) {
+    // A bare cursor position: mark its line, so the eye finds it.
+    const line = view.state.doc.lineAt(from)
+    markFrom = line.from
+    to = line.to
+  }
   // The cursor goes in front of the place, which is only marked: typing never replaces it.
   view.dispatch({
     selection: EditorSelection.cursor(from),
-    effects: [EditorView.scrollIntoView(from, { y: 'center' }), flash.of({ from, to })],
+    effects: [EditorView.scrollIntoView(from, { y: 'center' }), ...(to > markFrom ? [flash.of({ from: markFrom, to })] : [])],
   })
+  if (target.focus) view.focus()
   window.setTimeout(() => {
     // The view may be gone by then.
     if (view.dom.isConnected) view.dispatch({ effects: flash.of(null) })
@@ -65,35 +76,6 @@ const FONTS: { id: FontId; label: string; family: string }[] = [
   { id: 'inter', label: 'Inter', family: "'Inter', system-ui, sans-serif" },
   { id: 'courier-prime', label: 'Courier Prime', family: "'Courier Prime', 'Courier New', monospace" },
 ]
-
-/** Wraps the selection in a marker such as ** or *, or removes it again. */
-function toggleWrap(mark: string): Command {
-  return (view) => {
-    const { state } = view
-    const changes = state.changeByRange((range) => {
-      const before = state.sliceDoc(range.from - mark.length, range.from)
-      const after = state.sliceDoc(range.to, range.to + mark.length)
-      if (before === mark && after === mark) {
-        return {
-          changes: [
-            { from: range.from - mark.length, to: range.from },
-            { from: range.to, to: range.to + mark.length },
-          ],
-          range: EditorSelection.range(range.from - mark.length, range.to - mark.length),
-        }
-      }
-      return {
-        changes: [
-          { from: range.from, insert: mark },
-          { from: range.to, insert: mark },
-        ],
-        range: EditorSelection.range(range.from + mark.length, range.to + mark.length),
-      }
-    })
-    view.dispatch(state.update(changes, { scrollIntoView: true, userEvent: 'input' }))
-    return true
-  }
-}
 
 interface Props {
   book: Book
@@ -116,6 +98,7 @@ export function Editor({ book, chapter, onChanged, extraExtensions, jumpTo, onJu
   const viewRef = useRef<EditorView | null>(null)
   const saverRef = useRef<ChapterSaver | null>(null)
   const countTimer = useRef<number>()
+  const placeTimer = useRef<number>()
   const titleRef = useRef(chapter.title)
   const titleDirty = useRef(false)
   const onChangedRef = useRef(onChanged)
@@ -151,6 +134,20 @@ export function Editor({ book, chapter, onChanged, extraExtensions, jumpTo, onJu
     let cancelled = false
     let view: EditorView | null = null
     let saver: ChapterSaver | null = null
+    /** Where text changed last, not yet stored; the book reopens there. */
+    let placeOffset: number | null = null
+
+    const storePlace = () => {
+      if (placeOffset === null) return
+      const offset = placeOffset
+      placeOffset = null
+      void savePlace(book.id, { chapterId: chapter.id, offset, at: Date.now() }).catch(() => {})
+    }
+    const rememberPlace = (offset: number) => {
+      placeOffset = offset
+      window.clearTimeout(placeTimer.current)
+      placeTimer.current = window.setTimeout(storePlace, PLACE_DELAY)
+    }
 
     void (async () => {
       let content = chapter.content
@@ -170,14 +167,8 @@ export function Editor({ book, chapter, onChanged, extraExtensions, jumpTo, onJu
           doc: content,
           extensions: [
             history(),
-            keymap.of([
-              { key: 'Mod-b', run: toggleWrap('**') },
-              { key: 'Mod-i', run: toggleWrap('*') },
-              ...defaultKeymap,
-              ...historyKeymap,
-            ]),
-            markdown({ addKeymap: false }),
-            livePreview(),
+            writingMarkdown(),
+            keymap.of([...defaultKeymap, ...historyKeymap]),
             flashField,
             EditorView.lineWrapping,
             EditorView.contentAttributes.of({
@@ -191,6 +182,7 @@ export function Editor({ book, chapter, onChanged, extraExtensions, jumpTo, onJu
               if (!update.docChanged) return
               if (update.transactions.every((tr) => tr.annotation(external))) return
               saver?.contentChanged()
+              rememberPlace(update.state.selection.main.head)
               window.clearTimeout(countTimer.current)
               countTimer.current = window.setTimeout(
                 () => setWords(countWords(update.view.state.doc.toString())),
@@ -230,6 +222,8 @@ export function Editor({ book, chapter, onChanged, extraExtensions, jumpTo, onJu
     return () => {
       cancelled = true
       window.clearTimeout(countTimer.current)
+      window.clearTimeout(placeTimer.current)
+      storePlace()
       const closingView = view
       const closingSaver = saver
       if (viewRef.current === closingView) viewRef.current = null
@@ -346,6 +340,23 @@ export function Editor({ book, chapter, onChanged, extraExtensions, jumpTo, onJu
   return (
     <div className="editor" onKeyDown={onKeyDown}>
       <div className="editor-toolbar">
+        <button
+          type="button"
+          className="editor-highlight"
+          title="Auswahl markieren (Strg+Umschalt+H)"
+          // Keep the selection in the text while the button is pressed.
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => {
+            const view = viewRef.current
+            if (!view) return
+            toggleHighlight(view)
+            view.focus()
+          }}
+        >
+          <span className="editor-highlight-swatch" aria-hidden="true" />
+          Markieren
+        </button>
+        <span className="editor-toolbar-divider" aria-hidden="true" />
         <label className="editor-font">
           <span className="muted">Schrift</span>
           <select value={font} onChange={(event) => void changeFont(event.target.value as FontId)}>

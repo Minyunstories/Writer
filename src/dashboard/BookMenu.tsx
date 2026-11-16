@@ -1,0 +1,79 @@
+import { useEffect, useRef } from 'react'
+import { COVERS, coverOf, HIGHLIGHTS, highlightOf } from '../lib/bookStyle'
+import type { Book } from '../types'
+
+interface Props {
+  book: Book
+  onCover: (color: string) => void
+  onHighlight: (color: string) => void
+  onRename: () => void
+  onDelete: () => void
+  onClose: () => void
+}
+
+/** The "⋯" menu of a book on the shelf: colours, rename, delete. */
+export function BookMenu({ book, onCover, onHighlight, onRename, onDelete, onClose }: Props) {
+  const ref = useRef<HTMLDivElement>(null)
+  const label = `Buchmenü für ${book.title}`
+  const cover = coverOf(book)
+  const highlight = highlightOf(book)
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    // A press anywhere else closes the menu.
+    const onPointer = (event: PointerEvent) => {
+      const target = event.target as Node
+      if (ref.current && !ref.current.contains(target) && !(target as Element).closest?.('.book-menu-button')) onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    window.addEventListener('pointerdown', onPointer)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('pointerdown', onPointer)
+    }
+  }, [onClose])
+
+  return (
+    <div ref={ref} className="book-menu" role="dialog" aria-label={label}>
+      <span className="book-menu-label">Farbe des Einbands</span>
+      <div className="book-menu-covers">
+        {COVERS.map((swatch) => (
+          <button
+            key={swatch.color}
+            type="button"
+            className="book-menu-swatch"
+            aria-label={`Einband ${swatch.name}`}
+            title={swatch.name}
+            aria-pressed={cover === swatch.color}
+            style={{ background: swatch.color }}
+            onClick={() => onCover(swatch.color)}
+          />
+        ))}
+      </div>
+      <span className="book-menu-label">Farbe für Markierungen</span>
+      <div className="book-menu-highlights">
+        {HIGHLIGHTS.map((swatch) => (
+          <button
+            key={swatch.color}
+            type="button"
+            className="book-menu-swatch book-menu-swatch-square"
+            aria-label={`Markierung ${swatch.name}`}
+            title={swatch.name}
+            aria-pressed={highlight === swatch.color}
+            style={{ background: swatch.color }}
+            onClick={() => onHighlight(swatch.color)}
+          />
+        ))}
+      </div>
+      <div className="book-menu-rule" />
+      <button type="button" className="book-menu-action" onClick={onRename}>
+        Umbenennen
+      </button>
+      <button type="button" className="book-menu-action danger" onClick={onDelete}>
+        Löschen
+      </button>
+    </div>
+  )
+}

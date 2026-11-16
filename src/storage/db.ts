@@ -1,4 +1,5 @@
-import type { Book, Chapter, FontId } from '../types'
+import { cleanDate, cleanPlace, COVERS, isColor } from '../lib/bookStyle'
+import type { Book, BookPlace, Chapter, FontId } from '../types'
 import { announceChange, cleanList, cleanTitle, ConflictError, db, newId } from './connection'
 
 export { ConflictError, resetDatabaseForTests } from './connection'
@@ -12,7 +13,12 @@ export async function getBook(id: string): Promise<Book | undefined> {
   return (await db()).get('books', id)
 }
 
-export async function createBook(title: string): Promise<Book> {
+/** The cover colour a new book gets next: the colours in turn. */
+export async function nextCover(): Promise<string> {
+  return COVERS[(await (await db()).count('books')) % COVERS.length].color
+}
+
+export async function createBook(title: string, style?: { cover?: string }): Promise<Book> {
   const now = Date.now()
   const font: FontId = 'literata'
   const book: Book = {
@@ -23,6 +29,7 @@ export async function createBook(title: string): Promise<Book> {
     createdAt: now,
     updatedAt: now,
   }
+  if (isColor(style?.cover)) book.cover = style.cover
   await (await db()).put('books', book)
   announceChange()
   return book
@@ -41,6 +48,34 @@ export async function updateBook(
   await tx.done
   announceChange()
   return next
+}
+
+/** Sets the cover or highlight colour. Values that are not colours are ignored. */
+export async function setBookStyle(id: string, style: { cover?: string; highlight?: string }): Promise<Book> {
+  const tx = (await db()).transaction('books', 'readwrite')
+  const current = await tx.store.get(id)
+  if (!current) throw new Error(`Book not found: ${id}`)
+  const next: Book = { ...current }
+  if (isColor(style.cover)) next.cover = style.cover.trim()
+  if (isColor(style.highlight)) next.highlight = style.highlight.trim()
+  await tx.store.put(next)
+  await tx.done
+  announceChange()
+  return next
+}
+
+/**
+ * Remembers where text was last changed. An older place (e.g. from a slower device) never
+ * replaces a newer one. The book's "last changed" date stays as it is.
+ */
+export async function savePlace(bookId: string, place: BookPlace): Promise<void> {
+  const cleaned = cleanPlace(place)
+  if (!cleaned) return
+  const tx = (await db()).transaction('books', 'readwrite')
+  const current = await tx.store.get(bookId)
+  if (current && (current.place?.at ?? -Infinity) <= cleaned.at) await tx.store.put({ ...current, place: cleaned })
+  await tx.done
+  announceChange()
 }
 
 const BOOK_OWNED_STORES = ['chapters', 'wikiFolders', 'wikiEntries', 'wikiImages'] as const
@@ -139,6 +174,26 @@ export async function updateChapter(
   await tx.objectStore('chapters').put(next)
   const book = await tx.objectStore('books').get(current.bookId)
   if (book) await tx.objectStore('books').put({ ...book, updatedAt: now })
+  await tx.done
+  announceChange()
+  return next
+}
+
+/** Sets the free-text timeline date: one line, at most 40 characters; empty removes it. */
+export async function setChapterDate(id: string, date: string): Promise<Chapter> {
+  const tx = (await db()).transaction('chapters', 'readwrite')
+  const current = await tx.store.get(id)
+  if (!current) throw new Error(`Chapter not found: ${id}`)
+  const next: Chapter = { ...current }
+  const cleaned = cleanDate(date)
+  if (cleaned) next.date = cleaned
+  else delete next.date
+  if (next.date === current.date) {
+    await tx.done
+    return current
+  }
+  next.updatedAt = Date.now()
+  await tx.store.put(next)
   await tx.done
   announceChange()
   return next

@@ -7,6 +7,20 @@ export interface Book {
   chapterOrder: string[]
   createdAt: number
   updatedAt: number
+  /** Cover colour on the shelf. Missing: derived from the id (see coverOf). */
+  cover?: string
+  /** Colour of ==highlighted== text. Missing: copper. */
+  highlight?: string
+  /** Where text was last changed, so the book reopens there. */
+  place?: BookPlace
+}
+
+export interface BookPlace {
+  chapterId: string
+  /** Character offset in the chapter text. */
+  offset: number
+  /** When it was recorded; the newer place wins between devices. */
+  at: number
 }
 
 export interface Chapter {
@@ -18,6 +32,8 @@ export interface Chapter {
   outline?: string
   /** Free tags shown in the outline, e.g. a point of view. Missing when there are none. */
   tags?: string[]
+  /** Free-text date on the outline timeline, e.g. "März 1204". Missing when empty. */
+  date?: string
   updatedAt: number
 }
 

@@ -8,15 +8,32 @@
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  padding: 0.4rem 0.6rem;
+  padding: 0.35rem 0.75rem;
   border-bottom: 1px solid var(--border);
   flex: none;
 }
 
+.book-header > button.icon,
+.book-back {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 10px;
+  font-size: 1.1rem;
+}
+
+.book-logo {
+  width: 22px;
+  height: 26px;
+  margin: 0 0.4rem 0 0.3rem;
+  flex: none;
+}
+
 .book-header h1 {
-  margin: 0 0 0 0.4rem;
-  font-size: 0.95rem;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.5rem;
   font-weight: 600;
+  line-height: 1;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -25,9 +42,6 @@
 .book-back {
   display: grid;
   place-items: center;
-  width: 2.2rem;
-  height: 2.2rem;
-  border-radius: 8px;
   color: var(--text-muted);
 }
 
@@ -79,10 +93,10 @@ button.icon.danger:hover {
 }
 
 .sidebar {
-  padding: 0.6rem;
+  padding: 0.75rem;
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: 0.75rem;
 }
 
 .sidebar-tabs {
@@ -90,15 +104,17 @@ button.icon.danger:hover {
   grid-template-columns: repeat(3, 1fr);
   gap: 2px;
   background: var(--bg);
-  border-radius: 9px;
+  border-radius: 12px;
   padding: 3px;
 }
 
 .sidebar-tab {
-  padding: 0.35rem 0;
+  height: 2.25rem;
+  padding: 0;
+  border: none;
   font-size: 13px;
   color: var(--text-muted);
-  border-radius: 7px;
+  border-radius: 9px;
 }
 
 .sidebar-tab[aria-selected='true'] {
@@ -121,7 +137,7 @@ button.icon.danger:hover {
 .chapter-list li {
   display: flex;
   align-items: center;
-  border-radius: 8px;
+  border-radius: 10px;
   counter-increment: chapter;
 }
 
@@ -133,19 +149,26 @@ button.icon.danger:hover {
 .chapter-list a {
   flex: 1;
   min-width: 0;
-  padding: 0.5rem 0.6rem;
+  padding: 0.55rem 0.75rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--text-muted);
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 500;
+  line-height: 1.25;
 }
 
 .chapter-list a::before {
   content: counter(chapter);
   display: inline-block;
-  min-width: 1.6em;
+  min-width: 1.6rem;
+  font-family: var(--font-ui);
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
-  opacity: 0.6;
+  opacity: 0.7;
+  vertical-align: 0.15em;
 }
 
 .chapter-list li.active a {
@@ -165,7 +188,9 @@ button.icon.danger:hover {
 }
 
 .sidebar-add {
+  min-height: 2.75rem;
   border-style: dashed;
+  border-radius: 10px;
   color: var(--text-muted);
 }
 
@@ -207,6 +232,11 @@ button.icon.danger:hover {
 
 .book-panel-open {
   color: var(--accent);
+}
+
+.book-panel-header button {
+  border: none;
+  min-height: 2.5rem;
 }
 
 .book-panel-body {
@@ -271,6 +301,8 @@ button.icon.danger:hover {
   display: block;
   padding: 0.45rem 0.6rem;
   border-radius: 8px;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -281,6 +313,13 @@ button.icon.danger:hover {
 .wiki-tree-entry.active a {
   background: var(--surface-2);
   color: var(--text);
+}
+
+.wiki-tree-actions button {
+  font-size: 13px;
+  white-space: nowrap;
+  border-style: dashed;
+  border-radius: 10px;
 }
 
 .wiki-tree-actions {
@@ -317,6 +356,7 @@ button.icon.danger:hover {
 }
 
 .zoom-control .zoom-value {
+  white-space: nowrap;
   min-width: 4.2em;
   font-size: 13px;
   font-variant-numeric: tabular-nums;

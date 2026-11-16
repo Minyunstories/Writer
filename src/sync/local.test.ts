@@ -1,5 +1,5 @@
 import { beforeEach, expect, test } from 'vitest'
-import { createBook, createChapter, getBook, getChapter, listBooks, listChapters, resetDatabaseForTests, updateChapter } from '../storage/db'
+import { createBook, createChapter, getBook, getChapter, listBooks, listChapters, resetDatabaseForTests, savePlace, setBookStyle, setChapterDate, updateChapter } from '../storage/db'
 import { addImage, createEntry, createFolder, getEntry, getImage, listEntries, listFolders, setFolderTemplate, updateEntry } from '../storage/wiki'
 import type { FileSet } from './files'
 import { applyRemoteFiles, clearSyncState, loadSyncState, readLocalFiles, saveSyncState } from './local'
@@ -274,4 +274,94 @@ test('tags changed here during the run are merged into a pulled tags file', asyn
   await updateChapter(a.id, { tags: ['gerade eben'] })
   await apply({ write: new Map([[`${p}tags.json`, JSON.stringify({ [a.id]: ['von woanders'] })]]), snapshot })
   expect((await getChapter(a.id))!.tags).toEqual(['von woanders', 'gerade eben'])
+})
+
+test('cover, highlight, dates and place are taken over from their files; a pulled book.json leaves them alone', async () => {
+  const { p, book, a, b } = await seed()
+  const snapshot = await readLocalFiles()
+  const later = Date.now() + 60_000
+  await apply({
+    write: new Map([
+      [`${p}style.json`, JSON.stringify({ cover: '#283650', highlight: 'rgba(1, 2, 3, 0.4)' })],
+      [`${p}dates.json`, JSON.stringify({ [a.id]: 'März' })],
+      [`${p}place.json`, JSON.stringify({ chapterId: b.id, offset: 3, at: later })],
+    ]),
+    snapshot,
+  })
+  let stored = (await getBook(book.id))!
+  expect(stored.cover).toBe('#283650')
+  expect(stored.highlight).toBe('rgba(1, 2, 3, 0.4)')
+  expect(stored.place).toEqual({ chapterId: b.id, offset: 3, at: later })
+  expect((await getChapter(a.id))!.date).toBe('März')
+
+  const now = await readLocalFiles()
+  await apply({ write: new Map([[`${p}book.json`, now.get(`${p}book.json`)!]]), snapshot: now })
+  stored = (await getBook(book.id))!
+  expect(stored.cover).toBe('#283650')
+  expect((await getChapter(a.id))!.date).toBe('März')
+
+  // Removed in the repository and untouched here: cleared.
+  const before = await readLocalFiles()
+  await apply({ remove: [`${p}style.json`, `${p}dates.json`, `${p}place.json`], snapshot: before })
+  stored = (await getBook(book.id))!
+  expect(stored.cover).toBeUndefined()
+  expect(stored.highlight).toBeUndefined()
+  expect(stored.place).toBeUndefined()
+  expect((await getChapter(a.id))!.date).toBeUndefined()
+})
+
+test('dates: changed here wins; changed on both sides, both texts are kept with a note', async () => {
+  const { p, a, b } = await seed()
+  await setChapterDate(a.id, 'Montag')
+  await setChapterDate(b.id, 'Dienstag')
+  const snapshot = await readLocalFiles()
+  const { notes } = await applyFull({
+    conflicts: [{ path: `${p}dates.json`, remote: JSON.stringify({ [a.id]: 'Mittwoch', [b.id]: 'Dienstag' }) }],
+    snapshot,
+  })
+  expect((await getChapter(a.id))!.date).toBe('Mittwoch / Montag')
+  expect((await getChapter(b.id))!.date).toBe('Dienstag')
+  expect(notes.map((n) => n.kind)).toEqual(['dates'])
+})
+
+test('a date typed here during the run is kept', async () => {
+  const { p, a } = await seed()
+  const snapshot = await readLocalFiles()
+  await setChapterDate(a.id, 'gerade eben')
+  await apply({ write: new Map([[`${p}dates.json`, JSON.stringify({ [a.id]: 'von woanders' })]]), snapshot })
+  expect((await getChapter(a.id))!.date).toBe('gerade eben')
+})
+
+test('place: the newer one wins; unreadable files are skipped', async () => {
+  const { p, book, a, b } = await seed()
+  await savePlace(book.id, { chapterId: a.id, offset: 4, at: 2000 })
+  await apply({ conflicts: [{ path: `${p}place.json`, remote: JSON.stringify({ chapterId: b.id, offset: 1, at: 1000 }) }], snapshot: await readLocalFiles() })
+  expect((await getBook(book.id))!.place?.chapterId).toBe(a.id)
+  await apply({ write: new Map([[`${p}place.json`, JSON.stringify({ chapterId: b.id, offset: 1, at: 3000 })]]), snapshot: await readLocalFiles() })
+  expect((await getBook(book.id))!.place).toEqual({ chapterId: b.id, offset: 1, at: 3000 })
+  const { skipped } = await applyFull({
+    write: new Map([[`${p}place.json`, '{"chapterId": 5}'], [`${p}style.json`, 'kein json'], [`${p}dates.json`, '[1, 2]']]),
+    snapshot: await readLocalFiles(),
+  })
+  expect(skipped.sort()).toEqual([`${p}dates.json`, `${p}place.json`, `${p}style.json`].sort())
+  expect((await getBook(book.id))!.place?.chapterId).toBe(b.id)
+})
+
+test('style changed on both sides: the other device wins, with a note', async () => {
+  const { p, book } = await seed()
+  await setBookStyle(book.id, { cover: '#6e2a26' })
+  const { notes } = await applyFull({
+    conflicts: [{ path: `${p}style.json`, remote: JSON.stringify({ cover: '#283650' }) }],
+    snapshot: await readLocalFiles(),
+  })
+  expect((await getBook(book.id))!.cover).toBe('#283650')
+  expect(notes.map((n) => n.kind)).toEqual(['style'])
+})
+
+test('a colour picked here during the run is kept', async () => {
+  const { p, book } = await seed()
+  const snapshot = await readLocalFiles()
+  await setBookStyle(book.id, { cover: '#6e2a26' })
+  await apply({ write: new Map([[`${p}style.json`, JSON.stringify({ cover: '#283650' })]]), snapshot })
+  expect((await getBook(book.id))!.cover).toBe('#6e2a26')
 })

@@ -6,6 +6,7 @@ const headingLine = [1, 2, 3].map((level) => Decoration.line({ class: `cm-mw-h${
 const bold = Decoration.mark({ class: 'cm-mw-bold' })
 const italic = Decoration.mark({ class: 'cm-mw-italic' })
 const marker = Decoration.mark({ class: 'cm-mw-mark' })
+const highlight = Decoration.mark({ class: 'cm-mw-highlight' })
 const blankLine = Decoration.line({ class: 'cm-mw-blank' })
 
 const HEADING = /^(?:ATXHeading|SetextHeading)(\d)$/
@@ -38,7 +39,9 @@ export function buildDecorations(
           found.push(bold.range(node.from, node.to))
         } else if (node.name === 'Emphasis') {
           found.push(italic.range(node.from, node.to))
-        } else if (node.name === 'HeaderMark' || node.name === 'EmphasisMark') {
+        } else if (node.name === 'Highlight') {
+          found.push(highlight.range(node.from, node.to))
+        } else if (node.name === 'HeaderMark' || node.name === 'EmphasisMark' || node.name === 'HighlightMark') {
           if (node.to > node.from) found.push(marker.range(node.from, node.to))
         }
       },

@@ -1,47 +1,134 @@
 .outline {
   width: 100%;
-  max-width: 50rem;
+  max-width: 60rem;
   margin: 0 auto;
-  padding: 1.25rem clamp(0.9rem, 4vw, 2rem) 5rem;
+  padding: 2rem clamp(0.9rem, 4vw, 2rem) 5rem;
 }
 
 .outline-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 1em;
+  margin-bottom: 1.6em;
   font-size: 13px;
 }
 
 .outline-header h2 {
   margin: 0;
-  font-size: 1.15rem;
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 5vw, 2.6rem);
   font-weight: 600;
+  line-height: 1;
 }
 
 .outline-list {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: grid;
-  gap: 0.8em;
 }
 
-.outline-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 0.6em 0.8em 0.8em;
+/* The timeline: date | rail with a dot | chapter card. */
+.outline-row {
   display: grid;
-  gap: 0.5em;
+  grid-template-columns: 9.5rem 2.25rem minmax(0, 1fr);
+  column-gap: 0.5rem;
   scroll-margin-top: 1rem;
 }
 
-.outline-card.dragging {
+.outline-date {
+  padding-top: 0.9em;
+}
+
+.outline-date textarea {
+  width: 100%;
+  padding: 0.3em 0;
+  border: none;
+  border-bottom: 1px dashed var(--border);
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 1.3em;
+  font-style: italic;
+  line-height: 1.2;
+  text-align: right;
+  resize: none;
+  overflow: hidden;
+  field-sizing: content;
+}
+
+.outline-date textarea.filled {
+  border-bottom-color: transparent;
+}
+
+.outline-date textarea:focus {
+  outline: none;
+  border-bottom: 1px solid var(--accent);
+}
+
+.outline-date textarea::placeholder {
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
+.outline-rail {
+  position: relative;
+}
+
+.outline-rail::before {
+  content: '';
+  position: absolute;
+  left: calc(50% - 1px);
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--border);
+}
+
+.outline-row:first-child .outline-rail::before {
+  top: 1.9em;
+}
+
+.outline-row:last-child .outline-rail::before {
+  bottom: auto;
+  height: 1.9em;
+}
+
+.outline-row:only-child .outline-rail::before {
+  display: none;
+}
+
+.outline-dot {
+  position: absolute;
+  left: calc(50% - 7px);
+  top: 1.45em;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  background: var(--bg);
+}
+
+.outline-dot.filled {
+  background: var(--accent);
+}
+
+.outline-card {
+  margin-bottom: 1.1em;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 0.75em 0.9em 0.9em 1.1em;
+  display: grid;
+  gap: 0.6em;
+  min-width: 0;
+}
+
+.outline-row.dragging .outline-card {
   opacity: 0.45;
 }
 
-.outline-card.drop-target {
+.outline-row.drop-target .outline-card {
   border-color: var(--accent);
 }
 
@@ -74,9 +161,10 @@
 .outline-title {
   flex: 1;
   min-width: 0;
-  font-family: 'Literata', serif;
-  font-size: 1.15em;
-  font-weight: 700;
+  font-family: var(--font-display);
+  font-size: 1.55em;
+  font-weight: 600;
+  line-height: 1.15;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -125,7 +213,10 @@
   width: 100%;
   text-align: left;
   border: none;
-  padding: 0.5rem 0.6rem;
+  padding: 0.55rem 0.75rem;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 500;
   color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -136,8 +227,11 @@
 .outline-jump button::before {
   content: counter(chapter);
   display: inline-block;
-  min-width: 1.6em;
-  opacity: 0.6;
+  min-width: 1.6rem;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  opacity: 0.7;
+  vertical-align: 0.15em;
 }
 
 @media (hover: none) {
@@ -158,6 +252,30 @@
 @media (max-width: 480px) {
   .outline-words {
     display: none;
+  }
+
+  .outline-row {
+    grid-template-columns: 4.4rem 1.4rem minmax(0, 1fr);
+    column-gap: 0.25rem;
+  }
+
+  .outline-date textarea {
+    font-size: 1.05em;
+    white-space: normal;
+  }
+
+  .outline-dot {
+    width: 12px;
+    height: 12px;
+    left: calc(50% - 6px);
+  }
+
+  .outline-card {
+    padding: 0.4em 0.25em 0.75em 0.75em;
+  }
+
+  .outline-title {
+    font-size: 1.3em;
   }
 }
 
@@ -257,7 +375,7 @@ input.outline-tag-input:focus {
   padding: 0.1em 0.15em;
   color: var(--text);
   text-decoration: underline;
-  text-decoration-color: rgba(143, 167, 255, 0.45);
+  text-decoration-color: var(--link-line);
   text-underline-offset: 0.2em;
 }
 

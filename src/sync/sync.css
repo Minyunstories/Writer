@@ -18,7 +18,7 @@
 }
 
 .sync-idle .sync-dot {
-  background: #6fcf97;
+  background: var(--ok);
 }
 
 .sync-pending .sync-dot,
@@ -82,7 +82,7 @@
 }
 
 .sync-ok {
-  color: #6fcf97;
+  color: var(--ok);
 }
 
 .sync-actions {

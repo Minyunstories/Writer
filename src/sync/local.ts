@@ -1,12 +1,17 @@
 import type { IDBPTransaction } from 'idb'
+import { cleanPlace } from '../lib/bookStyle'
 import { cleanList, db, newId, type Schema } from '../storage/connection'
 import type { Book, Chapter, FontId, WikiEntry, WikiFolder, WikiImage } from '../types'
 import {
   bundleToFiles,
   classifyPath,
+  placeFile as placeText,
+  styleFile as styleText,
   entryToFile,
+  parseDates,
   parseEntry,
   parseJson,
+  parseStyle,
   stringList,
   text,
   type BookFile,
@@ -25,7 +30,7 @@ type Tx = IDBPTransaction<Schema, typeof STORES extends readonly (infer S)[] ? S
 
 export interface ConflictNote {
   bookTitle: string
-  kind: 'chapter' | 'entry' | 'outline' | 'book' | 'folders' | 'image' | 'tags' | 'templates'
+  kind: 'chapter' | 'entry' | 'outline' | 'book' | 'folders' | 'image' | 'tags' | 'templates' | 'style' | 'dates'
   name: string
 }
 
@@ -65,7 +70,7 @@ export async function readLocalFiles(): Promise<FileSet> {
   return files
 }
 
-const KIND_ORDER = ['book', 'folders', 'templates', 'chapter', 'outline', 'tags', 'entry', 'image']
+const KIND_ORDER = ['book', 'style', 'place', 'folders', 'templates', 'chapter', 'outline', 'tags', 'dates', 'entry', 'image']
 
 /**
  * Applies changes from the repository to this device, file by file, in one transaction.
@@ -249,6 +254,87 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
     if (await applyLists(path, data, conflict, items)) pending.push({ bookId, kind: 'templates', name: 'Vorlagen' })
   }
 
+  /** Cover and highlight: the repository's colours; on a conflict the other device wins, with a note. */
+  async function writeStyle(path: string, bookId: string, data: FileData | undefined, conflict: boolean) {
+    const style = parseStyle(data)
+    if (!style) {
+      skipped.push(path)
+      return
+    }
+    const book = await books.get(bookId)
+    if (!book) return
+    // Picked here after the run was planned: this device's colours stay and go up next time.
+    if (!conflict && (snapshotText(path) ?? '') !== (styleText(book) ?? '')) return
+    const next: Book = { ...book }
+    delete next.cover
+    delete next.highlight
+    if (style.cover) next.cover = style.cover
+    if (style.highlight) next.highlight = style.highlight
+    if (next.cover !== book.cover || next.highlight !== book.highlight) {
+      await books.put(next)
+      if (conflict) pending.push({ bookId, kind: 'style', name: next.title })
+    }
+  }
+
+  async function removeStyle(path: string, bookId: string) {
+    const book = await books.get(bookId)
+    if (!book || (snapshotText(path) ?? '') !== (styleText(book) ?? '')) return
+    const next: Book = { ...book }
+    delete next.cover
+    delete next.highlight
+    await books.put(next)
+  }
+
+  /** The last place: the newer one wins, from wherever it comes. */
+  async function writePlace(path: string, bookId: string, data: FileData) {
+    const place = cleanPlace(parseJson<unknown>(data))
+    if (!place) {
+      skipped.push(path)
+      return
+    }
+    const book = await books.get(bookId)
+    if (book && (book.place?.at ?? -Infinity) < place.at) await books.put({ ...book, place })
+  }
+
+  async function removePlace(path: string, bookId: string) {
+    const book = await books.get(bookId)
+    if (!book?.place || (snapshotText(path) ?? '') !== (placeText(book) ?? '')) return
+    const next: Book = { ...book }
+    delete next.place
+    await books.put(next)
+  }
+
+  /**
+   * Timeline dates per chapter. A date changed here since the run was planned stays. When both
+   * sides changed the file and a chapter has two different dates, both are kept, joined.
+   */
+  async function writeDates(path: string, bookId: string, data: FileData | undefined, conflict: boolean) {
+    const remote = parseDates(data)
+    if (!remote) {
+      skipped.push(path)
+      return
+    }
+    const planned = parseDates(change.snapshot.get(path)) ?? {}
+    let joined = false
+    for (const chapter of await chapters.index('bookId').getAll(bookId)) {
+      const local = chapter.date
+      const theirs = remote[chapter.id]
+      let next: string | undefined = theirs
+      if (local !== planned[chapter.id]) next = local
+      else if (conflict && local && theirs && local !== theirs) {
+        next = `${theirs} / ${local}`
+        joined = true
+      } else if (conflict && local && !theirs) next = local
+      if (next !== local) {
+        const updated: Chapter = { ...chapter, updatedAt: now }
+        if (next) updated.date = next
+        else delete updated.date
+        await chapters.put(updated)
+      }
+    }
+    if (joined) pending.push({ bookId, kind: 'dates', name: 'Daten' })
+  }
+
   async function writeFolders(path: string, bookId: string, data: FileData, conflict: boolean) {
     const list = parseJson<Omit<WikiFolder, 'bookId'>[]>(data)
     if (!Array.isArray(list)) {
@@ -386,6 +472,9 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
       else if (info.kind === 'outline') await writeOutline(path, info.bookId, info.id, data, conflict)
       else if (info.kind === 'entry') await writeEntry(path, info.bookId, data, conflict)
       else if (info.kind === 'tags') await writeTags(path, info.bookId, data, conflict)
+      else if (info.kind === 'style') await writeStyle(path, info.bookId, data, conflict)
+      else if (info.kind === 'place') await writePlace(path, info.bookId, data)
+      else if (info.kind === 'dates') await writeDates(path, info.bookId, data, conflict)
       else if (info.kind === 'templates') await writeTemplates(path, info.bookId, data, conflict)
       else await writeImage(path, info.bookId, info.id, data)
     }
@@ -404,6 +493,9 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
       else if (info.kind === 'image') await removeImage(info.id)
       // Removed there: an empty file, so lists unchanged here are cleared and changed ones kept.
       else if (info.kind === 'tags') await writeTags(item.path, info.bookId, '{}', false)
+      else if (info.kind === 'dates') await writeDates(item.path, info.bookId, '{}', false)
+      else if (info.kind === 'style') await removeStyle(item.path, info.bookId)
+      else if (info.kind === 'place') await removePlace(item.path, info.bookId)
       else if (info.kind === 'templates') await writeTemplates(item.path, info.bookId, '{}', false)
       else if (info.kind === 'folders') {
         for (const key of await folders.index('bookId').getAllKeys(info.bookId)) await folders.delete(key)

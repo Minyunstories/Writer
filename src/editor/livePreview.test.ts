@@ -2,6 +2,7 @@ import { markdown } from '@codemirror/lang-markdown'
 import { EditorState } from '@codemirror/state'
 import { expect, test } from 'vitest'
 import { buildDecorations } from './livePreview'
+import { highlightSyntax } from './markdownSetup'
 
 const DOC = '# Titel\n\nEin **fetter** und *kursiver* Satz.'
 
@@ -55,4 +56,30 @@ test('empty lines between paragraphs are marked so they can be drawn smaller', (
   const blanks = decorations('Eins\n\nZwei\n\n\nDrei').filter((d) => d.cls === 'cm-mw-blank')
   expect(blanks.map((d) => d.from)).toEqual([5, 11, 12])
   expect(decorations('Eins\nZwei').some((d) => d.cls === 'cm-mw-blank')).toBe(false)
+})
+
+function highlightClasses(doc: string) {
+  const state = EditorState.create({ doc, extensions: [markdown({ extensions: [highlightSyntax] })] })
+  const found: { from: number; to: number; cls: string }[] = []
+  const cursor = buildDecorations(state, [{ from: 0, to: doc.length }]).iter()
+  while (cursor.value) {
+    found.push({ from: cursor.from, to: cursor.to, cls: String(cursor.value.spec.class) })
+    cursor.next()
+  }
+  return found
+}
+
+test('==text== is highlighted and its markers are dimmed', () => {
+  const doc = 'Ein ==wichtiger Satz== hier.'
+  const found = highlightClasses(doc)
+  const from = doc.indexOf('wichtiger')
+  expect(found.some((d) => d.cls === 'cm-mw-highlight' && d.from <= from && d.to >= from + 'wichtiger Satz'.length)).toBe(true)
+  const marks = found.filter((d) => d.cls === 'cm-mw-mark').map((d) => doc.slice(d.from, d.to))
+  expect(marks).toEqual(['==', '=='])
+})
+
+test('a lone, spaced or unclosed == is not a highlight', () => {
+  for (const doc of ['a==b und weiter', 'x == y und z', '== a ==', 'Ein ==offen bis zum Ende']) {
+    expect(highlightClasses(doc).some((d) => d.cls === 'cm-mw-highlight')).toBe(false)
+  }
 })

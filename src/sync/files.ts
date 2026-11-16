@@ -1,3 +1,4 @@
+import { cleanDate, cleanPlace, isColor } from '../lib/bookStyle'
 import type { Book, Chapter, FontId, WikiEntry, WikiFolder, WikiImage, WikiProperty } from '../types'
 import type { FileData } from './hash'
 
@@ -77,6 +78,12 @@ export function bundleToFiles({ book, chapters, folders, entries, images }: Book
   if (tags) files.set(`${prefix}tags.json`, tags)
   const templates = templatesFile(folders)
   if (templates) files.set(`${prefix}wiki/templates.json`, templates)
+  const style = styleFile(book)
+  if (style) files.set(`${prefix}style.json`, style)
+  const dates = datesFile(ordered)
+  if (dates) files.set(`${prefix}dates.json`, dates)
+  const place = placeFile(book)
+  if (place) files.set(`${prefix}place.json`, place)
 
   for (const chapter of ordered) {
     files.set(`${prefix}chapters/${chapter.id}.md`, chapter.content)
@@ -130,6 +137,48 @@ export function orderedChapters(book: Pick<Book, 'chapterOrder'>, chapters: Chap
 export function tagsFile(ordered: Chapter[]): string | undefined {
   const entries = ordered.filter((chapter) => chapter.tags?.length).map((chapter) => [chapter.id, chapter.tags] as const)
   return entries.length > 0 ? json(Object.fromEntries(entries)) : undefined
+}
+
+/** style.json: cover and highlight colour. Undefined when neither is set. */
+export function styleFile(book: Pick<Book, 'cover' | 'highlight'>): string | undefined {
+  const style: { cover?: string; highlight?: string } = {}
+  if (book.cover) style.cover = book.cover
+  if (book.highlight) style.highlight = book.highlight
+  return Object.keys(style).length > 0 ? json(style) : undefined
+}
+
+/** dates.json: chapter id to timeline date, in chapter order. Undefined when there are none. */
+export function datesFile(ordered: Chapter[]): string | undefined {
+  const entries = ordered.filter((chapter) => chapter.date).map((chapter) => [chapter.id, chapter.date] as const)
+  return entries.length > 0 ? json(Object.fromEntries(entries)) : undefined
+}
+
+/** place.json: where text was last changed. */
+export function placeFile(book: Pick<Book, 'place'>): string | undefined {
+  return book.place ? json({ chapterId: book.place.chapterId, offset: book.place.offset, at: book.place.at }) : undefined
+}
+
+/** The usable colours of a style.json; null when the file is not a JSON object. */
+export function parseStyle(data: FileData | undefined): { cover?: string; highlight?: string } | null {
+  const parsed = parseJson<unknown>(data)
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+  const { cover, highlight } = parsed as Record<string, unknown>
+  const style: { cover?: string; highlight?: string } = {}
+  if (isColor(cover)) style.cover = cover.trim()
+  if (isColor(highlight)) style.highlight = highlight.trim()
+  return style
+}
+
+/** The usable dates of a dates.json; null when the file is not a JSON object. */
+export function parseDates(data: FileData | undefined): Record<string, string> | null {
+  const parsed = parseJson<unknown>(data)
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+  const dates: Record<string, string> = {}
+  for (const [id, value] of Object.entries(parsed as Record<string, unknown>)) {
+    const date = cleanDate(value)
+    if (date) dates[id] = date
+  }
+  return dates
 }
 
 /** wiki/templates.json: folder id to field names, by folder id. Undefined when there are none. */
@@ -203,6 +252,7 @@ export function filesToBundle(bookId: string, files: FileSet): BookBundle {
     .sort()
 
   const tagMap = parseJson<Record<string, unknown>>(files.get(`${prefix}tags.json`)) ?? {}
+  const dateMap = parseDates(files.get(`${prefix}dates.json`)) ?? {}
   const chapters: Chapter[] = [...listed, ...unlisted.map((id) => ({ id, title: 'Unbenannt' }))].map((meta) => {
     const chapter: Chapter = {
       id: meta.id,
@@ -214,6 +264,8 @@ export function filesToBundle(bookId: string, files: FileSet): BookBundle {
     }
     const tags = stringList(tagMap[meta.id])
     if (tags.length > 0) chapter.tags = tags
+    const date = dateMap[meta.id]
+    if (date) chapter.date = date
     return chapter
   })
 
@@ -225,6 +277,11 @@ export function filesToBundle(bookId: string, files: FileSet): BookBundle {
     createdAt: Number(bookFile?.createdAt) || 0,
     updatedAt: 0,
   }
+  const style = parseStyle(files.get(`${prefix}style.json`)) ?? {}
+  if (style.cover) book.cover = style.cover
+  if (style.highlight) book.highlight = style.highlight
+  const place = cleanPlace(parseJson<unknown>(files.get(`${prefix}place.json`)))
+  if (place) book.place = place
 
   const folderList = parseJson<Omit<WikiFolder, 'bookId'>[]>(files.get(`${prefix}wiki/folders.json`))
   const templateMap = parseJson<Record<string, unknown>>(files.get(`${prefix}wiki/templates.json`)) ?? {}
@@ -277,7 +334,7 @@ export function filesToBundle(bookId: string, files: FileSet): BookBundle {
   return { book, chapters, folders, entries, images }
 }
 
-export type PathKind = 'book' | 'chapter' | 'outline' | 'folders' | 'entry' | 'image' | 'tags' | 'templates'
+export type PathKind = 'book' | 'chapter' | 'outline' | 'folders' | 'entry' | 'image' | 'tags' | 'templates' | 'style' | 'dates' | 'place'
 
 /** What a repository path holds, or null for files the app does not manage. */
 export function classifyPath(path: string): { bookId: string; kind: PathKind; id: string } | null {
@@ -288,6 +345,9 @@ export function classifyPath(path: string): { bookId: string; kind: PathKind; id
   if (rest === 'book.json') return { bookId, kind: 'book', id: bookId }
   if (rest === 'wiki/folders.json') return { bookId, kind: 'folders', id: bookId }
   if (rest === 'tags.json') return { bookId, kind: 'tags', id: bookId }
+  if (rest === 'style.json') return { bookId, kind: 'style', id: bookId }
+  if (rest === 'dates.json') return { bookId, kind: 'dates', id: bookId }
+  if (rest === 'place.json') return { bookId, kind: 'place', id: bookId }
   if (rest === 'wiki/templates.json') return { bookId, kind: 'templates', id: bookId }
   const match = /^(chapters|outline|wiki\/_images|wiki)\/([^/]+)$/.exec(rest)
   if (!match) return null

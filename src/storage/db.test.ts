@@ -1,4 +1,6 @@
 import { beforeEach, expect, test } from 'vitest'
+import { COVERS, coverOf, HIGHLIGHTS, highlightOf } from '../lib/bookStyle'
+import type { Book } from '../types'
 import {
   ConflictError,
   createBook,
@@ -9,6 +11,10 @@ import {
   getChapter,
   listBooks,
   changeChapterTags,
+  nextCover,
+  savePlace,
+  setBookStyle,
+  setChapterDate,
   listChapters,
   moveChapter,
   resetDatabaseForTests,
@@ -175,4 +181,46 @@ test('tag changes work on the stored tags, so quick changes never undo each othe
   expect((await getChapter(a.id))!.tags).toEqual(['Nacht'])
   await changeChapterTags(a.id, { remove: 'Nacht' })
   expect((await getChapter(a.id))!.tags).toBeUndefined()
+})
+
+test('chapter dates are trimmed, limited to 40 characters and cleared when empty', async () => {
+  const book = await createBook('B')
+  const c = await createChapter(book.id, 'A')
+  await setChapterDate(c.id, '  März 1204  ')
+  expect((await getChapter(c.id))!.date).toBe('März 1204')
+  await setChapterDate(c.id, 'x'.repeat(50))
+  expect((await getChapter(c.id))!.date).toBe('x'.repeat(40))
+  await setChapterDate(c.id, '   ')
+  expect((await getChapter(c.id))!.date).toBeUndefined()
+})
+
+test('the last place keeps the newest and leaves the book date alone', async () => {
+  const book = await createBook('B')
+  const c = await createChapter(book.id, 'A')
+  const before = (await getBook(book.id))!.updatedAt
+  await savePlace(book.id, { chapterId: c.id, offset: 5, at: 200 })
+  await savePlace(book.id, { chapterId: c.id, offset: 1, at: 100 })
+  const stored = (await getBook(book.id))!
+  expect(stored.place).toEqual({ chapterId: c.id, offset: 5, at: 200 })
+  expect(stored.updatedAt).toBe(before)
+})
+
+test('new books get the cover colours in turn; style can be changed; junk is ignored', async () => {
+  const a = await createBook('A', { cover: await nextCover() })
+  const b = await createBook('B', { cover: await nextCover() })
+  expect(a.cover).toBe(COVERS[0].color)
+  expect(b.cover).toBe(COVERS[1].color)
+  await setBookStyle(a.id, { highlight: HIGHLIGHTS[2].color })
+  await setBookStyle(a.id, { cover: 'url(x)' })
+  const stored = (await getBook(a.id))!
+  expect(stored.highlight).toBe(HIGHLIGHTS[2].color)
+  expect(stored.cover).toBe(COVERS[0].color)
+})
+
+test('books without stored colours still get a fixed cover and the copper highlight', () => {
+  const plain: Book = { id: 'abc', title: 'T', font: 'literata', chapterOrder: [], createdAt: 0, updatedAt: 0 }
+  expect(COVERS.map((c) => c.color)).toContain(coverOf(plain))
+  expect(coverOf(plain)).toBe(coverOf({ ...plain }))
+  expect(coverOf({ ...plain, cover: '#123456' })).toBe('#123456')
+  expect(highlightOf(plain)).toBe('rgba(213, 141, 98, 0.30)')
 })

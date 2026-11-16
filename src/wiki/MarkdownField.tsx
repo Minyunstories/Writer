@@ -1,10 +1,9 @@
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
-import { markdown } from '@codemirror/lang-markdown'
 import { EditorState, type Extension } from '@codemirror/state'
 import { EditorView, keymap, placeholder as placeholderExtension } from '@codemirror/view'
 import { useEffect, useRef } from 'react'
 import { editorTheme } from '../editor/editorTheme'
-import { livePreview } from '../editor/livePreview'
+import { writingMarkdown } from '../editor/markdownSetup'
 
 interface Props {
   /** Initial text. Later changes of this prop are ignored; remount with a key to replace the text. */
@@ -30,9 +29,8 @@ export function MarkdownField({ value, onChange, ariaLabel, placeholder, extensi
         doc: value,
         extensions: [
           history(),
+          writingMarkdown(),
           keymap.of([...defaultKeymap, ...historyKeymap]),
-          markdown({ addKeymap: false }),
-          livePreview(),
           EditorView.lineWrapping,
           EditorView.contentAttributes.of({ spellcheck: 'true', 'aria-label': ariaLabel }),
           placeholder ? placeholderExtension(placeholder) : [],
