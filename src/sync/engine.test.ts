@@ -2,7 +2,7 @@ import { deleteDB } from 'idb'
 import { beforeEach, expect, test } from 'vitest'
 import { useDatabaseForTests } from '../storage/connection'
 import { createBook, createChapter, deleteBook, deleteChapter, getChapter, listBooks, listChapters, updateBook, updateChapter } from '../storage/db'
-import { addImage, createEntry, getImage, listEntries, updateEntry } from '../storage/wiki'
+import { addImage, createEntry, createFolder, getImage, listEntries, listFolders, setFolderTemplate, updateEntry } from '../storage/wiki'
 import { runSync } from './engine'
 import { createFakeGitHub } from './fakeGitHub'
 import { GitHubError } from './github'
@@ -51,14 +51,14 @@ test('first sync fills an empty repository; a second run changes nothing', async
 
 test('a second device without data receives everything, images included', async () => {
   const { book } = await seedA()
-  const entry = await createEntry(book.id, 'Prince')
+  const entry = await createEntry(book.id, 'Pascal')
   const image = await addImage(entry.id, { type: 'image/webp', data: new Uint8Array([9, 0, 255, 13]).buffer, width: 2, height: 2 })
   await sync(A)
   const result = await sync(B)
   expect(result.pulled).toBe(5)
   expect(result.pushed).toBe(0)
   expect(await chaptersOf(B)).toEqual([['Anfang', 'eins'], ['Sturm', 'zwei']])
-  expect((await listEntries(book.id))[0]).toMatchObject({ name: 'Prince', imageIds: [image.id] })
+  expect((await listEntries(book.id))[0]).toMatchObject({ name: 'Pascal', imageIds: [image.id] })
   expect([...new Uint8Array((await getImage(image.id))!.data)]).toEqual([9, 0, 255, 13])
   expect(repo.commits).toBe(1)
 })
@@ -145,7 +145,7 @@ test('a book deleted on one device but edited on the other comes back whole', as
 
 test('wiki entries sync and conflict by keeping both', async () => {
   const { book } = await seedA()
-  const entry = await createEntry(book.id, 'Prince')
+  const entry = await createEntry(book.id, 'Pascal')
   await sync(A)
   await sync(B)
   await on(A)
@@ -153,12 +153,12 @@ test('wiki entries sync and conflict by keeping both', async () => {
   await on(B)
   await updateEntry(entry.id, { body: 'von B' })
   await sync(A)
-  expect((await sync(B)).conflicts).toEqual([{ bookTitle: 'Sturmlied', kind: 'entry', name: 'Prince' }])
+  expect((await sync(B)).conflicts).toEqual([{ bookTitle: 'Sturmlied', kind: 'entry', name: 'Pascal' }])
   await sync(A)
   await on(A)
   expect((await listEntries(book.id)).map((e) => [e.name, e.body])).toEqual([
-    ['Prince', 'von A'],
-    ['Prince (Fassung von diesem Gerät)', 'von B'],
+    ['Pascal', 'von A'],
+    ['Pascal (Fassung von diesem Gerät)', 'von B'],
   ])
 })
 
@@ -356,7 +356,7 @@ test('a restarted run does not turn the other device\'s text into a "this device
 
 test('text files travel inside the commit; only images need separate uploads', async () => {
   const { book } = await seedA()
-  const entry = await createEntry(book.id, 'Prince')
+  const entry = await createEntry(book.id, 'Pascal')
   await addImage(entry.id, { type: 'image/webp', data: new Uint8Array([1, 2, 3]).buffer, width: 1, height: 1 })
   let blobs = 0
   const original = repo.createBlob.bind(repo)
@@ -394,4 +394,23 @@ test('deleting the last book still reaches the other device', async () => {
   await sync(B, async () => true)
   await on(B)
   expect(await listBooks()).toEqual([])
+})
+
+test('tags and templates reach the other device', async () => {
+  const { book, two } = await seedA()
+  const folder = await createFolder(book.id, 'Characters')
+  await sync(A)
+  await sync(B)
+  await on(A)
+  await updateChapter(two.id, { tags: ['PoV: Pascal'] })
+  await setFolderTemplate(folder.id, ['Augenfarbe', 'Alter'])
+  await sync(A)
+  await sync(B)
+  await on(B)
+  expect((await getChapter(two.id))!.tags).toEqual(['PoV: Pascal'])
+  expect((await listFolders(book.id))[0].template).toEqual(['Augenfarbe', 'Alter'])
+  const commits = repo.commits
+  await sync(B)
+  await sync(A)
+  expect(repo.commits).toBe(commits)
 })

@@ -8,7 +8,7 @@ test('counts words and ignores markdown markers', () => {
 })
 
 test('handles umlauts, apostrophes and dashes', () => {
-  expect(countWords("**Prince's** größter — Tag")).toBe(3)
+  expect(countWords("**Pascal's** größter — Tag")).toBe(3)
 })
 
 test('unspaced dashes and ellipses separate words', () => {

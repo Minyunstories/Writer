@@ -8,6 +8,7 @@ import {
   getBook,
   getChapter,
   listBooks,
+  changeChapterTags,
   listChapters,
   moveChapter,
   resetDatabaseForTests,
@@ -152,4 +153,26 @@ test('moveChapter repairs an order with missing or deleted chapters', async () =
   expect((await getBook(book.id))!.chapterOrder).toEqual([b.id, a.id, c.id])
   await moveChapter(book.id, 'unknown', { before: a.id })
   expect((await getBook(book.id))!.chapterOrder).toEqual([b.id, a.id, c.id])
+})
+
+test('chapter tags are cleaned when stored', async () => {
+  const book = await createBook('B')
+  const a = await createChapter(book.id, 'A')
+  expect(a.tags).toBeUndefined()
+  const updated = await updateChapter(a.id, { tags: [' PoV: Pascal ', '', 'Rückblick', 'PoV: Pascal'] })
+  expect(updated.tags).toEqual(['PoV: Pascal', 'Rückblick'])
+  expect((await getChapter(a.id))!.tags).toEqual(['PoV: Pascal', 'Rückblick'])
+})
+
+test('tag changes work on the stored tags, so quick changes never undo each other', async () => {
+  const book = await createBook('B')
+  const a = await createChapter(book.id, 'A')
+  await Promise.all([changeChapterTags(a.id, { add: 'Nacht' }), changeChapterTags(a.id, { add: 'Rückblick' })])
+  expect((await getChapter(a.id))!.tags!.sort()).toEqual(['Nacht', 'Rückblick'])
+  await changeChapterTags(a.id, { remove: 'Rückblick' })
+  await changeChapterTags(a.id, { add: '  ' })
+  await changeChapterTags(a.id, { add: 'Nacht' })
+  expect((await getChapter(a.id))!.tags).toEqual(['Nacht'])
+  await changeChapterTags(a.id, { remove: 'Nacht' })
+  expect((await getChapter(a.id))!.tags).toBeUndefined()
 })

@@ -89,6 +89,16 @@ export function cleanTitle(title: string): string {
   return title.trim() || FALLBACK_TITLE
 }
 
+/** Trims names, drops empty ones and repeats (the first one stays). */
+export function cleanList(list: string[]): string[] {
+  const seen = new Set<string>()
+  for (const item of list) {
+    const trimmed = item.trim()
+    if (trimmed) seen.add(trimmed)
+  }
+  return [...seen]
+}
+
 export function newId(): string {
   return crypto.randomUUID()
 }

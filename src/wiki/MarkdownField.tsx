@@ -1,6 +1,6 @@
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
 import { markdown } from '@codemirror/lang-markdown'
-import { EditorState } from '@codemirror/state'
+import { EditorState, type Extension } from '@codemirror/state'
 import { EditorView, keymap, placeholder as placeholderExtension } from '@codemirror/view'
 import { useEffect, useRef } from 'react'
 import { editorTheme } from '../editor/editorTheme'
@@ -12,10 +12,12 @@ interface Props {
   onChange: (value: string) => void
   ariaLabel: string
   placeholder?: string
+  /** E.g. wiki links. Read once when the field is created. */
+  extensions?: Extension[]
 }
 
 /** A small text field with the same live formatting as the chapter editor. */
-export function MarkdownField({ value, onChange, ariaLabel, placeholder }: Props) {
+export function MarkdownField({ value, onChange, ariaLabel, placeholder, extensions }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
@@ -39,6 +41,7 @@ export function MarkdownField({ value, onChange, ariaLabel, placeholder }: Props
           EditorView.updateListener.of((update) => {
             if (update.docChanged) onChangeRef.current(update.state.doc.toString())
           }),
+          ...(extensions ?? []),
         ],
       }),
     })

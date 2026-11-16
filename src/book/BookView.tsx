@@ -14,6 +14,8 @@ import {
 import type { Book, Chapter, WikiEntry, WikiFolder } from '../types'
 import { Outline } from '../outline/Outline'
 import { SyncStatus } from '../sync/SyncStatus'
+import type { JumpTarget } from '../editor/Editor'
+import { wikiCompletion } from '../editor/wikiComplete'
 import { ConfirmDialog, PromptDialog } from '../ui/Dialogs'
 import { buildMatcher } from '../wiki/linker'
 import { WikiEntryEditor } from '../wiki/WikiEntryEditor'
@@ -29,6 +31,10 @@ export interface ChapterRenderProps {
   onChanged: () => void
   /** Editor extensions provided by the book view, e.g. wiki links. */
   extensions: Extension[]
+  /** Where to jump in this chapter, e.g. from "Erwähnt in". */
+  jumpTo?: JumpTarget
+  /** Call once the jump happened, so a later visit to the chapter does not jump again. */
+  onJumped: () => void
 }
 
 interface Props {
@@ -68,7 +74,10 @@ export function BookView({ renderChapter }: Props) {
   const [chapters, setChapters] = useState<Chapter[]>([])
   const [folders, setFolders] = useState<WikiFolder[]>([])
   const [entries, setEntries] = useState<WikiEntry[]>([])
-  const [panelEntryId, setPanelEntryId] = useState<string | null>(null)
+  /** Entries opened in the panel; the last one is shown, "Zurück" goes one step back. */
+  const [panelStack, setPanelStack] = useState<string[]>([])
+  const panelEntryId = panelStack[panelStack.length - 1] ?? null
+  const [jump, setJump] = useState<(JumpTarget & { chapterId: string }) | null>(null)
   const [dialog, setDialog] = useState<DialogState>(null)
   const [sidebarOpen, setSidebarOpen] = useState(() => !isNarrow())
 
@@ -98,7 +107,7 @@ export function BookView({ renderChapter }: Props) {
 
   useEffect(() => {
     setBook(undefined)
-    setPanelEntryId(null)
+    setPanelStack([])
     void reload()
   }, [reload])
 
@@ -123,14 +132,52 @@ export function BookView({ renderChapter }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [section])
 
+  /** Opens an entry in the panel as a fresh start, e.g. from the chapter text or the outline. */
+  const openPanel = useCallback(
+    (entryId: string) => {
+      setPanelStack([entryId])
+      // Chapters may have changed since they were loaded; "Erwähnt in" should be current.
+      void reload()
+    },
+    [reload],
+  )
+  const pushPanel = (entryId: string) => setPanelStack((stack) => (stack[stack.length - 1] === entryId ? stack : [...stack, entryId]))
+
+  // Latest lists for the editor extensions, which are created once per book.
+  const entriesRef = useRef(entries)
+  entriesRef.current = entries
+  const foldersRef = useRef(folders)
+  foldersRef.current = folders
+  const openPanelRef = useRef(openPanel)
+  openPanelRef.current = openPanel
+
   // Names in the chapter text link to their wiki entry; a click opens the panel.
   const links = useMemo(
-    () => createWikiLinks({ onOpen: (entryId) => setPanelEntryId(entryId) }),
+    () => createWikiLinks({ onOpen: (entryId) => openPanelRef.current(entryId) }),
     // One instance per book.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [bookId],
   )
-  const extensions = useMemo(() => [links.extension], [links])
+  const extensions = useMemo(
+    () => [
+      links.extension,
+      wikiCompletion({
+        entries: () => entriesRef.current,
+        topFolders: () => foldersRef.current.filter((folder) => !folder.parentId),
+        create: async (name, folderId) => {
+          try {
+            await createEntry(bookId, name, folderId)
+          } catch {
+            setActionError(true)
+          }
+          await reloadWiki()
+        },
+      }),
+    ],
+    // One set per book; the lists are read through refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [links, bookId],
+  )
   useEffect(() => {
     links.setMatcher(buildMatcher(entries))
   }, [links, entries])
@@ -223,7 +270,17 @@ export function BookView({ renderChapter }: Props) {
   }
 
   const activeEntry = section === 'wiki' ? entries.find((entry) => entry.id === itemId) : undefined
-  const panelEntry = section === 'chapters' ? entries.find((entry) => entry.id === panelEntryId) : undefined
+  const panelEntry = section !== 'wiki' ? entries.find((entry) => entry.id === panelEntryId) : undefined
+
+  /** Opens a chapter and marks a place in it. */
+  const openChapterAt = (chapterId: string, range: { from: number; to: number }) => {
+    if (!book) return
+    setJump({ chapterId, ...range, key: Date.now() })
+    navigate(`/book/${book.id}/chapters/${chapterId}`)
+    closeSidebarOnPhone()
+    // On a phone the panel covers the text: close it so the place is visible.
+    if (isNarrow()) setPanelStack([])
+  }
 
   if (loadFailed && !book) {
     return (
@@ -334,7 +391,14 @@ export function BookView({ renderChapter }: Props) {
         <main className="book-main">
           {section === 'chapters' && activeChapter && (
             renderChapter ? (
-              renderChapter({ book, chapter: activeChapter, onChanged: reload, extensions })
+              renderChapter({
+                book,
+                chapter: activeChapter,
+                onChanged: reload,
+                extensions,
+                jumpTo: jump?.chapterId === activeChapter.id ? jump : undefined,
+                onJumped: () => setJump(null),
+              })
             ) : (
               <p className="book-message muted">{activeChapter.title}</p>
             )
@@ -353,7 +417,11 @@ export function BookView({ renderChapter }: Props) {
                 key={activeEntry.id}
                 entryId={activeEntry.id}
                 folders={folders}
+                entries={entries}
+                chapters={chapters}
                 zoomArea="wiki"
+                onOpenEntry={(entryId) => navigate(`/book/${book.id}/wiki/${entryId}`)}
+                onOpenChapter={openChapterAt}
                 onChanged={reloadWiki}
                 onSaveFailed={() => setActionError(true)}
                 onDeleted={() => {
@@ -385,6 +453,9 @@ export function BookView({ renderChapter }: Props) {
                 onChanged={reload}
                 onError={() => setActionError(true)}
                 onCreateChapter={() => void handleCreate(false)}
+                entries={entries}
+                folders={folders}
+                onOpenEntry={openPanel}
               />
             </div>
           )}
@@ -396,20 +467,31 @@ export function BookView({ renderChapter }: Props) {
               <Link to={`/book/${book.id}/wiki/${panelEntry.id}`} className="book-panel-open">
                 Im Wiki öffnen
               </Link>
-              <button className="ghost" onClick={() => setPanelEntryId(null)}>
-                Schließen
-              </button>
+              <span className="book-panel-actions">
+                {panelStack.length > 1 && (
+                  <button className="ghost" onClick={() => setPanelStack((stack) => stack.slice(0, -1))}>
+                    Zurück
+                  </button>
+                )}
+                <button className="ghost" onClick={() => setPanelStack([])}>
+                  Schließen
+                </button>
+              </span>
             </header>
             <div className="book-panel-body">
               <WikiEntryEditor
                 key={panelEntry.id}
                 entryId={panelEntry.id}
                 folders={folders}
+                entries={entries}
+                chapters={chapters}
                 zoomArea="panel"
+                onOpenEntry={pushPanel}
+                onOpenChapter={openChapterAt}
                 onChanged={reloadWiki}
                 onSaveFailed={() => setActionError(true)}
                 onDeleted={() => {
-                  setPanelEntryId(null)
+                  setPanelStack((stack) => stack.filter((id) => id !== panelEntry.id))
                   void reloadWiki()
                 }}
               />

@@ -1,5 +1,5 @@
 import type { IDBPTransaction } from 'idb'
-import { db, newId, type Schema } from '../storage/connection'
+import { cleanList, db, newId, type Schema } from '../storage/connection'
 import type { Book, Chapter, FontId, WikiEntry, WikiFolder, WikiImage } from '../types'
 import {
   bundleToFiles,
@@ -7,6 +7,7 @@ import {
   entryToFile,
   parseEntry,
   parseJson,
+  stringList,
   text,
   type BookFile,
   type FileData,
@@ -24,7 +25,7 @@ type Tx = IDBPTransaction<Schema, typeof STORES extends readonly (infer S)[] ? S
 
 export interface ConflictNote {
   bookTitle: string
-  kind: 'chapter' | 'entry' | 'outline' | 'book' | 'folders' | 'image'
+  kind: 'chapter' | 'entry' | 'outline' | 'book' | 'folders' | 'image' | 'tags' | 'templates'
   name: string
 }
 
@@ -64,7 +65,7 @@ export async function readLocalFiles(): Promise<FileSet> {
   return files
 }
 
-const KIND_ORDER = ['book', 'folders', 'chapter', 'outline', 'entry', 'image']
+const KIND_ORDER = ['book', 'folders', 'templates', 'chapter', 'outline', 'tags', 'entry', 'image']
 
 /**
  * Applies changes from the repository to this device, file by file, in one transaction.
@@ -117,6 +118,7 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
     for (const item of listed) {
       const chapter = await ensureChapter(bookId, item.id)
       const title = typeof item.title === 'string' && item.title.trim() ? item.title : chapter.title
+      // Tags live in tags.json; a book.json never changes them.
       if (title !== chapter.title) await chapters.put({ ...chapter, title, updatedAt: now })
     }
     const book = (await books.get(bookId))!
@@ -182,6 +184,71 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
     await chapters.put({ ...chapter, outline: '', updatedAt: now })
   }
 
+  /** A file mapping ids to string lists (tags.json, wiki/templates.json); null when unreadable. */
+  const listMap = (data: FileData | undefined): Record<string, string[]> | null => {
+    if (data === undefined) return {}
+    const parsed = parseJson<unknown>(data)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+    return Object.fromEntries(Object.entries(parsed as Record<string, unknown>).map(([id, list]) => [id, stringList(list)]))
+  }
+  const sameList = (a: string[], b: string[]) => JSON.stringify(a) === JSON.stringify(b)
+
+  /**
+   * Takes over lists from the repository. Where this device changed a list since the run was
+   * planned, or both sides changed the file, the two lists are merged so nothing is dropped.
+   * Returns true when a merge kept something the repository did not have.
+   */
+  async function applyLists(
+    path: string,
+    data: FileData | undefined,
+    conflict: boolean,
+    items: { id: string; list: string[]; set: (list: string[]) => Promise<void> }[],
+  ): Promise<boolean> {
+    const remote = listMap(data)
+    if (!remote) {
+      skipped.push(path)
+      return false
+    }
+    const planned = listMap(change.snapshot.get(path)) ?? {}
+    let kept = false
+    for (const item of items) {
+      const theirs = remote[item.id] ?? []
+      const changedHere = !sameList(planned[item.id] ?? [], item.list)
+      const next = conflict || changedHere ? cleanList([...theirs, ...item.list]) : theirs
+      if (!sameList(next, theirs)) kept = true
+      if (!sameList(next, item.list)) await item.set(next)
+    }
+    return kept && conflict
+  }
+
+  async function writeTags(path: string, bookId: string, data: FileData | undefined, conflict: boolean) {
+    const items = (await chapters.index('bookId').getAll(bookId)).map((chapter) => ({
+      id: chapter.id,
+      list: chapter.tags ?? [],
+      set: async (tags: string[]) => {
+        const next: Chapter = { ...chapter, updatedAt: now }
+        if (tags.length > 0) next.tags = tags
+        else delete next.tags
+        await chapters.put(next)
+      },
+    }))
+    if (await applyLists(path, data, conflict, items)) pending.push({ bookId, kind: 'tags', name: 'Tags' })
+  }
+
+  async function writeTemplates(path: string, bookId: string, data: FileData | undefined, conflict: boolean) {
+    const items = (await folders.index('bookId').getAll(bookId)).map((folder) => ({
+      id: folder.id,
+      list: folder.template ?? [],
+      set: async (template: string[]) => {
+        const next: WikiFolder = { ...folder }
+        if (template.length > 0) next.template = template
+        else delete next.template
+        await folders.put(next)
+      },
+    }))
+    if (await applyLists(path, data, conflict, items)) pending.push({ bookId, kind: 'templates', name: 'Vorlagen' })
+  }
+
   async function writeFolders(path: string, bookId: string, data: FileData, conflict: boolean) {
     const list = parseJson<Omit<WikiFolder, 'bookId'>[]>(data)
     if (!Array.isArray(list)) {
@@ -199,13 +266,17 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
       pending.push({ bookId, kind: 'folders', name: 'Ordner' })
     }
     for (const folder of remote) {
-      await folders.put({
+      const next: WikiFolder = {
         id: folder.id,
         bookId,
         parentId: folder.parentId ?? null,
         name: typeof folder.name === 'string' && folder.name.trim() ? folder.name : 'Unbenannt',
         createdAt: Number(folder.createdAt) || now,
-      })
+      }
+      // Templates live in wiki/templates.json; folders.json never changes them.
+      const template = (await folders.get(folder.id))?.template
+      if (template?.length) next.template = template
+      await folders.put(next)
     }
   }
 
@@ -314,6 +385,8 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
       else if (info.kind === 'chapter') await writeChapter(path, info.bookId, info.id, data, conflict)
       else if (info.kind === 'outline') await writeOutline(path, info.bookId, info.id, data, conflict)
       else if (info.kind === 'entry') await writeEntry(path, info.bookId, data, conflict)
+      else if (info.kind === 'tags') await writeTags(path, info.bookId, data, conflict)
+      else if (info.kind === 'templates') await writeTemplates(path, info.bookId, data, conflict)
       else await writeImage(path, info.bookId, info.id, data)
     }
 
@@ -329,6 +402,9 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
       else if (info.kind === 'outline') await removeOutline(item.path, info.id)
       else if (info.kind === 'entry') await removeEntry(item.path, info.id)
       else if (info.kind === 'image') await removeImage(info.id)
+      // Removed there: an empty file, so lists unchanged here are cleared and changed ones kept.
+      else if (info.kind === 'tags') await writeTags(item.path, info.bookId, '{}', false)
+      else if (info.kind === 'templates') await writeTemplates(item.path, info.bookId, '{}', false)
       else if (info.kind === 'folders') {
         for (const key of await folders.index('bookId').getAllKeys(info.bookId)) await folders.delete(key)
       }

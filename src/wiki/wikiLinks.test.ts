@@ -5,7 +5,7 @@ import { buildMatcher } from './linker'
 import { buildLinkDecorations, createWikiLinks } from './wikiLinks'
 
 const entry = (id: string, name: string) => ({ id, name, aliases: [], autoLink: true, createdAt: 1 })
-const matcher = buildMatcher([entry('prince', 'Prince'), entry('rose', 'Rose')])
+const matcher = buildMatcher([entry('pascal', 'Pascal'), entry('rose', 'Rose')])
 
 let view: EditorView | undefined
 afterEach(() => {
@@ -25,25 +25,25 @@ function collect(doc: string, ranges: { from: number; to: number }[]) {
 }
 
 test('names in range are decorated with their entry id', () => {
-  const doc = 'Prince met Rose.\nRose left.'
+  const doc = 'Pascal met Rose.\nRose left.'
   expect(collect(doc, [{ from: 0, to: doc.length }])).toEqual([
-    { text: 'Prince', id: 'prince' },
+    { text: 'Pascal', id: 'pascal' },
     { text: 'Rose', id: 'rose' },
     { text: 'Rose', id: 'rose' },
   ])
 })
 
 test('nothing outside the given range is decorated', () => {
-  const doc = 'Prince met Rose.\nRose left.'
+  const doc = 'Pascal met Rose.\nRose left.'
   expect(collect(doc, [{ from: 17, to: doc.length }])).toEqual([{ text: 'Rose', id: 'rose' }])
 })
 
 test('a new matcher updates an open editor without a text change', () => {
   const links = createWikiLinks({ onOpen: () => {} })
-  view = new EditorView({ parent: document.body, state: EditorState.create({ doc: 'Prince met Rose.', extensions: [links.extension] }) })
+  view = new EditorView({ parent: document.body, state: EditorState.create({ doc: 'Pascal met Rose.', extensions: [links.extension] }) })
   expect(view.dom.querySelectorAll('.cm-mw-link')).toHaveLength(0)
   links.setMatcher(matcher)
-  expect([...view.dom.querySelectorAll('.cm-mw-link')].map((el) => el.textContent)).toEqual(['Prince', 'Rose'])
+  expect([...view.dom.querySelectorAll('.cm-mw-link')].map((el) => el.textContent)).toEqual(['Pascal', 'Rose'])
   links.setMatcher(buildMatcher([]))
   expect(view.dom.querySelectorAll('.cm-mw-link')).toHaveLength(0)
 })
@@ -59,7 +59,7 @@ test('clicking a link opens its entry', () => {
   const onOpen = vi.fn()
   const links = createWikiLinks({ onOpen })
   links.setMatcher(matcher)
-  view = new EditorView({ parent: document.body, state: EditorState.create({ doc: 'Prince met Rose.', extensions: [links.extension] }) })
+  view = new EditorView({ parent: document.body, state: EditorState.create({ doc: 'Pascal met Rose.', extensions: [links.extension] }) })
   const link = [...view.dom.querySelectorAll<HTMLElement>('.cm-mw-link')].find((el) => el.textContent === 'Rose')!
   link.dispatchEvent(new MouseEvent('click', { bubbles: true }))
   expect(onOpen).toHaveBeenCalledWith('rose')
@@ -71,7 +71,7 @@ test('on touch a tap opens the entry without focusing the text; a scroll gesture
   const onOpen = vi.fn()
   const links = createWikiLinks({ onOpen })
   links.setMatcher(matcher)
-  view = new EditorView({ parent: document.body, state: EditorState.create({ doc: 'Prince met Rose.', extensions: [links.extension] }) })
+  view = new EditorView({ parent: document.body, state: EditorState.create({ doc: 'Pascal met Rose.', extensions: [links.extension] }) })
   const link = view.dom.querySelector<HTMLElement>('.cm-mw-link')!
   const fire = (type: string) => {
     const event = new Event(type, { bubbles: true, cancelable: true })
@@ -88,5 +88,5 @@ test('on touch a tap opens the entry without focusing the text; a scroll gesture
 
   fire('touchstart')
   expect(fire('touchend').defaultPrevented).toBe(true)
-  expect(onOpen).toHaveBeenCalledWith('prince')
+  expect(onOpen).toHaveBeenCalledWith('pascal')
 })

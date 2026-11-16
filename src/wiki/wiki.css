@@ -112,9 +112,101 @@
 
 .wiki-properties li {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) auto;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) auto auto;
   gap: 0.4em;
   align-items: center;
+}
+
+.wiki-properties li.wiki-template-row {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) auto;
+  margin-right: 2.6rem;
+}
+
+.wiki-template-key {
+  padding: 0.5rem 0.2rem;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wiki-pin {
+  color: var(--text-muted);
+}
+
+.wiki-pin[aria-pressed='true'] {
+  color: var(--accent);
+}
+
+.wiki-linked-value {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.5rem 0.7rem;
+  min-height: 2.4em;
+  cursor: text;
+  overflow-wrap: anywhere;
+}
+
+.wiki-inline-link {
+  display: inline;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: rgba(143, 167, 255, 0.55);
+  text-underline-offset: 0.22em;
+  cursor: pointer;
+}
+
+.wiki-inline-link:hover {
+  background: none !important;
+  color: var(--accent);
+}
+
+.wiki-none {
+  margin: 0;
+  font-size: 0.9em;
+}
+
+.wiki-mentions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.wiki-mentions button {
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  gap: 0.6em;
+  text-align: left;
+  border: none;
+  padding: 0.45em 0.6em;
+}
+
+.wiki-mention-number {
+  min-width: 1.4em;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.wiki-mention-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wiki-mention-count {
+  color: var(--text-muted);
+  font-size: 0.85em;
+  font-variant-numeric: tabular-nums;
 }
 
 .wiki-add {
@@ -223,4 +315,21 @@
 
 .wiki-replaced button {
   margin-left: 0.5em;
+}
+
+/* Fingers need larger targets than a mouse. */
+@media (hover: none) {
+  .wiki-properties button.icon {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+
+  .wiki-mentions button {
+    min-height: 2.75rem;
+    align-items: center;
+  }
+
+  .wiki-inline-link {
+    padding-block: 0.35em;
+  }
 }

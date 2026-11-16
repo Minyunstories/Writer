@@ -10,13 +10,18 @@ import {
   getEntry,
   getImage,
   removeImage,
+  changeTemplate,
   updateEntry,
   type EntryPatch,
 } from '../storage/wiki'
-import type { WikiEntry, WikiFolder, WikiProperty, ZoomArea } from '../types'
+import type { Chapter, WikiEntry, WikiFolder, WikiProperty, ZoomArea } from '../types'
 import { ConfirmDialog } from '../ui/Dialogs'
 import { prepareImage } from './image'
+import { buildMatcher } from './linker'
+import { LinkedValue } from './LinkedValue'
 import { MarkdownField } from './MarkdownField'
+import { mentionsOf, topFolderOf } from './mentions'
+import { createWikiLinks } from './wikiLinks'
 import './wiki.css'
 
 const SAVE_DELAY = 400
@@ -32,6 +37,12 @@ interface Props {
   /** Called when a save fails after this editor was closed, so the failure is still shown somewhere. */
   onSaveFailed?: () => void
   prepare?: typeof prepareImage
+  /** All entries of the book, for links between entries. */
+  entries?: WikiEntry[]
+  /** All chapters of the book, for "Erwähnt in". */
+  chapters?: Chapter[]
+  onOpenEntry?: (entryId: string) => void
+  onOpenChapter?: (chapterId: string, range: { from: number; to: number }) => void
 }
 
 /** Folders as a flat list with their full path, e.g. "Welt / Orte". */
@@ -95,12 +106,18 @@ export function WikiEntryEditor({
   onDeleted,
   onSaveFailed,
   prepare = prepareImage,
+  entries,
+  chapters,
+  onOpenEntry,
+  onOpenChapter,
 }: Props) {
   const [entry, setEntry] = useState<WikiEntry | null | undefined>(undefined)
   const [aliasDraft, setAliasDraft] = useState('')
   const [saveFailed, setSaveFailed] = useState(false)
   const [imageError, setImageError] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  // The property whose name is being typed: it keeps its own row until the field is left.
+  const [editingKey, setEditingKey] = useState<string | null>(null)
   /** Bumped when the notes were replaced from storage, so the notes field starts over with the new text. */
   const [notesVersion, setNotesVersion] = useState(0)
   const [imageToRemove, setImageToRemove] = useState<string | null>(null)
@@ -121,6 +138,8 @@ export function WikiEntryEditor({
   onChangedRef.current = onChanged
   const onSaveFailedRef = useRef(onSaveFailed)
   onSaveFailedRef.current = onSaveFailed
+  const onOpenEntryRef = useRef(onOpenEntry)
+  onOpenEntryRef.current = onOpenEntry
 
   /**
    * The entry was changed elsewhere (another tab or a sync run) while it was edited here.
@@ -241,6 +260,14 @@ export function WikiEntryEditor({
 
   const paths = useMemo(() => folderPaths(folders), [folders])
 
+  // Links to other entries: never to this one.
+  const allMatcher = useMemo(() => buildMatcher(entries ?? []), [entries])
+  const otherMatcher = useMemo(() => buildMatcher((entries ?? []).filter((item) => item.id !== entryId)), [entries, entryId])
+  const notesLinks = useMemo(() => createWikiLinks({ onOpen: (id) => onOpenEntryRef.current?.(id) }), [])
+  const notesExtensions = useMemo(() => [notesLinks.extension], [notesLinks])
+  useEffect(() => notesLinks.setMatcher(otherMatcher), [notesLinks, otherMatcher])
+  const mentions = useMemo(() => (chapters ? mentionsOf(entryId, chapters, allMatcher) : []), [chapters, entryId, allMatcher])
+
   entryRef.current = entry ?? null
 
   if (entry === undefined) return <p className="wiki-entry-message muted">Lädt …</p>
@@ -262,6 +289,36 @@ export function WikiEntryEditor({
 
   const setProperty = (id: string, patch: Partial<WikiProperty>) =>
     change({ properties: entry.properties.map((p) => (p.id === id ? { ...p, ...patch } : p)) })
+
+  // Template fields come from the entry's top-level folder; their values belong to this entry.
+  const top = topFolderOf(entry.folderId, folders)
+  const template = top?.template ?? []
+  // Each template field shows the first property with its name. A field name still being
+  // typed stays in its own row, and further properties with the same name stay visible.
+  const templateOwner = new Map<string, string>()
+  for (const property of entry.properties) {
+    const key = property.key.trim()
+    if (template.includes(key) && !templateOwner.has(key) && property.id !== editingKey) templateOwner.set(key, property.id)
+  }
+  const shownInTemplate = new Set(templateOwner.values())
+  const valueOf = (key: string) => entry.properties.find((property) => property.id === templateOwner.get(key))
+  const ownProperties = entry.properties.filter((property) => !shownInTemplate.has(property.id))
+  const setTemplateValue = (key: string, value: string) => {
+    const existing = valueOf(key)
+    if (existing) setProperty(existing.id, { value })
+    else change({ properties: [...entry.properties, { id: crypto.randomUUID(), key, value }] })
+  }
+  const setPinned = async (key: string, pinned: boolean) => {
+    if (!top || !key.trim()) return
+    try {
+      await changeTemplate(top.id, pinned ? { add: key } : { remove: key })
+      onChangedRef.current()
+    } catch {
+      setSaveFailed(true)
+    }
+  }
+  const pinLabel = top ? `Feld für alle Einträge in „${top.name}"` : ''
+  const linkProps = { matcher: otherMatcher, onOpen: onOpenEntry }
 
   const reloadImages = async () => {
     const stored = await getEntry(entryId)
@@ -387,24 +444,63 @@ export function WikiEntryEditor({
 
       <div className="wiki-field">
         <span className="wiki-label">Eigenschaften</span>
-        {entry.properties.length > 0 && (
+        {(template.length > 0 || ownProperties.length > 0) && (
           <ul className="wiki-properties">
-            {entry.properties.map((property) => (
+            {template.map((key, index) => (
+              <li key={`template-${key}`} className="wiki-template-row">
+                <label htmlFor={`${ids}-template-${index}`} className="wiki-template-key">
+                  {key}
+                </label>
+                <LinkedValue
+                  id={`${ids}-template-${index}`}
+                  value={valueOf(key)?.value ?? ''}
+                  placeholder="–"
+                  onChange={(value) => setTemplateValue(key, value)}
+                  {...linkProps}
+                />
+                <button
+                  className="ghost icon wiki-pin"
+                  aria-pressed={true}
+                  aria-label={pinLabel}
+                  title={`${pinLabel} (an)`}
+                  onClick={() => void setPinned(key, false)}
+                >
+                  ★
+                </button>
+              </li>
+            ))}
+            {ownProperties.map((property) => (
               <li key={property.id}>
                 <input
                   type="text"
                   aria-label="Eigenschaft"
                   placeholder="z. B. Augenfarbe"
                   value={property.key}
+                  onFocus={() => setEditingKey(property.id)}
+                  onBlur={() => setEditingKey(null)}
                   onChange={(event) => setProperty(property.id, { key: event.target.value })}
                 />
-                <input
-                  type="text"
-                  aria-label="Wert"
-                  placeholder="Wert"
+                <LinkedValue
                   value={property.value}
-                  onChange={(event) => setProperty(property.id, { value: event.target.value })}
+                  ariaLabel="Wert"
+                  placeholder="Wert"
+                  onChange={(value) => setProperty(property.id, { value })}
+                  {...linkProps}
                 />
+                {top ? (
+                  <button
+                    className="ghost icon wiki-pin"
+                    aria-pressed={false}
+                    aria-label={pinLabel}
+                    title={pinLabel}
+                    disabled={!property.key.trim()}
+                    onClick={() => void setPinned(property.key, true)}
+                  >
+                    ☆
+                  </button>
+                ) : (
+                  <span />
+                )}
                 <button
                   className="ghost icon"
                   aria-label="Eigenschaft entfernen"
@@ -471,6 +567,7 @@ export function WikiEntryEditor({
           ariaLabel="Notizen"
           placeholder="Freier Text …"
           onChange={(body) => change({ body })}
+          extensions={notesExtensions}
         />
       </div>
 
@@ -482,6 +579,32 @@ export function WikiEntryEditor({
         />
         Im Text automatisch verlinken
       </label>
+
+      {chapters && (
+        <div className="wiki-field">
+          <span className="wiki-label" id={`${ids}-mentions`}>
+            Erwähnt in
+          </span>
+          {mentions.length === 0 ? (
+            <p className="muted wiki-none">Noch in keinem Kapitel erwähnt</p>
+          ) : (
+            <ul className="wiki-mentions" aria-labelledby={`${ids}-mentions`}>
+              {mentions.map((mention) => {
+                const index = chapters.findIndex((chapter) => chapter.id === mention.chapterId)
+                return (
+                  <li key={mention.chapterId}>
+                    <button onClick={() => onOpenChapter?.(mention.chapterId, mention.first)}>
+                      <span className="wiki-mention-number">{index + 1}</span>
+                      <span className="wiki-mention-title">{chapters[index].title}</span>
+                      <span className="wiki-mention-count">{mention.count}×</span>
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </div>
+      )}
 
       <div className="wiki-entry-footer">
         <button className="ghost danger" onClick={() => setConfirmDelete(true)}>

@@ -398,3 +398,8 @@ button.icon.danger:hover {
 .book-header-space {
   flex: 1;
 }
+
+.book-panel-actions {
+  display: flex;
+  gap: 0.25rem;
+}

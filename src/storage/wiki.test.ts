@@ -12,7 +12,9 @@ import {
   listEntries,
   listFolders,
   removeImage,
+  changeTemplate,
   renameFolder,
+  setFolderTemplate,
   updateEntry,
 } from './wiki'
 
@@ -34,8 +36,8 @@ test('folders: create, rename, list by name, fallback name', async () => {
 
 test('entries: defaults, update, alias clean-up, name fallback', async () => {
   const book = await createBook('B')
-  const entry = await createEntry(book.id, 'Prince')
-  expect(entry).toMatchObject({ name: 'Prince', aliases: [], properties: [], imageIds: [], body: '', autoLink: true, folderId: null })
+  const entry = await createEntry(book.id, 'Pascal')
+  expect(entry).toMatchObject({ name: 'Pascal', aliases: [], properties: [], imageIds: [], body: '', autoLink: true, folderId: null })
   const updated = await updateEntry(entry.id, {
     name: '  ',
     aliases: [' Nys ', '', 'Nys', 'the Heir'],
@@ -67,7 +69,7 @@ test('deleteFolder moves entries and subfolders to the parent', async () => {
 
 test('images: add, read, remove; deleteEntry removes its images', async () => {
   const book = await createBook('B')
-  const entry = await createEntry(book.id, 'Prince')
+  const entry = await createEntry(book.id, 'Pascal')
   const a = await addImage(entry.id, pixel())
   const b = await addImage(entry.id, pixel())
   expect((await getEntry(entry.id))!.imageIds).toEqual([a.id, b.id])
@@ -109,4 +111,22 @@ test('a version 1 database keeps its books and chapters after the upgrade', asyn
   expect((await listBooks()).map((b) => b.title)).toEqual(['Alt'])
   expect((await getChapter('c1'))!.content).toBe('bleibt')
   expect((await createEntry('b1', 'Neu')).name).toBe('Neu')
+})
+
+test('folder templates are cleaned when stored', async () => {
+  const book = await createBook('B')
+  const folder = await createFolder(book.id, 'Characters')
+  const updated = await setFolderTemplate(folder.id, [' Augenfarbe ', 'Alter', '', 'Alter'])
+  expect(updated.template).toEqual(['Augenfarbe', 'Alter'])
+  expect((await listFolders(book.id))[0].template).toEqual(['Augenfarbe', 'Alter'])
+})
+
+test('template changes work on the stored template', async () => {
+  const book = await createBook('B')
+  const folder = await createFolder(book.id, 'Characters')
+  await Promise.all([changeTemplate(folder.id, { add: 'Alter' }), changeTemplate(folder.id, { add: 'Größe' })])
+  expect((await listFolders(book.id))[0].template!.sort()).toEqual(['Alter', 'Größe'])
+  await changeTemplate(folder.id, { remove: 'Alter' })
+  await changeTemplate(folder.id, { remove: 'Größe' })
+  expect((await listFolders(book.id))[0].template).toBeUndefined()
 })

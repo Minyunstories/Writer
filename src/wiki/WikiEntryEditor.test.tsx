@@ -9,7 +9,7 @@ import { WikiEntryEditor } from './WikiEntryEditor'
 
 const prepare = vi.fn(async () => ({ type: 'image/webp', data: new Uint8Array([1, 2, 3]).buffer, width: 4, height: 2 }))
 
-async function setup(name = 'Prince') {
+async function setup(name = 'Pascal') {
   const book = await createBook('B')
   const folder = await createFolder(book.id, 'Personen')
   const entry = await createEntry(book.id, name)
@@ -40,7 +40,7 @@ beforeEach(async () => {
 test('typing a name saves it and reports the change', async () => {
   const { entry, user, onChanged } = await setup()
   const name = screen.getByLabelText('Name')
-  expect(name).toHaveValue('Prince')
+  expect(name).toHaveValue('Pascal')
   await user.clear(name)
   await user.type(name, 'Prinz')
   await waitFor(async () => expect((await getEntry(entry.id))!.name).toBe('Prinz'))
@@ -93,9 +93,9 @@ test('notes are stored', async () => {
 
 test('images can be attached and removed', async () => {
   const { entry, user } = await setup()
-  const file = new File(['x'], 'prince.png', { type: 'image/png' })
+  const file = new File(['x'], 'pascal.png', { type: 'image/png' })
   await user.upload(screen.getByLabelText('Bild hinzufügen'), file)
-  const figure = await screen.findByRole('img', { name: 'Bild 1 von Prince' })
+  const figure = await screen.findByRole('img', { name: 'Bild 1 von Pascal' })
   expect(prepare).toHaveBeenCalledWith(file)
   const [imageId] = (await getEntry(entry.id))!.imageIds
   expect((await getImage(imageId))!.width).toBe(4)
@@ -117,7 +117,7 @@ test('an unreadable image is reported', async () => {
 test('deleting asks first', async () => {
   const { entry, user, onDeleted } = await setup()
   await user.click(screen.getByRole('button', { name: 'Eintrag löschen' }))
-  expect(screen.getByText('Eintrag „Prince" wirklich löschen?')).toBeInTheDocument()
+  expect(screen.getByText('Eintrag „Pascal" wirklich löschen?')).toBeInTheDocument()
   await user.click(screen.getByRole('button', { name: 'Endgültig löschen' }))
   await waitFor(() => expect(onDeleted).toHaveBeenCalled())
   expect(await getEntry(entry.id)).toBeUndefined()
@@ -127,7 +127,7 @@ test('unmounting right after typing still saves', async () => {
   const { entry, user, unmount } = await setup()
   await user.type(screen.getByLabelText('Name'), 'ssin')
   unmount()
-  await waitFor(async () => expect((await getEntry(entry.id))!.name).toBe('Princessin'), { timeout: 200 })
+  await waitFor(async () => expect((await getEntry(entry.id))!.name).toBe('Pascalssin'), { timeout: 200 })
 })
 
 test('an empty name shows Unbenannt after leaving the field', async () => {
@@ -195,9 +195,9 @@ test('an entry changed elsewhere while typing here is not overwritten; my versio
   expect(await screen.findByText(/an anderer Stelle geändert/)).toBeInTheDocument()
   const all = await wikiStorage.listEntries(book.id)
   expect(all.map((e) => [e.name, e.body, e.aliases, e.autoLink])).toEqual([
-    ['Prince', 'vom anderen Gerät', ['Nys'], true],
-    ['Princess (meine Fassung)', '', [], false],
+    ['Pascal', 'vom anderen Gerät', ['Nys'], true],
+    ['Pascalss (meine Fassung)', '', [], false],
   ])
-  await waitFor(() => expect(name).toHaveValue('Prince'))
+  await waitFor(() => expect(name).toHaveValue('Pascal'))
   await waitFor(() => expect(screen.getByLabelText('Notizen')).toHaveTextContent('vom anderen Gerät'))
 })

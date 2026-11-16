@@ -148,3 +148,21 @@ test('follows a rename made in the sidebar', async () => {
   rerender(<Editor book={book} chapter={renamed} onChanged={() => {}} />)
   await waitFor(() => expect(screen.getByLabelText('Kapiteltitel')).toHaveValue('Prolog'))
 })
+
+test('jumpTo selects and marks a range, also when it changes while open', async () => {
+  const book = await createBook('B')
+  const chapter = await createChapter(book.id, 'A', 'Eins Pascal zwei Pascal')
+  const { rerender } = render(<Editor book={book} chapter={chapter} onChanged={() => {}} jumpTo={{ from: 5, to: 11, key: 1 }} />)
+  const view = await waitFor(() => {
+    const found = EditorView.findFromDOM(document.querySelector<HTMLElement>('.cm-editor')!)
+    if (!found) throw new Error('not mounted')
+    return found
+  })
+  // The cursor goes before the mention; the mention itself is only marked, so typing never replaces it.
+  await waitFor(() => expect([view.state.selection.main.from, view.state.selection.main.to]).toEqual([5, 5]))
+  expect(document.querySelector('.cm-mw-flash')?.textContent).toBe('Pascal')
+  rerender(<Editor book={book} chapter={chapter} onChanged={() => {}} jumpTo={{ from: 17, to: 23, key: 2 }} />)
+  await waitFor(() => expect([view.state.selection.main.from, view.state.selection.main.to]).toEqual([17, 17]))
+  rerender(<Editor book={book} chapter={chapter} onChanged={() => {}} jumpTo={{ from: 900, to: 950, key: 3 }} />)
+  await waitFor(() => expect(view.state.selection.main.from).toBe(view.state.doc.length))
+})

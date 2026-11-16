@@ -1,5 +1,5 @@
 import type { Book, Chapter, FontId } from '../types'
-import { announceChange, cleanTitle, ConflictError, db, newId } from './connection'
+import { announceChange, cleanList, cleanTitle, ConflictError, db, newId } from './connection'
 
 export { ConflictError, resetDatabaseForTests } from './connection'
 
@@ -107,7 +107,7 @@ export async function createChapter(bookId: string, title: string, content = '')
 
 export async function updateChapter(
   id: string,
-  patch: Partial<Pick<Chapter, 'title' | 'content' | 'outline'>>,
+  patch: Partial<Pick<Chapter, 'title' | 'content' | 'outline' | 'tags'>>,
   options?: { expectedContent?: string; expectedOutline?: string },
 ): Promise<Chapter> {
   const tx = (await db()).transaction(['books', 'chapters'], 'readwrite')
@@ -131,6 +131,38 @@ export async function updateChapter(
   const now = Date.now()
   const next: Chapter = { ...current, ...patch, updatedAt: now }
   if (patch.title !== undefined) next.title = cleanTitle(patch.title)
+  if (patch.tags !== undefined) {
+    const tags = cleanList(patch.tags)
+    if (tags.length > 0) next.tags = tags
+    else delete next.tags
+  }
+  await tx.objectStore('chapters').put(next)
+  const book = await tx.objectStore('books').get(current.bookId)
+  if (book) await tx.objectStore('books').put({ ...book, updatedAt: now })
+  await tx.done
+  announceChange()
+  return next
+}
+
+/**
+ * Adds or removes one tag on the stored chapter, inside one transaction, so two quick
+ * changes (or a change from another tab) never undo each other.
+ */
+export async function changeChapterTags(id: string, change: { add?: string; remove?: string }): Promise<Chapter> {
+  const tx = (await db()).transaction(['books', 'chapters'], 'readwrite')
+  const current = await tx.objectStore('chapters').get(id)
+  if (!current) throw new Error(`Chapter not found: ${id}`)
+  const removed = change.remove?.trim()
+  const tags = cleanList([...(current.tags ?? []).filter((tag) => tag !== removed), change.add ?? ''])
+  const next: Chapter = { ...current }
+  if (tags.length > 0) next.tags = tags
+  else delete next.tags
+  if (JSON.stringify(next.tags ?? []) === JSON.stringify(current.tags ?? [])) {
+    await tx.done
+    return current
+  }
+  const now = Date.now()
+  next.updatedAt = now
   await tx.objectStore('chapters').put(next)
   const book = await tx.objectStore('books').get(current.bookId)
   if (book) await tx.objectStore('books').put({ ...book, updatedAt: now })

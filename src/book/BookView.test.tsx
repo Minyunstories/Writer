@@ -1,5 +1,5 @@
 import { EditorView } from '@codemirror/view'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { beforeEach, expect, test, vi } from 'vitest'
@@ -17,8 +17,8 @@ function Location() {
 function renderAt(path: string, withEditor = false) {
   const view = withEditor ? (
     <BookView
-      renderChapter={({ book, chapter, onChanged, extensions }) => (
-        <Editor key={chapter.id} book={book} chapter={chapter} onChanged={onChanged} extraExtensions={extensions} />
+      renderChapter={({ book, chapter, onChanged, extensions, jumpTo, onJumped }) => (
+        <Editor key={chapter.id} book={book} chapter={chapter} onChanged={onChanged} extraExtensions={extensions} jumpTo={jumpTo} onJumped={onJumped} />
       )}
     />
   ) : (
@@ -211,8 +211,8 @@ test('a name in the chapter opens its entry in the panel, where it can be edited
   const user = userEvent.setup()
   const book = await createBook('Sturmlied')
   const chapter = await createChapter(book.id, 'Anfang')
-  await updateChapter(chapter.id, { content: 'Prince stood.' })
-  const entry = await createEntry(book.id, 'Prince')
+  await updateChapter(chapter.id, { content: 'Pascal stood.' })
+  const entry = await createEntry(book.id, 'Pascal')
   renderAt(`/book/${book.id}/chapters/${chapter.id}`, true)
 
   const link = await waitFor(() => {
@@ -220,13 +220,13 @@ test('a name in the chapter opens its entry in the panel, where it can be edited
     if (!found) throw new Error('no link yet')
     return found
   })
-  expect(link).toHaveTextContent('Prince')
+  expect(link).toHaveTextContent('Pascal')
   expect(screen.queryByRole('complementary', { name: 'Wiki-Eintrag' })).not.toBeInTheDocument()
   await user.click(link)
 
   const panel = await screen.findByRole('complementary', { name: 'Wiki-Eintrag' })
   const name = await within(panel).findByLabelText('Name')
-  expect(name).toHaveValue('Prince')
+  expect(name).toHaveValue('Pascal')
   expect(within(panel).getByRole('link', { name: 'Im Wiki öffnen' })).toHaveAttribute(
     'href',
     `/book/${book.id}/wiki/${entry.id}`,
@@ -235,7 +235,7 @@ test('a name in the chapter opens its entry in the panel, where it can be edited
   await user.type(name, 'Prinz')
   await waitFor(async () => expect((await getEntry(entry.id))!.name).toBe('Prinz'))
   await waitFor(() => expect(document.querySelector('.cm-mw-link')).toBeNull())
-  expect(document.querySelector('.cm-content')).toHaveTextContent('Prince stood.')
+  expect(document.querySelector('.cm-content')).toHaveTextContent('Pascal stood.')
 
   await user.click(within(panel).getByRole('button', { name: 'Schließen' }))
   expect(screen.queryByRole('complementary', { name: 'Wiki-Eintrag' })).not.toBeInTheDocument()
@@ -295,4 +295,138 @@ test('outline: word counts are fresh after chapter text was saved elsewhere', as
   await updateChapter(chapter.id, { content: 'eins zwei drei' })
   await user.click(screen.getByRole('tab', { name: 'Outline' }))
   expect(await screen.findByText('3 Wörter')).toBeInTheDocument()
+})
+
+test('panel: opens from a mention in the outline', async () => {
+  const user = userEvent.setup()
+  const book = await createBook('Sturmlied')
+  await createChapter(book.id, 'Anfang', 'Pascal stood.')
+  const chars = await createFolder(book.id, 'Characters')
+  await createEntry(book.id, 'Pascal', chars.id)
+  renderAt(`/book/${book.id}/outline`)
+  const group = await screen.findByRole('group', { name: 'Characters' })
+  await user.click(within(group).getByRole('button', { name: 'Pascal' }))
+  const panel = await screen.findByRole('complementary', { name: 'Wiki-Eintrag' })
+  expect(await within(panel).findByLabelText('Name')).toHaveValue('Pascal')
+})
+
+test('panel: links inside the panel go forward, Zurück goes back, Schließen ends it', async () => {
+  const user = userEvent.setup()
+  const book = await createBook('Sturmlied')
+  const chapter = await createChapter(book.id, 'Anfang', 'Pascal stood.')
+  await createEntry(book.id, 'Elena')
+  const pascal = await createEntry(book.id, 'Pascal')
+  await db.updateChapter(chapter.id, { content: 'Pascal stood.' })
+  const { updateEntry } = await import('../storage/wiki')
+  await updateEntry(pascal.id, { body: 'Sohn von Elena.' })
+  renderAt(`/book/${book.id}/chapters/${chapter.id}`, true)
+  const link = await waitFor(() => {
+    const found = document.querySelector<HTMLElement>('.editor .cm-mw-link')
+    if (!found) throw new Error('no link yet')
+    return found
+  })
+  await user.click(link)
+  const panel = await screen.findByRole('complementary', { name: 'Wiki-Eintrag' })
+  expect(await within(panel).findByLabelText('Name')).toHaveValue('Pascal')
+  expect(within(panel).queryByRole('button', { name: 'Zurück' })).not.toBeInTheDocument()
+  const inner = await waitFor(() => {
+    const found = panel.querySelector<HTMLElement>('.markdown-field .cm-mw-link')
+    if (!found) throw new Error('no link in notes yet')
+    return found
+  })
+  fireEvent.click(inner)
+  await waitFor(() => expect(within(panel).getByLabelText('Name')).toHaveValue('Elena'))
+  await user.click(within(panel).getByRole('button', { name: 'Zurück' }))
+  await waitFor(() => expect(within(panel).getByLabelText('Name')).toHaveValue('Pascal'))
+  await user.click(within(panel).getByRole('button', { name: 'Schließen' }))
+  expect(screen.queryByRole('complementary', { name: 'Wiki-Eintrag' })).not.toBeInTheDocument()
+})
+
+test('wiki: "Erwähnt in" opens the chapter at the first mention', async () => {
+  const user = userEvent.setup()
+  const book = await createBook('Sturmlied')
+  await createChapter(book.id, 'Vorher', 'Nichts.')
+  const chapter = await createChapter(book.id, 'Anfang', 'Es war Pascal. Pascal!')
+  const pascal = await createEntry(book.id, 'Pascal')
+  renderAt(`/book/${book.id}/wiki/${pascal.id}`, true)
+  const list = await screen.findByRole('list', { name: 'Erwähnt in' })
+  await user.click(within(list).getByRole('button', { name: /Anfang/ }))
+  await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(`/book/${book.id}/chapters/${chapter.id}`))
+  const view = await waitFor(() => {
+    const found = EditorView.findFromDOM(document.querySelector<HTMLElement>('.editor .cm-editor')!)
+    if (!found) throw new Error('not mounted')
+    return found
+  })
+  await waitFor(() => expect([view.state.selection.main.from, view.state.selection.main.to]).toEqual([7, 7]))
+  expect(document.querySelector('.cm-mw-flash')?.textContent).toBe('Pascal')
+
+  // Later visits to the chapter do not jump again.
+  await user.click(screen.getByRole('link', { name: 'Vorher' }))
+  await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/chapters/'))
+  await user.click(screen.getByRole('link', { name: 'Anfang' }))
+  const again = await waitFor(() => {
+    const found = EditorView.findFromDOM(document.querySelector<HTMLElement>('.editor .cm-editor')!)
+    if (!found || found === view) throw new Error('not remounted')
+    return found
+  })
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  expect(again.state.selection.main.from).toBe(0)
+  expect(document.querySelector('.cm-mw-flash')).toBeNull()
+})
+
+test('chapter: [[ creates an entry in the chosen folder', async () => {
+  const book = await createBook('Sturmlied')
+  const chapter = await createChapter(book.id, 'Anfang', '')
+  await createFolder(book.id, 'Characters')
+  renderAt(`/book/${book.id}/chapters/${chapter.id}`, true)
+  const view = await waitFor(() => {
+    const found = EditorView.findFromDOM(document.querySelector<HTMLElement>('.editor .cm-editor')!)
+    if (!found) throw new Error('not mounted')
+    return found
+  })
+  const { startCompletion, currentCompletions, acceptCompletion, selectedCompletionIndex, setSelectedCompletion } = await import('@codemirror/autocomplete')
+  view.dispatch({ changes: { from: 0, insert: 'Da kam [[Mira' }, selection: { anchor: 13 } })
+  startCompletion(view)
+  await waitFor(() => expect(currentCompletions(view.state).map((c) => c.label)).toContain('„Mira" neu anlegen in: Characters'))
+  // Nothing is picked until the writer picks it: Enter keeps writing.
+  await new Promise((resolve) => setTimeout(resolve, 120))
+  expect(selectedCompletionIndex(view.state)).toBeNull()
+  expect(acceptCompletion(view)).toBe(false)
+  const index = currentCompletions(view.state).findIndex((c) => c.label === '„Mira" neu anlegen in: Characters')
+  view.dispatch({ effects: setSelectedCompletion(index) })
+  // CodeMirror ignores an accept within its short interaction delay after the list opens.
+  await new Promise((resolve) => setTimeout(resolve, 120))
+  expect(selectedCompletionIndex(view.state)).toBe(index)
+  expect(acceptCompletion(view)).toBe(true)
+  expect(view.state.doc.toString()).toBe('Da kam Mira')
+  await waitFor(async () => {
+    const [entry] = await listEntries(book.id)
+    expect(entry?.name).toBe('Mira')
+    expect((await listFolders(book.id))[0].id).toBe(entry.folderId)
+  })
+  await waitFor(() => expect(document.querySelector('.editor .cm-mw-link')?.textContent).toBe('Mira'))
+})
+
+test('panel: on a phone, jumping from "Erwähnt in" closes the panel so the place is visible', async () => {
+  const original = window.matchMedia
+  window.matchMedia = ((query: string) => ({ matches: query.includes('max-width'), media: query, addEventListener() {}, removeEventListener() {} })) as unknown as typeof window.matchMedia
+  try {
+    const user = userEvent.setup()
+    const book = await createBook('Sturmlied')
+    const chapter = await createChapter(book.id, 'Anfang', 'Pascal stood.')
+    await createEntry(book.id, 'Pascal')
+    renderAt(`/book/${book.id}/chapters/${chapter.id}`, true)
+    const link = await waitFor(() => {
+      const found = document.querySelector<HTMLElement>('.editor .cm-mw-link')
+      if (!found) throw new Error('no link yet')
+      return found
+    })
+    await user.click(link)
+    const panel = await screen.findByRole('complementary', { name: 'Wiki-Eintrag' })
+    const list = await within(panel).findByRole('list', { name: 'Erwähnt in' })
+    await user.click(within(list).getByRole('button', { name: /Anfang/ }))
+    await waitFor(() => expect(screen.queryByRole('complementary', { name: 'Wiki-Eintrag' })).not.toBeInTheDocument())
+  } finally {
+    window.matchMedia = original
+  }
 })

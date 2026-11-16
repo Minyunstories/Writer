@@ -1,13 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ZoomControl } from '../book/ZoomControl'
 import { useAutosave } from '../lib/useAutosave'
 import { countWords, formatWordCount } from '../lib/wordCount'
 import { useZoom } from '../lib/zoom'
 import { SYNCED_EVENT } from '../storage/connection'
-import { ConflictError, getChapter, moveChapter, updateChapter } from '../storage/db'
-import type { Book, Chapter } from '../types'
+import { changeChapterTags, ConflictError, getChapter, moveChapter, updateChapter } from '../storage/db'
+import type { Book, Chapter, WikiEntry, WikiFolder } from '../types'
+import { buildMatcher, type Matcher } from '../wiki/linker'
 import { MarkdownField } from '../wiki/MarkdownField'
+import { entriesIn, groupByTopFolder } from '../wiki/mentions'
+import { Tags } from './Tags'
 import './outline.css'
 
 interface Props {
@@ -18,6 +21,10 @@ interface Props {
   /** Called when something could not be stored. */
   onError: () => void
   onCreateChapter: () => void
+  /** Wiki entries and folders, for the list of entries each chapter mentions. */
+  entries?: WikiEntry[]
+  folders?: WikiFolder[]
+  onOpenEntry?: (entryId: string) => void
 }
 
 interface CardProps {
@@ -35,6 +42,13 @@ interface CardProps {
   onDragEnd: () => void
   onDropHere: () => void
   onError: () => void
+  tagSuggestions: string[]
+  onTagsChange: (change: { add: string } | { remove: string }) => void
+  onFilter: (tag: string) => void
+  matcher: Matcher
+  entries: WikiEntry[]
+  folders: WikiFolder[]
+  onOpenEntry?: (entryId: string) => void
 }
 
 function OutlineCard({
@@ -50,6 +64,13 @@ function OutlineCard({
   onDragEnd,
   onDropHere,
   onError,
+  tagSuggestions,
+  onTagsChange,
+  onFilter,
+  matcher,
+  entries,
+  folders,
+  onOpenEntry,
 }: CardProps) {
   const [over, setOver] = useState(false)
   // The note is read from storage, not from the chapter list, which may be outdated.
@@ -146,6 +167,11 @@ function OutlineCard({
     await load()
   }
 
+  const mentionGroups = useMemo(
+    () => groupByTopFolder(entriesIn(chapter, matcher), entries, folders),
+    [chapter, matcher, entries, folders],
+  )
+
   return (
     <li
       id={`outline-${chapter.id}`}
@@ -170,7 +196,7 @@ function OutlineCard({
       <header className="outline-card-header">
         <span
           className="outline-handle"
-          draggable
+          draggable={!busy}
           title="Ziehen zum Umsortieren"
           aria-hidden="true"
           onDragStart={(event) => {
@@ -207,6 +233,26 @@ function OutlineCard({
           ↓
         </button>
       </header>
+      <Tags tags={chapter.tags ?? []} suggestions={tagSuggestions} onChange={onTagsChange} onFilter={onFilter} />
+      {mentionGroups.length > 0 && (
+        <div className="outline-mentions">
+          {mentionGroups.map((group) => {
+            const label = group.folder?.name ?? 'Weitere'
+            return (
+              <div key={group.folder?.id ?? 'none'} role="group" aria-label={label} className="outline-mentions-group">
+                <span className="outline-mentions-folder" aria-hidden="true">
+                  {label}
+                </span>
+                {group.entries.map((entry) => (
+                  <button key={entry.id} className="outline-mention" onClick={() => onOpenEntry?.(entry.id)}>
+                    {entry.name}
+                  </button>
+                ))}
+              </div>
+            )
+          })}
+        </div>
+      )}
       {failed && !conflict && (
         <p className="status-error" role="alert">
           Speichern fehlgeschlagen, neuer Versuch läuft.
@@ -242,9 +288,25 @@ function OutlineCard({
   )
 }
 
-export function Outline({ book, chapters, onChanged, onError, onCreateChapter }: Props) {
+export function Outline({ book, chapters, onChanged, onError, onCreateChapter, entries = [], folders = [], onOpenEntry }: Props) {
   const [zoom] = useZoom('outline')
   const [dragId, setDragId] = useState<string | null>(null)
+  const [filter, setFilter] = useState<string | null>(null)
+  const matcher = useMemo(() => buildMatcher(entries), [entries])
+  const allTags = useMemo(
+    () => [...new Set(chapters.flatMap((chapter) => chapter.tags ?? []))].sort((a, b) => a.localeCompare(b, 'de')),
+    [chapters],
+  )
+  const visible = filter ? chapters.filter((chapter) => chapter.tags?.includes(filter)) : chapters
+
+  const setTags = async (chapterId: string, change: { add: string } | { remove: string }) => {
+    try {
+      await changeChapterTags(chapterId, change)
+    } catch {
+      onError()
+    }
+    await onChanged()
+  }
 
   const [busy, setBusy] = useState(false)
   const busyRef = useRef(false)
@@ -288,6 +350,15 @@ export function Outline({ book, chapters, onChanged, onError, onCreateChapter }:
         <ZoomControl area="outline" />
       </header>
 
+      {filter && (
+        <div className="outline-filter">
+          <span>Filter: {filter}</span>
+          <button className="ghost" aria-label="Filter aufheben" onClick={() => setFilter(null)}>
+            ×
+          </button>
+        </div>
+      )}
+
       {chapters.length === 0 ? (
         <div className="outline-empty">
           <p className="muted">Noch keine Kapitel</p>
@@ -297,23 +368,34 @@ export function Outline({ book, chapters, onChanged, onError, onCreateChapter }:
         </div>
       ) : (
         <ol className="outline-list">
-          {chapters.map((chapter, index) => (
-            <OutlineCard
-              key={chapter.id}
-              book={book}
-              chapter={chapter}
-              index={index}
-              count={chapters.length}
-              dragging={dragId === chapter.id}
-              reordering={dragId !== null}
-              busy={busy}
-              onMove={(direction) => step(index, direction)}
-              onDragStart={() => setDragId(chapter.id)}
-              onDragEnd={() => setDragId(null)}
-              onDropHere={() => dropOn(index)}
-              onError={onError}
-            />
-          ))}
+          {visible.map((chapter) => {
+            const index = chapters.indexOf(chapter)
+            return (
+              <OutlineCard
+                key={chapter.id}
+                book={book}
+                chapter={chapter}
+                index={index}
+                count={chapters.length}
+                dragging={dragId === chapter.id}
+                reordering={dragId !== null}
+                // While filtered, neighbours on screen are not neighbours in the book: no moving.
+                busy={busy || filter !== null}
+                onMove={(direction) => step(index, direction)}
+                onDragStart={() => setDragId(chapter.id)}
+                onDragEnd={() => setDragId(null)}
+                onDropHere={() => dropOn(index)}
+                onError={onError}
+                tagSuggestions={allTags}
+                onTagsChange={(change) => void setTags(chapter.id, change)}
+                onFilter={setFilter}
+                matcher={matcher}
+                entries={entries}
+                folders={folders}
+                onOpenEntry={onOpenEntry}
+              />
+            )
+          })}
         </ol>
       )}
 

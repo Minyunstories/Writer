@@ -36,6 +36,10 @@ function describe(note: ConflictNote): string {
       return `Titel und Kapitelreihenfolge von ${book}: Es gilt der Stand des anderen Geräts; neue Kapitel von hier hängen am Ende.`
     case 'folders':
       return `Wiki-Ordner in ${book}: Die Ordner beider Geräte wurden zusammengeführt.`
+    case 'tags':
+      return `Tags in ${book}: Die Tags beider Geräte wurden zusammengeführt.`
+    case 'templates':
+      return `Vorlagenfelder in ${book}: Die Felder beider Geräte wurden zusammengeführt.`
     default:
       return `Bild in ${book}: Es gilt der Stand des anderen Geräts.`
   }

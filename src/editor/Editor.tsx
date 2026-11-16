@@ -1,7 +1,7 @@
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
 import { markdown } from '@codemirror/lang-markdown'
-import { Annotation, EditorSelection, EditorState, type Extension } from '@codemirror/state'
-import { EditorView, keymap, type Command } from '@codemirror/view'
+import { Annotation, EditorSelection, EditorState, StateEffect, StateField, type Extension } from '@codemirror/state'
+import { Decoration, EditorView, keymap, type Command, type DecorationSet } from '@codemirror/view'
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { ZoomControl } from '../book/ZoomControl'
 import { countWords } from '../lib/wordCount'
@@ -16,6 +16,46 @@ import { StatusBar } from './StatusBar'
 import './editor.css'
 
 const COUNT_DELAY = 250
+
+/** A short highlight where the writer jumped to, e.g. from "Erwähnt in". */
+const flash = StateEffect.define<{ from: number; to: number } | null>()
+const flashField = StateField.define<DecorationSet>({
+  create: () => Decoration.none,
+  update(value, transaction) {
+    let next = value.map(transaction.changes)
+    for (const effect of transaction.effects) {
+      if (effect.is(flash)) {
+        next = effect.value && effect.value.to > effect.value.from
+          ? Decoration.set([Decoration.mark({ class: 'cm-mw-flash' }).range(effect.value.from, effect.value.to)])
+          : Decoration.none
+      }
+    }
+    return next
+  },
+  provide: (field) => EditorView.decorations.from(field),
+})
+
+export interface JumpTarget {
+  from: number
+  to: number
+  /** A new key jumps again, even to the same place. */
+  key: number
+}
+
+function jump(view: EditorView, target: JumpTarget) {
+  const length = view.state.doc.length
+  const from = Math.min(Math.max(target.from, 0), length)
+  const to = Math.min(Math.max(target.to, from), length)
+  // The cursor goes in front of the place, which is only marked: typing never replaces it.
+  view.dispatch({
+    selection: EditorSelection.cursor(from),
+    effects: [EditorView.scrollIntoView(from, { y: 'center' }), flash.of({ from, to })],
+  })
+  window.setTimeout(() => {
+    // The view may be gone by then.
+    if (view.dom.isConnected) view.dispatch({ effects: flash.of(null) })
+  }, 2500)
+}
 
 /** Marks a change that came from storage, not from the writer. */
 const external = Annotation.define<boolean>()
@@ -62,9 +102,16 @@ interface Props {
   onChanged: () => void
   /** Hook for later stages, e.g. wiki links. */
   extraExtensions?: Extension[]
+  /** Put the cursor at this range and mark it, e.g. a mention the writer jumped to. */
+  jumpTo?: JumpTarget
+  /** Called once the jump happened. */
+  onJumped?: () => void
 }
 
-export function Editor({ book, chapter, onChanged, extraExtensions }: Props) {
+export function Editor({ book, chapter, onChanged, extraExtensions, jumpTo, onJumped }: Props) {
+  const onJumpedRef = useRef(onJumped)
+  onJumpedRef.current = onJumped
+  const pendingJump = useRef<JumpTarget | undefined>(jumpTo)
   const hostRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
   const saverRef = useRef<ChapterSaver | null>(null)
@@ -131,6 +178,7 @@ export function Editor({ book, chapter, onChanged, extraExtensions }: Props) {
             ]),
             markdown({ addKeymap: false }),
             livePreview(),
+            flashField,
             EditorView.lineWrapping,
             EditorView.contentAttributes.of({
               spellcheck: 'true',
@@ -172,6 +220,11 @@ export function Editor({ book, chapter, onChanged, extraExtensions }: Props) {
       })
       viewRef.current = view
       saverRef.current = saver
+      if (pendingJump.current) {
+        jump(view, pendingJump.current)
+        pendingJump.current = undefined
+        onJumpedRef.current?.()
+      }
     })()
 
     return () => {
@@ -226,6 +279,17 @@ export function Editor({ book, chapter, onChanged, extraExtensions }: Props) {
   useEffect(() => {
     if (!titleDirty.current) setTitle(chapter.title)
   }, [chapter.title])
+
+  // Jump when asked to; if the editor is still loading, it jumps once it is there.
+  useEffect(() => {
+    if (!jumpTo) return
+    if (viewRef.current) {
+      jump(viewRef.current, jumpTo)
+      onJumpedRef.current?.()
+    } else pendingJump.current = jumpTo
+    // The key decides; the object may be recreated on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jumpTo?.key])
 
   // Font and zoom change the text metrics; let CodeMirror measure again.
   useEffect(() => {

@@ -11,8 +11,8 @@ const entry = (id: string, name: string, extra: Partial<{ aliases: string[]; aut
 })
 
 const matcher = buildMatcher([
-  entry('prince', 'Prince', { aliases: ['the Heir'] }),
-  entry('arlen', 'Prince Arlen'),
+  entry('pascal', 'Pascal', { aliases: ['the Heir'] }),
+  entry('arlen', 'Pascal Arlen'),
   entry('rose', 'Rose'),
   entry('storm', 'Storm', { autoLink: false }),
 ])
@@ -20,21 +20,21 @@ const matcher = buildMatcher([
 const ids = (text: string) => matcher.find(text).map((m) => `${m.entryId}:${text.slice(m.from, m.to)}`)
 
 test('matches a whole name', () => {
-  expect(matcher.find('Prince stood.')).toEqual([{ from: 0, to: 6, entryId: 'prince' }])
+  expect(matcher.find('Pascal stood.')).toEqual([{ from: 0, to: 6, entryId: 'pascal' }])
 })
 
 test('possessives match, longer words and other case do not', () => {
-  expect(ids("Prince's coat")).toEqual(['prince:Prince'])
-  expect(ids('Princess Rosenkohl rose')).toEqual([])
+  expect(ids("Pascal's coat")).toEqual(['pascal:Pascal'])
+  expect(ids('Pascalss Rosenkohl rose')).toEqual([])
 })
 
 test('the longest name wins', () => {
-  expect(ids('Prince Arlen came')).toEqual(['arlen:Prince Arlen'])
-  expect(ids('Prince and Prince Arlen')).toEqual(['prince:Prince', 'arlen:Prince Arlen'])
+  expect(ids('Pascal Arlen came')).toEqual(['arlen:Pascal Arlen'])
+  expect(ids('Pascal and Pascal Arlen')).toEqual(['pascal:Pascal', 'arlen:Pascal Arlen'])
 })
 
 test('aliases match; entries with autoLink off do not', () => {
-  expect(ids('Hail the Heir!')).toEqual(['prince:the Heir'])
+  expect(ids('Hail the Heir!')).toEqual(['pascal:the Heir'])
   expect(ids('Storm came')).toEqual([])
 })
 
@@ -65,6 +65,6 @@ test('offset shifts the positions', () => {
 test('an empty list matches nothing', () => {
   const empty = buildMatcher([])
   expect(empty.size).toBe(0)
-  expect(empty.find('Prince Rose')).toEqual([])
+  expect(empty.find('Pascal Rose')).toEqual([])
   expect(buildMatcher([entry('blank', '   ', { aliases: ['', ' '] })]).size).toBe(0)
 })

@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest'
 import type { Book, Chapter, WikiEntry, WikiFolder, WikiImage } from '../types'
-import { bookIdOf, bundleToFiles, filesToBundle, type BookBundle, type FileSet } from './files'
+import { bookIdOf, bundleToFiles, classifyPath, filesToBundle, type BookBundle, type FileSet } from './files'
 import { gitBlobSha } from './hash'
 
 const book: Book = { id: 'b1', title: 'Sturmlied', font: 'inter', chapterOrder: ['c2', 'c1'], createdAt: 10, updatedAt: 99 }
@@ -17,7 +17,7 @@ const entries: WikiEntry[] = [
     id: 'e1',
     bookId: 'b1',
     folderId: 'f2',
-    name: 'Prince',
+    name: 'Pascal',
     aliases: ['the Heir', 'Nys'],
     properties: [{ id: 'p1', key: 'Augenfarbe', value: 'grün' }],
     imageIds: ['i1'],
@@ -76,7 +76,7 @@ test('files are readable and serialising twice is byte-identical', () => {
   )
   expect(first.get('books/b1/chapters/c1.md')).toBe('Größe — „Zitat“')
   const entry = first.get('books/b1/wiki/e1.md') as string
-  expect(entry.startsWith('---\n{\n  "id": "e1",\n  "name": "Prince"')).toBe(true)
+  expect(entry.startsWith('---\n{\n  "id": "e1",\n  "name": "Pascal"')).toBe(true)
   expect(entry.endsWith('\n---\nNotiz\n---\nmit Strich')).toBe(true)
   expect(JSON.parse(first.get('books/b1/book.json') as string).chapters.map((c: { title: string }) => c.title)).toEqual(['Sturm', 'Anfang'])
 })
@@ -102,4 +102,32 @@ test('a book without book.json still parses from its files', () => {
   const files: FileSet = new Map([['books/b9/chapters/x.md', 'Text']])
   const parsed = filesToBundle('b9', files)
   expect(parsed.book).toMatchObject({ id: 'b9', title: 'Unbenannt', font: 'literata', chapterOrder: ['x'] })
+})
+
+test('tags and templates live in their own files; book.json and folders.json never change because of them', () => {
+  const plain = bundleToFiles(bundle)
+  expect(plain.has('books/b1/tags.json')).toBe(false)
+  expect(plain.has('books/b1/wiki/templates.json')).toBe(false)
+
+  const tagged: BookBundle = {
+    ...bundle,
+    chapters: bundle.chapters.map((c) => (c.id === 'c2' ? { ...c, tags: ['PoV: Pascal', 'Sturm'] } : c)),
+    folders: bundle.folders.map((f) => (f.id === 'f1' ? { ...f, template: ['Augenfarbe', 'Alter'] } : f)),
+  }
+  const files = bundleToFiles(tagged)
+  // An older app version re-serialises these two files byte for byte, so it can never strip anything.
+  expect(files.get('books/b1/book.json')).toBe(plain.get('books/b1/book.json'))
+  expect(files.get('books/b1/wiki/folders.json')).toBe(plain.get('books/b1/wiki/folders.json'))
+  expect(JSON.parse(files.get('books/b1/tags.json') as string)).toEqual({ c2: ['PoV: Pascal', 'Sturm'] })
+  expect(JSON.parse(files.get('books/b1/wiki/templates.json') as string)).toEqual({ f1: ['Augenfarbe', 'Alter'] })
+  expect(classifyPath('books/b1/tags.json')).toEqual({ bookId: 'b1', kind: 'tags', id: 'b1' })
+  expect(classifyPath('books/b1/wiki/templates.json')).toEqual({ bookId: 'b1', kind: 'templates', id: 'b1' })
+
+  const back = filesToBundle('b1', files)
+  expect(back.chapters.find((c) => c.id === 'c2')!.tags).toEqual(['PoV: Pascal', 'Sturm'])
+  expect(back.chapters.find((c) => c.id === 'c1')!.tags).toBeUndefined()
+  expect(back.folders.find((f) => f.id === 'f1')!.template).toEqual(['Augenfarbe', 'Alter'])
+  expect(back.folders.find((f) => f.id === 'f2')!.template).toBeUndefined()
+  const again = bundleToFiles(back)
+  for (const path of ['books/b1/tags.json', 'books/b1/wiki/templates.json']) expect(again.get(path)).toBe(files.get(path))
 })

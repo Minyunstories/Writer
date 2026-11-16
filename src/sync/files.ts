@@ -59,11 +59,7 @@ export interface EntryHeader {
 export function bundleToFiles({ book, chapters, folders, entries, images }: BookBundle): FileSet {
   const prefix = bookPrefix(book.id)
   const files: FileSet = new Map()
-  const byId = new Map(chapters.map((chapter) => [chapter.id, chapter]))
-  const ordered = [
-    ...book.chapterOrder.flatMap((id) => (byId.has(id) ? [byId.get(id)!] : [])),
-    ...chapters.filter((chapter) => !book.chapterOrder.includes(chapter.id)),
-  ]
+  const ordered = orderedChapters(book, chapters)
 
   const bookFile: BookFile = {
     id: book.id,
@@ -74,6 +70,13 @@ export function bundleToFiles({ book, chapters, folders, entries, images }: Book
     chapters: ordered.map((chapter) => ({ id: chapter.id, title: chapter.title })),
   }
   files.set(`${prefix}book.json`, json(bookFile))
+
+  // Tags and templates have files of their own: an older app version rewrites only the
+  // files it knows, so it can never strip them.
+  const tags = tagsFile(ordered)
+  if (tags) files.set(`${prefix}tags.json`, tags)
+  const templates = templatesFile(folders)
+  if (templates) files.set(`${prefix}wiki/templates.json`, templates)
 
   for (const chapter of ordered) {
     files.set(`${prefix}chapters/${chapter.id}.md`, chapter.content)
@@ -112,6 +115,35 @@ export function bundleToFiles({ book, chapters, folders, entries, images }: Book
     files.set(`${prefix}wiki/_images/${image.id}.${extension}`, new Uint8Array(image.data))
   }
   return files
+}
+
+/** Chapters in the book's order; chapters missing from the order follow. */
+export function orderedChapters(book: Pick<Book, 'chapterOrder'>, chapters: Chapter[]): Chapter[] {
+  const byId = new Map(chapters.map((chapter) => [chapter.id, chapter]))
+  return [
+    ...book.chapterOrder.flatMap((id) => (byId.has(id) ? [byId.get(id)!] : [])),
+    ...chapters.filter((chapter) => !book.chapterOrder.includes(chapter.id)),
+  ]
+}
+
+/** tags.json: chapter id to tags, in chapter order. Undefined when no chapter has tags. */
+export function tagsFile(ordered: Chapter[]): string | undefined {
+  const entries = ordered.filter((chapter) => chapter.tags?.length).map((chapter) => [chapter.id, chapter.tags] as const)
+  return entries.length > 0 ? json(Object.fromEntries(entries)) : undefined
+}
+
+/** wiki/templates.json: folder id to field names, by folder id. Undefined when there are none. */
+export function templatesFile(folders: WikiFolder[]): string | undefined {
+  const entries = [...folders]
+    .filter((folder) => folder.template?.length)
+    .sort((a, b) => a.id.localeCompare(b.id))
+    .map((folder) => [folder.id, folder.template] as const)
+  return entries.length > 0 ? json(Object.fromEntries(entries)) : undefined
+}
+
+/** Only the strings of a list that may come from a hand-edited file. */
+export function stringList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && item.trim() !== '') : []
 }
 
 export function parseJson<T>(data: FileData | undefined): T | undefined {
@@ -170,14 +202,20 @@ export function filesToBundle(bookId: string, files: FileSet): BookBundle {
     .filter((id) => !listed.some((chapter) => chapter.id === id))
     .sort()
 
-  const chapters: Chapter[] = [...listed, ...unlisted.map((id) => ({ id, title: 'Unbenannt' }))].map((meta) => ({
-    id: meta.id,
-    bookId,
-    title: typeof meta.title === 'string' && meta.title.trim() ? meta.title : 'Unbenannt',
-    content: text(files.get(`${prefix}chapters/${meta.id}.md`)),
-    outline: text(files.get(`${prefix}outline/${meta.id}.md`)),
-    updatedAt: 0,
-  }))
+  const tagMap = parseJson<Record<string, unknown>>(files.get(`${prefix}tags.json`)) ?? {}
+  const chapters: Chapter[] = [...listed, ...unlisted.map((id) => ({ id, title: 'Unbenannt' }))].map((meta) => {
+    const chapter: Chapter = {
+      id: meta.id,
+      bookId,
+      title: typeof meta.title === 'string' && meta.title.trim() ? meta.title : 'Unbenannt',
+      content: text(files.get(`${prefix}chapters/${meta.id}.md`)),
+      outline: text(files.get(`${prefix}outline/${meta.id}.md`)),
+      updatedAt: 0,
+    }
+    const tags = stringList(tagMap[meta.id])
+    if (tags.length > 0) chapter.tags = tags
+    return chapter
+  })
 
   const book: Book = {
     id: bookId,
@@ -189,15 +227,21 @@ export function filesToBundle(bookId: string, files: FileSet): BookBundle {
   }
 
   const folderList = parseJson<Omit<WikiFolder, 'bookId'>[]>(files.get(`${prefix}wiki/folders.json`))
+  const templateMap = parseJson<Record<string, unknown>>(files.get(`${prefix}wiki/templates.json`)) ?? {}
   const folders: WikiFolder[] = (Array.isArray(folderList) ? folderList : [])
     .filter((folder) => folder && typeof folder.id === 'string')
-    .map((folder) => ({
-      id: folder.id,
-      bookId,
-      parentId: folder.parentId ?? null,
-      name: typeof folder.name === 'string' && folder.name.trim() ? folder.name : 'Unbenannt',
-      createdAt: Number(folder.createdAt) || 0,
-    }))
+    .map((folder) => {
+      const parsed: WikiFolder = {
+        id: folder.id,
+        bookId,
+        parentId: folder.parentId ?? null,
+        name: typeof folder.name === 'string' && folder.name.trim() ? folder.name : 'Unbenannt',
+        createdAt: Number(folder.createdAt) || 0,
+      }
+      const template = stringList(templateMap[folder.id])
+      if (template.length > 0) parsed.template = template
+      return parsed
+    })
 
   const imagePaths = new Map(
     own.filter((path) => path.startsWith(`${prefix}wiki/_images/`)).map((path) => [idOf(path, 'wiki/_images/'), path]),
@@ -233,7 +277,7 @@ export function filesToBundle(bookId: string, files: FileSet): BookBundle {
   return { book, chapters, folders, entries, images }
 }
 
-export type PathKind = 'book' | 'chapter' | 'outline' | 'folders' | 'entry' | 'image'
+export type PathKind = 'book' | 'chapter' | 'outline' | 'folders' | 'entry' | 'image' | 'tags' | 'templates'
 
 /** What a repository path holds, or null for files the app does not manage. */
 export function classifyPath(path: string): { bookId: string; kind: PathKind; id: string } | null {
@@ -243,6 +287,8 @@ export function classifyPath(path: string): { bookId: string; kind: PathKind; id
   const stem = (value: string) => value.replace(/\.[^./]+$/, '')
   if (rest === 'book.json') return { bookId, kind: 'book', id: bookId }
   if (rest === 'wiki/folders.json') return { bookId, kind: 'folders', id: bookId }
+  if (rest === 'tags.json') return { bookId, kind: 'tags', id: bookId }
+  if (rest === 'wiki/templates.json') return { bookId, kind: 'templates', id: bookId }
   const match = /^(chapters|outline|wiki\/_images|wiki)\/([^/]+)$/.exec(rest)
   if (!match) return null
   const [, folder, file] = match

@@ -1,6 +1,6 @@
 import { beforeEach, expect, test } from 'vitest'
 import { createBook, createChapter, getBook, getChapter, listBooks, listChapters, resetDatabaseForTests, updateChapter } from '../storage/db'
-import { addImage, createEntry, createFolder, getEntry, getImage, listEntries, listFolders, updateEntry } from '../storage/wiki'
+import { addImage, createEntry, createFolder, getEntry, getImage, listEntries, listFolders, setFolderTemplate, updateEntry } from '../storage/wiki'
 import type { FileSet } from './files'
 import { applyRemoteFiles, clearSyncState, loadSyncState, readLocalFiles, saveSyncState } from './local'
 
@@ -14,7 +14,7 @@ async function seed() {
   const a = await createChapter(book.id, 'Anfang', 'alt')
   const b = await createChapter(book.id, 'Sturm', 'bleibt')
   const folder = await createFolder(book.id, 'Personen')
-  const entry = await createEntry(book.id, 'Prince', folder.id)
+  const entry = await createEntry(book.id, 'Pascal', folder.id)
   const image = await addImage(entry.id, pixel())
   const p = `books/${book.id}/`
   return { book, a, b, folder, entry, image, p, snapshot: await readLocalFiles() }
@@ -63,7 +63,7 @@ test('files of an unknown book create it completely', async () => {
   ])
   expect((await listFolders(book.id)).map((f) => f.name)).toEqual(['Personen'])
   const [entry] = await listEntries(book.id)
-  expect(entry).toMatchObject({ name: 'Prince', folderId: source.folder.id, imageIds: [source.image.id] })
+  expect(entry).toMatchObject({ name: 'Pascal', folderId: source.folder.id, imageIds: [source.image.id] })
   expect(new Uint8Array((await getImage(source.image.id))!.data)).toEqual(new Uint8Array([1, 2, 3]))
   expect([...(await readLocalFiles()).keys()].sort()).toEqual([...files.keys()].sort())
 })
@@ -148,10 +148,10 @@ test('entry conflict keeps both, the copy without auto-linking', async () => {
   const notes = await apply({ conflicts: [{ path: `${p}wiki/${entry.id}.md`, remote }], snapshot: local })
   const entries = await listEntries(book.id)
   expect(entries.map((e) => [e.name, e.body, e.autoLink, e.imageIds])).toEqual([
-    ['Prince', 'Notiz aus dem Repo', true, [image.id]],
-    ['Prince (Fassung von diesem Gerät)', 'meine Notiz', false, []],
+    ['Pascal', 'Notiz aus dem Repo', true, [image.id]],
+    ['Pascal (Fassung von diesem Gerät)', 'meine Notiz', false, []],
   ])
-  expect(notes).toEqual([{ bookTitle: 'Sturmlied', kind: 'entry', name: 'Prince' }])
+  expect(notes).toEqual([{ bookTitle: 'Sturmlied', kind: 'entry', name: 'Pascal' }])
 })
 
 test('folders: a plain pull replaces, a conflict unites', async () => {
@@ -218,4 +218,60 @@ test('a failure in the middle changes nothing', async () => {
     applyFull({ write: new Map<string, string | Uint8Array>([[`${p}chapters/${a.id}.md`, 'neu'], [`${p}chapters/${b.id}.md`, poison]]), snapshot }),
   ).rejects.toThrow()
   expect((await getChapter(a.id))!.content).toBe('alt')
+})
+
+test('tags and templates are taken over from their own files; book.json and folders.json leave them alone', async () => {
+  const { p, book, a, b, folder } = await seed()
+  await updateChapter(b.id, { tags: ['Alt'] })
+  await setFolderTemplate(folder.id, ['Alt'])
+  const snapshot = await readLocalFiles()
+  await apply({
+    write: new Map([
+      [`${p}tags.json`, JSON.stringify({ [a.id]: ['PoV: Pascal'] })],
+      [`${p}wiki/templates.json`, JSON.stringify({ [folder.id]: ['Augenfarbe'] })],
+    ]),
+    snapshot,
+  })
+  expect((await getChapter(a.id))!.tags).toEqual(['PoV: Pascal'])
+  expect((await getChapter(b.id))!.tags).toBeUndefined()
+  expect((await listFolders(book.id))[0].template).toEqual(['Augenfarbe'])
+
+  // A pulled book.json or folders.json (e.g. from an older app) keeps tags and templates.
+  const now = await readLocalFiles()
+  await apply({ write: new Map([[`${p}book.json`, now.get(`${p}book.json`)!], [`${p}wiki/folders.json`, now.get(`${p}wiki/folders.json`)!]]), snapshot: now })
+  expect((await getChapter(a.id))!.tags).toEqual(['PoV: Pascal'])
+  expect((await listFolders(book.id))[0].template).toEqual(['Augenfarbe'])
+
+  // Removed in the repository and untouched here: cleared.
+  const before = await readLocalFiles()
+  await apply({ remove: [`${p}tags.json`, `${p}wiki/templates.json`], snapshot: before })
+  expect((await getChapter(a.id))!.tags).toBeUndefined()
+  expect((await listFolders(book.id))[0].template).toBeUndefined()
+})
+
+test('tags and templates changed on both sides are merged, nothing is dropped', async () => {
+  const { p, book, a, b, folder } = await seed()
+  await updateChapter(a.id, { tags: ['PoV: Elena'] })
+  await updateChapter(b.id, { tags: ['Rückblick'] })
+  await setFolderTemplate(folder.id, ['Augenfarbe', 'Alter'])
+  const snapshot = await readLocalFiles()
+  const { notes } = await applyFull({
+    conflicts: [
+      { path: `${p}tags.json`, remote: JSON.stringify({ [a.id]: ['PoV: Pascal'] }) },
+      { path: `${p}wiki/templates.json`, remote: JSON.stringify({ [folder.id]: ['Größe', 'Augenfarbe'] }) },
+    ],
+    snapshot,
+  })
+  expect((await getChapter(a.id))!.tags).toEqual(['PoV: Pascal', 'PoV: Elena'])
+  expect((await getChapter(b.id))!.tags).toEqual(['Rückblick'])
+  expect((await listFolders(book.id))[0].template).toEqual(['Größe', 'Augenfarbe', 'Alter'])
+  expect(notes.map((n) => n.kind).sort()).toEqual(['tags', 'templates'])
+})
+
+test('tags changed here during the run are merged into a pulled tags file', async () => {
+  const { p, a } = await seed()
+  const snapshot = await readLocalFiles()
+  await updateChapter(a.id, { tags: ['gerade eben'] })
+  await apply({ write: new Map([[`${p}tags.json`, JSON.stringify({ [a.id]: ['von woanders'] })]]), snapshot })
+  expect((await getChapter(a.id))!.tags).toEqual(['von woanders', 'gerade eben'])
 })

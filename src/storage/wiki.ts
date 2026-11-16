@@ -1,16 +1,9 @@
 import type { WikiEntry, WikiFolder, WikiImage } from '../types'
-import { announceChange, cleanTitle, ConflictError, db, newId } from './connection'
+import { announceChange, cleanList, cleanTitle, ConflictError, db, newId } from './connection'
 
 const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, 'de')
 
-function cleanAliases(aliases: string[]): string[] {
-  const seen = new Set<string>()
-  for (const alias of aliases) {
-    const trimmed = alias.trim()
-    if (trimmed) seen.add(trimmed)
-  }
-  return [...seen]
-}
+const cleanAliases = cleanList
 
 export async function listFolders(bookId: string): Promise<WikiFolder[]> {
   return (await (await db()).getAllFromIndex('wikiFolders', 'bookId', bookId)).sort(byName)
@@ -28,6 +21,37 @@ export async function renameFolder(id: string, name: string): Promise<WikiFolder
   const current = await tx.store.get(id)
   if (!current) throw new Error(`Folder not found: ${id}`)
   const next = { ...current, name: cleanTitle(name) }
+  await tx.store.put(next)
+  await tx.done
+  announceChange()
+  return next
+}
+
+/** Sets the field names every entry in this folder shows. */
+export async function setFolderTemplate(id: string, template: string[]): Promise<WikiFolder> {
+  const tx = (await db()).transaction('wikiFolders', 'readwrite')
+  const current = await tx.store.get(id)
+  if (!current) throw new Error(`Folder not found: ${id}`)
+  const next: WikiFolder = { ...current }
+  const cleaned = cleanList(template)
+  if (cleaned.length > 0) next.template = cleaned
+  else delete next.template
+  await tx.store.put(next)
+  await tx.done
+  announceChange()
+  return next
+}
+
+/** Adds or removes one template field on the stored folder, inside one transaction. */
+export async function changeTemplate(id: string, change: { add?: string; remove?: string }): Promise<WikiFolder> {
+  const tx = (await db()).transaction('wikiFolders', 'readwrite')
+  const current = await tx.store.get(id)
+  if (!current) throw new Error(`Folder not found: ${id}`)
+  const removed = change.remove?.trim()
+  const template = cleanList([...(current.template ?? []).filter((key) => key !== removed), change.add ?? ''])
+  const next: WikiFolder = { ...current }
+  if (template.length > 0) next.template = template
+  else delete next.template
   await tx.store.put(next)
   await tx.done
   announceChange()

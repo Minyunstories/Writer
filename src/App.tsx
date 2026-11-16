@@ -9,13 +9,15 @@ export function AppRoutes() {
       <Route path="/" element={<Dashboard />} />
       <Route path="/book/:bookId/:section?/:itemId?" element={
           <BookView
-            renderChapter={({ book, chapter, onChanged, extensions }) => (
+            renderChapter={({ book, chapter, onChanged, extensions, jumpTo, onJumped }) => (
               <Editor
                 key={chapter.id}
                 book={book}
                 chapter={chapter}
                 onChanged={onChanged}
                 extraExtensions={extensions}
+                jumpTo={jumpTo}
+                onJumped={onJumped}
               />
             )}
           />

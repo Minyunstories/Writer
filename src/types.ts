@@ -16,6 +16,8 @@ export interface Chapter {
   content: string
   /** Free-text note shown in the outline. Missing on chapters created before the outline existed. */
   outline?: string
+  /** Free tags shown in the outline, e.g. a point of view. Missing when there are none. */
+  tags?: string[]
   updatedAt: number
 }
 
@@ -26,6 +28,8 @@ export interface WikiFolder {
   bookId: string
   parentId: string | null
   name: string
+  /** Field names every entry in this folder (and below) shows. Only used on top-level folders. */
+  template?: string[]
   createdAt: number
 }
 
