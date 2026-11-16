@@ -523,3 +523,33 @@ input.wiki-home-search {
   font-weight: 600;
   color: var(--text-muted);
 }
+
+.wiki-entry-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.wiki-entry-title input.wiki-entry-name {
+  flex: 1;
+  min-width: 0;
+}
+
+button.wiki-star {
+  font-size: 1.4rem;
+  color: var(--text-muted);
+}
+
+button.wiki-star.on {
+  color: var(--primary);
+}
+
+.wiki-tree-star {
+  color: var(--primary);
+}
+
+@media (max-width: 600px) {
+  .notes-button-label {
+    display: none;
+  }
+}

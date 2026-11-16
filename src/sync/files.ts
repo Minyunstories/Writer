@@ -1,5 +1,5 @@
 import { cleanDate, cleanPlace, isColor } from '../lib/bookStyle'
-import type { Book, Chapter, FontId, WikiEntry, WikiFolder, WikiImage, WikiProperty } from '../types'
+import type { Book, BookNote, Chapter, FontId, WikiEntry, WikiFolder, WikiImage, WikiProperty } from '../types'
 import type { FileData } from './hash'
 
 export type { FileData } from './hash'
@@ -88,6 +88,8 @@ export function bundleToFiles({ book, chapters, folders, entries, images }: Book
   if (order) files.set(`${prefix}wiki/order.json`, order)
   const colors = colorsFile(folders)
   if (colors) files.set(`${prefix}wiki/colors.json`, colors)
+  if (book.notes?.length) files.set(`${prefix}notes.json`, notesFile(book.notes))
+  if (book.wikiStars?.length) files.set(`${prefix}wiki/stars.json`, json(book.wikiStars))
 
   for (const chapter of ordered) {
     files.set(`${prefix}chapters/${chapter.id}.md`, chapter.content)
@@ -160,6 +162,42 @@ export function datesFile(ordered: Chapter[]): string | undefined {
 /** place.json: where text was last changed. */
 export function placeFile(book: Pick<Book, 'place'>): string | undefined {
   return book.place ? json({ chapterId: book.place.chapterId, offset: book.place.offset, at: book.place.at }) : undefined
+}
+
+/** notes.json: the notepad, as stored. */
+export function notesFile(notes: BookNote[]): string {
+  return json(
+    notes.map(({ id, text, chapterId, from, done, createdAt, updatedAt }) => ({
+      id,
+      text,
+      ...(chapterId ? { chapterId } : {}),
+      ...(from !== undefined ? { from } : {}),
+      done,
+      createdAt,
+      updatedAt,
+    })),
+  )
+}
+
+/** The usable notes of a notes.json; null when the file is not a list. */
+export function parseNotes(data: FileData | undefined): BookNote[] | null {
+  const parsed = parseJson<unknown>(data)
+  if (!Array.isArray(parsed)) return null
+  return parsed.flatMap((raw) => {
+    if (!raw || typeof raw !== 'object') return []
+    const value = raw as Record<string, unknown>
+    if (typeof value.id !== 'string' || typeof value.text !== 'string' || !value.text.trim()) return []
+    const note: BookNote = {
+      id: value.id,
+      text: value.text,
+      done: value.done === true,
+      createdAt: Number(value.createdAt) || 0,
+      updatedAt: Number(value.updatedAt) || 0,
+    }
+    if (typeof value.chapterId === 'string') note.chapterId = value.chapterId
+    if (typeof value.from === 'number' && value.from >= 0) note.from = value.from
+    return [note]
+  })
 }
 
 /** wiki/colors.json: folder id to colour, by folder id. Undefined when no folder has one. */
@@ -325,6 +363,10 @@ export function filesToBundle(bookId: string, files: FileSet): BookBundle {
   if (style.highlight) book.highlight = style.highlight
   const place = cleanPlace(parseJson<unknown>(files.get(`${prefix}place.json`)))
   if (place) book.place = place
+  const notes = parseNotes(files.get(`${prefix}notes.json`))
+  if (notes?.length) book.notes = notes
+  const stars = stringList(parseJson<unknown>(files.get(`${prefix}wiki/stars.json`)))
+  if (stars.length > 0) book.wikiStars = stars
   const wikiOrder = parseOrder(files.get(`${prefix}wiki/order.json`))
   if (wikiOrder && Object.keys(wikiOrder).length > 0) book.wikiOrder = wikiOrder
 
@@ -381,7 +423,7 @@ export function filesToBundle(bookId: string, files: FileSet): BookBundle {
   return { book, chapters, folders, entries, images }
 }
 
-export type PathKind = 'book' | 'chapter' | 'outline' | 'folders' | 'entry' | 'image' | 'tags' | 'templates' | 'style' | 'dates' | 'place' | 'wikiOrder' | 'folderColors'
+export type PathKind = 'book' | 'chapter' | 'outline' | 'folders' | 'entry' | 'image' | 'tags' | 'templates' | 'style' | 'dates' | 'place' | 'wikiOrder' | 'folderColors' | 'notes' | 'stars'
 
 /** What a repository path holds, or null for files the app does not manage. */
 export function classifyPath(path: string): { bookId: string; kind: PathKind; id: string } | null {
@@ -398,6 +440,8 @@ export function classifyPath(path: string): { bookId: string; kind: PathKind; id
   if (rest === 'wiki/templates.json') return { bookId, kind: 'templates', id: bookId }
   if (rest === 'wiki/order.json') return { bookId, kind: 'wikiOrder', id: bookId }
   if (rest === 'wiki/colors.json') return { bookId, kind: 'folderColors', id: bookId }
+  if (rest === 'notes.json') return { bookId, kind: 'notes', id: bookId }
+  if (rest === 'wiki/stars.json') return { bookId, kind: 'stars', id: bookId }
   const match = /^(chapters|outline|wiki\/_images|wiki)\/([^/]+)$/.exec(rest)
   if (!match) return null
   const [, folder, file] = match

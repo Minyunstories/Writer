@@ -1,0 +1,127 @@
+.notes-title {
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+  font-weight: 600;
+}
+
+.notes-body {
+  display: grid;
+  align-content: start;
+  gap: 1rem;
+  padding: 1rem;
+}
+
+textarea.notes-input {
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  resize: vertical;
+}
+
+textarea.notes-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.notes-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.note {
+  padding: 0.7rem 0.8rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  box-shadow: inset 3px 0 0 var(--primary);
+  display: grid;
+  gap: 0.4rem;
+}
+
+.note.done {
+  box-shadow: none;
+  opacity: 0.75;
+}
+
+.note-text {
+  margin: 0;
+  font-family: var(--font-text);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+button.note-origin {
+  justify-self: start;
+  padding: 0;
+  border: none;
+  font-size: 12px;
+  color: var(--accent);
+}
+
+button.note-origin:hover:not(:disabled) {
+  background: none;
+  text-decoration: underline;
+}
+
+.note-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  font-size: 13px;
+}
+
+.note-actions select {
+  max-width: 9rem;
+  padding: 0.35rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.note-actions button {
+  padding: 0.35rem 0.7rem;
+}
+
+.notes-empty {
+  margin: 0;
+  font-size: 14px;
+}
+
+button.notes-done-toggle {
+  padding: 0.3rem 0.2rem;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+button.notes-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  height: 2.5rem;
+  padding: 0 0.8rem;
+  border-radius: 999px;
+  font-size: 13px;
+}
+
+button.notes-button[aria-pressed='true'] {
+  border-color: var(--accent);
+}
+
+.notes-count {
+  min-width: 1.4em;
+  padding: 0 0.35em;
+  border-radius: 999px;
+  background: var(--primary);
+  color: var(--primary-ink);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+}

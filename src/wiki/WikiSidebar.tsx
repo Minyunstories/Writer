@@ -3,7 +3,7 @@ import { COVERS } from '../lib/bookStyle'
 import { Link } from 'react-router-dom'
 import type { WikiItem } from '../storage/wiki'
 import type { WikiEntry, WikiFolder } from '../types'
-import { orderedChildren } from './order'
+import { orderedChildren, starredFirst } from './order'
 
 /** A private drag type: nothing that accepts text takes it, and nothing else is taken here. */
 const DRAG_TYPE = 'application/x-writer-wiki'
@@ -14,6 +14,8 @@ interface Props {
   entries: WikiEntry[]
   /** The writer's order (Book.wikiOrder). */
   order?: Record<string, string[]>
+  /** Starred entries (Book.wikiStars): first in their folder, with a star. */
+  stars?: string[]
   activeEntryId?: string
   onNavigate: () => void
   onCreateFolder: (parentId: string | null) => void
@@ -32,6 +34,7 @@ export function WikiSidebar({
   folders,
   entries,
   order,
+  stars,
   activeEntryId,
   onNavigate,
   onCreateFolder,
@@ -109,8 +112,9 @@ export function WikiSidebar({
     return (
       <>
         {kids.folders.map((folder, index) => renderFolder(folder, depth, index, kids.folders.length, color))}
-        {kids.entries.map((entry, index) => {
+        {starredFirst(kids.entries, stars).map((entry, index) => {
           const active = entry.id === activeEntryId
+          const starred = stars?.includes(entry.id)
           const item: WikiItem = { kind: 'entry', id: entry.id }
           return (
             <li key={entry.id} className={`wiki-tree-entry${active ? ' active' : ''}`}>
@@ -124,6 +128,7 @@ export function WikiSidebar({
                   draggable={false}
                   onClick={onNavigate}
                 >
+                  {starred && <span className="wiki-tree-star">★ </span>}
                   {entry.name}
                 </Link>
                 {arranging && arrows(item, entry.name, index, kids.entries.length)}

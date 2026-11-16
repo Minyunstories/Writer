@@ -205,3 +205,19 @@ test('folder colours live in their own file', () => {
   expect(junk.folders.find((f) => f.id === 'f1')!.color).toBeUndefined()
   expect(junk.folders.find((f) => f.id === 'f2')!.color).toBe('#4d5a2b')
 })
+
+test('notes and stars live in their own files', () => {
+  const plain = bundleToFiles(bundle)
+  const note = { id: 'n1', text: 'Idee', chapterId: 'c1', from: 3, done: false, createdAt: 5, updatedAt: 6 }
+  const files = bundleToFiles({ ...bundle, book: { ...book, notes: [note], wikiStars: ['e1'] } })
+  expect(files.get('books/b1/book.json')).toBe(plain.get('books/b1/book.json'))
+  expect(JSON.parse(files.get('books/b1/notes.json') as string)).toEqual([note])
+  expect(JSON.parse(files.get('books/b1/wiki/stars.json') as string)).toEqual(['e1'])
+  expect(classifyPath('books/b1/notes.json')).toEqual({ bookId: 'b1', kind: 'notes', id: 'b1' })
+  expect(classifyPath('books/b1/wiki/stars.json')).toEqual({ bookId: 'b1', kind: 'stars', id: 'b1' })
+  const back = filesToBundle('b1', files)
+  expect(back.book.notes).toEqual([note])
+  expect(back.book.wikiStars).toEqual(['e1'])
+  files.set('books/b1/notes.json', JSON.stringify([{ id: 'x' }, { id: 'n2', text: 'gut', done: 'ja', createdAt: 1, updatedAt: 1 }]))
+  expect(filesToBundle('b1', files).book.notes).toEqual([{ id: 'n2', text: 'gut', done: false, createdAt: 1, updatedAt: 1 }])
+})

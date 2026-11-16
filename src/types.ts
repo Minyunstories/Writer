@@ -15,6 +15,21 @@ export interface Book {
   place?: BookPlace
   /** The writer's order of wiki folders and entries: folder id (or "_root") to ids. */
   wikiOrder?: Record<string, string[]>
+  /** Wiki entries marked with a star, e.g. main characters. */
+  wikiStars?: string[]
+  /** The notepad: ideas waiting for a better place, newest first. */
+  notes?: BookNote[]
+}
+
+export interface BookNote {
+  id: string
+  text: string
+  /** Where the idea came up. */
+  chapterId?: string
+  from?: number
+  done: boolean
+  createdAt: number
+  updatedAt: number
 }
 
 export interface BookPlace {

@@ -40,3 +40,10 @@ export function orderedChildren(
     entries: sort(entries.filter((entry) => inside(entry.folderId))),
   }
 }
+
+/** Starred entries first, otherwise in the given order. */
+export function starredFirst<T extends { id: string }>(items: T[], stars?: string[]): T[] {
+  if (!stars?.length) return items
+  const set = new Set(stars)
+  return [...items.filter((item) => set.has(item.id)), ...items.filter((item) => !set.has(item.id))]
+}

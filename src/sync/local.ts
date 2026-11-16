@@ -6,6 +6,8 @@ import {
   bundleToFiles,
   classifyPath,
   colorsFile as colorsText,
+  notesFile,
+  parseNotes,
   orderFile as orderText,
   parseColors,
   parseOrder,
@@ -74,7 +76,7 @@ export async function readLocalFiles(): Promise<FileSet> {
   return files
 }
 
-const KIND_ORDER = ['book', 'style', 'place', 'folders', 'templates', 'chapter', 'outline', 'tags', 'dates', 'entry', 'wikiOrder', 'folderColors', 'image']
+const KIND_ORDER = ['book', 'style', 'place', 'folders', 'templates', 'chapter', 'outline', 'tags', 'dates', 'entry', 'wikiOrder', 'folderColors', 'notes', 'stars', 'image']
 
 /**
  * Applies changes from the repository to this device, file by file, in one transaction.
@@ -309,6 +311,54 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
     await books.put(next)
   }
 
+  /**
+   * The notepad: the repository's, unless changed here after the run was planned. When both
+   * sides changed it, the notes are merged by note and the newer version of each note wins.
+   */
+  async function writeNotes(path: string, bookId: string, data: FileData | undefined, conflict: boolean) {
+    const remote = parseNotes(data)
+    if (!remote) {
+      skipped.push(path)
+      return
+    }
+    const book = await books.get(bookId)
+    if (!book) return
+    const local = book.notes ?? []
+    const localText = local.length > 0 ? notesFile(local) : ''
+    if (!conflict && (snapshotText(path) ?? '') !== localText) return
+    let merged = remote
+    if (conflict) {
+      const byId = new Map(remote.map((note) => [note.id, note]))
+      for (const note of local) {
+        const theirs = byId.get(note.id)
+        if (!theirs || theirs.updatedAt < note.updatedAt) byId.set(note.id, note)
+      }
+      merged = [...byId.values()].sort((a, b) => b.createdAt - a.createdAt)
+    }
+    const next: Book = { ...book }
+    if (merged.length > 0) next.notes = merged
+    else delete next.notes
+    await books.put(next)
+  }
+
+  /** Stars in the wiki: the repository's, unless changed here after the run was planned. */
+  async function writeStars(path: string, bookId: string, data: FileData | undefined, conflict: boolean) {
+    const parsed = parseJson<unknown>(data)
+    if (!Array.isArray(parsed)) {
+      skipped.push(path)
+      return
+    }
+    const book = await books.get(bookId)
+    if (!book) return
+    const localText = book.wikiStars?.length ? `${JSON.stringify(book.wikiStars, null, 2)}\n` : ''
+    if (!conflict && (snapshotText(path) ?? '') !== localText) return
+    const stars = stringList(parsed)
+    const next: Book = { ...book }
+    if (stars.length > 0) next.wikiStars = stars
+    else delete next.wikiStars
+    await books.put(next)
+  }
+
   /** Folder colours: the repository's, unless changed here after the run was planned. */
   async function writeColors(path: string, bookId: string, data: FileData | undefined, conflict: boolean) {
     const colors = parseColors(data)
@@ -521,6 +571,8 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
       else if (info.kind === 'dates') await writeDates(path, info.bookId, data, conflict)
       else if (info.kind === 'wikiOrder') await writeOrder(path, info.bookId, data, conflict)
       else if (info.kind === 'folderColors') await writeColors(path, info.bookId, data, conflict)
+      else if (info.kind === 'notes') await writeNotes(path, info.bookId, data, conflict)
+      else if (info.kind === 'stars') await writeStars(path, info.bookId, data, conflict)
       else if (info.kind === 'templates') await writeTemplates(path, info.bookId, data, conflict)
       else await writeImage(path, info.bookId, info.id, data)
     }
@@ -544,6 +596,8 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
       else if (info.kind === 'place') await removePlace(item.path, info.bookId)
       else if (info.kind === 'wikiOrder') await writeOrder(item.path, info.bookId, '{}', false)
       else if (info.kind === 'folderColors') await writeColors(item.path, info.bookId, '{}', false)
+      else if (info.kind === 'notes') await writeNotes(item.path, info.bookId, '[]', false)
+      else if (info.kind === 'stars') await writeStars(item.path, info.bookId, '[]', false)
       else if (info.kind === 'templates') await writeTemplates(item.path, info.bookId, '{}', false)
       else if (info.kind === 'folders') {
         for (const key of await folders.index('bookId').getAllKeys(info.bookId)) await folders.delete(key)

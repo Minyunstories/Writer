@@ -1,7 +1,7 @@
 import { useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import type { WikiEntry, WikiFolder } from '../types'
-import { orderedChildren } from './order'
+import { orderedChildren, starredFirst } from './order'
 import './wiki.css'
 
 interface Props {
@@ -9,6 +9,7 @@ interface Props {
   folders: WikiFolder[]
   entries: WikiEntry[]
   order?: Record<string, string[]>
+  stars?: string[]
   onCreateEntry: (folderId: string | null) => void
 }
 
@@ -16,7 +17,7 @@ const RECENT = 5
 const timeFormat = new Intl.DateTimeFormat('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 
 /** The wiki's start page: last edited entries, a search and every folder with its contents. */
-export function WikiHome({ bookId, folders, entries, order, onCreateEntry }: Props) {
+export function WikiHome({ bookId, folders, entries, order, stars, onCreateEntry }: Props) {
   const [query, setQuery] = useState('')
   const byId = useMemo(() => new Map(folders.map((folder) => [folder.id, folder])), [folders])
 
@@ -38,6 +39,7 @@ export function WikiHome({ bookId, folders, entries, order, onCreateEntry }: Pro
     return <span className="wiki-home-meta">{folder?.name ?? 'Ohne Ordner'}</span>
   }
 
+  const starred = (stars ?? []).flatMap((id) => entries.filter((entry) => entry.id === id))
   const recent = [...entries].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, RECENT)
   const needle = query.trim().toLocaleLowerCase('de')
   const found = needle
@@ -91,6 +93,19 @@ export function WikiHome({ bookId, folders, entries, order, onCreateEntry }: Pro
         )
       ) : (
         <>
+          {starred.length > 0 && (
+            <section className="wiki-home-section">
+              <h3 id="wiki-home-starred">★ Markiert</h3>
+              <ul className="wiki-home-recent" aria-label="Markiert">
+                {starred.map((entry) => (
+                  <li key={entry.id} style={tint(topOf(entry.folderId))}>
+                    {link(entry, where(entry))}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           {recent.length > 0 && (
             <section className="wiki-home-section">
               <h3 id="wiki-home-recent">Zuletzt bearbeitet</h3>
@@ -131,7 +146,7 @@ export function WikiHome({ bookId, folders, entries, order, onCreateEntry }: Pro
                     </button>
                   </header>
                   <ul>
-                    {kids.entries.map((entry) => (
+                    {starredFirst(kids.entries, stars).map((entry) => (
                       <li key={entry.id}>{link(entry)}</li>
                     ))}
                   </ul>

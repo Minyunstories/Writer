@@ -13,6 +13,8 @@ import { ConfirmDialog, PromptDialog } from '../ui/Dialogs'
 import { buildMatcher } from '../wiki/linker'
 import { WikiEntryEditor } from '../wiki/WikiEntryEditor'
 import { createWikiLinks } from '../wiki/wikiLinks'
+import { NotesPanel } from '../notes/NotesPanel'
+import { addNote, deleteNote, moveNoteToChapter, moveNoteToEntry, setEntryStar, updateNote } from '../storage/notes'
 import { WikiHome } from '../wiki/WikiHome'
 import { WikiSidebar } from '../wiki/WikiSidebar'
 import { SidebarHandle, useSidebarWidth } from './SidebarHandle'
@@ -85,6 +87,7 @@ export function BookView({ renderChapter }: Props) {
   /** The entry just created here: its name gets the cursor. */
   const [freshEntryId, setFreshEntryId] = useState<string | null>(null)
   const [sidebarWidth, setSidebarWidth] = useSidebarWidth()
+  const [notesOpen, setNotesOpen] = useState(false)
 
   /** Reloads folders and entries only; cheap enough to run after every wiki edit. */
   const reloadWiki = useCallback(async () => {
@@ -99,9 +102,10 @@ export function BookView({ renderChapter }: Props) {
 
   const reload = useCallback(async () => {
     try {
-      const loaded = await getBook(bookId)
+      // Book and chapters together: a book without its chapters would "correct" a chapter link.
+      const [loaded, loadedChapters] = await Promise.all([getBook(bookId), listChapters(bookId)])
       setBook(loaded ?? null)
-      setChapters(loaded ? await listChapters(bookId) : [])
+      setChapters(loaded ? loadedChapters : [])
       setLoadFailed(false)
     } catch {
       setLoadFailed(true)
@@ -140,6 +144,7 @@ export function BookView({ renderChapter }: Props) {
   /** Opens an entry in the panel as a fresh start, e.g. from the chapter text or the outline. */
   const openPanel = useCallback(
     (entryId: string) => {
+      setNotesOpen(false)
       setPanelStack([entryId])
       // Chapters may have changed since they were loaded; "Erwähnt in" should be current.
       void reload()
@@ -203,6 +208,36 @@ export function BookView({ renderChapter }: Props) {
       navigate(`/book/${book.id}/chapters`, { replace: true })
     }
   }, [book, section, rawSection, activeChapter, chapters, itemId, navigate])
+
+  const openNotes = (book?.notes ?? []).filter((note) => !note.done).length
+  const toggleNotes = () =>
+    setNotesOpen((open) => {
+      if (!open) setPanelStack([])
+      return !open
+    })
+  const toggleNotesRef = useRef(toggleNotes)
+  toggleNotesRef.current = toggleNotes
+
+  // Ctrl+Shift+N: the notepad from anywhere. Ctrl+B outside text fields: the sidebar.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey) return
+      const key = event.key.toLowerCase()
+      if (key === 'n' && event.shiftKey) {
+        event.preventDefault()
+        toggleNotesRef.current()
+        return
+      }
+      if (key === 'b' && !event.shiftKey) {
+        const target = event.target as HTMLElement | null
+        if (target?.closest?.('.cm-editor, input, textarea, select, [contenteditable="true"]')) return
+        event.preventDefault()
+        setSidebarOpen((open) => !open)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   const closeSidebarOnPhone = () => {
     if (isNarrow()) setSidebarOpen(false)
@@ -343,6 +378,16 @@ export function BookView({ renderChapter }: Props) {
         <img className="book-logo" src={FEATHER} alt="" />
         <h1>{book.title}</h1>
         <span className="book-header-space" />
+        <button
+          className="notes-button"
+          aria-pressed={notesOpen}
+          aria-label={openNotes > 0 ? `Notizblock, ${openNotes} offen` : 'Notizblock'}
+          title="Notizblock (Strg+Umschalt+N)"
+          onClick={() => toggleNotes()}
+        >
+          ✎ <span className="notes-button-label">Notizen</span>
+          {openNotes > 0 && <span className="notes-count">{openNotes}</span>}
+        </button>
         <SyncStatus />
       </header>
 
@@ -401,6 +446,7 @@ export function BookView({ renderChapter }: Props) {
                 onRenameFolder={(folder) => setDialog({ kind: 'renameFolder', folder })}
                 onDeleteFolder={(folder) => setDialog({ kind: 'deleteFolder', folder })}
                 order={book.wikiOrder}
+                stars={book.wikiStars}
                 onMove={(item, target) =>
                   void attempt(async () => {
                     await moveWikiItem(book.id, item, target)
@@ -416,7 +462,7 @@ export function BookView({ renderChapter }: Props) {
             }
           />
         </div>
-        {sidebarOpen && <SidebarHandle width={sidebarWidth} onWidth={setSidebarWidth} />}
+        {sidebarOpen && <SidebarHandle width={sidebarWidth} onWidth={setSidebarWidth} onCollapse={() => setSidebarOpen(false)} />}
         <div className="sidebar-scrim" onClick={() => setSidebarOpen(false)} />
 
         <main className="book-main">
@@ -447,6 +493,8 @@ export function BookView({ renderChapter }: Props) {
               <WikiEntryEditor
                 key={activeEntry.id}
                 entryId={activeEntry.id}
+                starred={book.wikiStars?.includes(activeEntry.id) ?? false}
+                onStar={(starred) => void attempt(() => setEntryStar(book.id, activeEntry.id, starred))}
                 folders={folders}
                 entries={entries}
                 chapters={chapters}
@@ -470,6 +518,7 @@ export function BookView({ renderChapter }: Props) {
                 folders={folders}
                 entries={entries}
                 order={book.wikiOrder}
+                stars={book.wikiStars}
                 onCreateEntry={(folderId) => void handleCreateEntry(folderId)}
               />
             </div>
@@ -504,7 +553,35 @@ export function BookView({ renderChapter }: Props) {
           )}
         </main>
 
-        {panelEntry && (
+        {notesOpen && book && (
+          <NotesPanel
+            notes={book.notes ?? []}
+            chapters={chapters}
+            entries={entries}
+            onAdd={(text) =>
+              void attempt(async () => {
+                const place = book.place
+                const chapterId = activeChapter?.id
+                await addNote(
+                  book.id,
+                  text,
+                  chapterId ? { chapterId, from: place?.chapterId === chapterId ? place.offset : undefined } : undefined,
+                )
+              })
+            }
+            onDone={(id, done) => void attempt(() => updateNote(book.id, id, { done }))}
+            onDelete={(id) => void attempt(() => deleteNote(book.id, id))}
+            onToChapter={(id, chapterId) => void attempt(() => moveNoteToChapter(book.id, id, chapterId))}
+            onToEntry={(id, entryId) => void attempt(() => moveNoteToEntry(book.id, id, entryId))}
+            onOpenOrigin={(note) => {
+              if (!note.chapterId) return
+              if (note.from !== undefined) openChapterAt(note.chapterId, { from: note.from, to: note.from })
+              else navigate(`/book/${book.id}/chapters/${note.chapterId}`)
+            }}
+            onClose={() => setNotesOpen(false)}
+          />
+        )}
+        {!notesOpen && panelEntry && (
           <aside className="book-panel" aria-label="Wiki-Eintrag">
             <header className="book-panel-header">
               <Link to={`/book/${book.id}/wiki/${panelEntry.id}`} className="book-panel-open">
@@ -525,6 +602,8 @@ export function BookView({ renderChapter }: Props) {
               <WikiEntryEditor
                 key={panelEntry.id}
                 entryId={panelEntry.id}
+                starred={book.wikiStars?.includes(panelEntry.id) ?? false}
+                onStar={(starred) => void attempt(() => setEntryStar(book.id, panelEntry.id, starred))}
                 folders={folders}
                 entries={entries}
                 chapters={chapters}

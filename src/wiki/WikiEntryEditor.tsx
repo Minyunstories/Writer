@@ -46,6 +46,9 @@ interface Props {
   onOpenChapter?: (chapterId: string, range: { from: number; to: number }) => void
   /** A new entry: put the cursor in its name, with the placeholder name selected. */
   focusName?: boolean
+  /** Marked with a star, e.g. a main character. */
+  starred?: boolean
+  onStar?: (starred: boolean) => void
 }
 
 /** Folders as a flat list with their full path, e.g. "Welt / Orte". */
@@ -114,6 +117,8 @@ export function WikiEntryEditor({
   onOpenEntry,
   onOpenChapter,
   focusName = false,
+  starred = false,
+  onStar,
 }: Props) {
   const [entry, setEntry] = useState<WikiEntry | null | undefined>(undefined)
   const nameRef = useRef<HTMLInputElement>(null)
@@ -440,17 +445,30 @@ export function WikiEntryEditor({
         </p>
       )}
 
-      <input
-        ref={nameRef}
-        className="wiki-entry-name"
-        type="text"
-        aria-label="Name"
-        value={entry.name}
-        onChange={(event) => change({ name: event.target.value })}
-        onBlur={() => {
-          if (!entry.name.trim()) change({ name: 'Unbenannt' })
-        }}
-      />
+      <div className="wiki-entry-title">
+        <input
+          ref={nameRef}
+          className="wiki-entry-name"
+          type="text"
+          aria-label="Name"
+          value={entry.name}
+          onChange={(event) => change({ name: event.target.value })}
+          onBlur={() => {
+            if (!entry.name.trim()) change({ name: 'Unbenannt' })
+          }}
+        />
+        {onStar && (
+          <button
+            className={`ghost icon wiki-star${starred ? ' on' : ''}`}
+            aria-pressed={starred}
+            aria-label={starred ? 'Stern entfernen' : 'Mit Stern markieren'}
+            title={starred ? 'Stern entfernen' : 'Mit Stern markieren, z. B. für Hauptfiguren'}
+            onClick={() => onStar(!starred)}
+          >
+            {starred ? '★' : '☆'}
+          </button>
+        )}
+      </div>
 
       <div className="wiki-field">
         <label htmlFor={`${ids}-alias`}>Auch bekannt als</label>

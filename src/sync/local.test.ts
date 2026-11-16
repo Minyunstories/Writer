@@ -1,5 +1,6 @@
 import { beforeEach, expect, test } from 'vitest'
 import { createBook, createChapter, getBook, getChapter, listBooks, listChapters, resetDatabaseForTests, savePlace, setBookStyle, setChapterDate, updateChapter } from '../storage/db'
+import { addNote, updateNote } from '../storage/notes'
 import { addImage, createEntry, createFolder, getEntry, getImage, listEntries, listFolders, moveWikiItem, setFolderColor, setFolderTemplate, updateEntry } from '../storage/wiki'
 import type { FileSet } from './files'
 import { applyRemoteFiles, clearSyncState, loadSyncState, readLocalFiles, saveSyncState } from './local'
@@ -400,4 +401,30 @@ test('folder colours: taken over from their file, kept by a pulled folders.json,
   expect((await listFolders(book.id))[0].color).toBe('#6e2a26')
   await apply({ remove: [`${p}wiki/colors.json`], snapshot: await readLocalFiles() })
   expect((await listFolders(book.id))[0].color).toBeUndefined()
+})
+
+test('notes: taken over; when both devices changed them, both sets are merged by note, newest wins', async () => {
+  const { p, book } = await seed()
+  const mine = (await addNote(book.id, 'von hier'))!
+  const remoteNote = { id: 'r1', text: 'von dort', done: false, createdAt: 1, updatedAt: 1 }
+  const { notes } = await applyFull({
+    conflicts: [{ path: `${p}notes.json`, remote: JSON.stringify([remoteNote, { ...mine, text: 'älter', updatedAt: mine.updatedAt - 10 }]) }],
+    snapshot: await readLocalFiles(),
+  })
+  expect(notes).toEqual([])
+  const stored = (await getBook(book.id))!.notes!
+  expect(stored.map((n) => n.text).sort()).toEqual(['von dort', 'von hier'])
+
+  const planned = await readLocalFiles()
+  await updateNote(book.id, mine.id, { done: true })
+  await apply({ write: new Map([[`${p}notes.json`, JSON.stringify([remoteNote])]]), snapshot: planned })
+  expect((await getBook(book.id))!.notes!.find((n) => n.id === mine.id)!.done).toBe(true)
+
+  await apply({ write: new Map([[`${p}notes.json`, JSON.stringify([remoteNote])]]), snapshot: await readLocalFiles() })
+  expect((await getBook(book.id))!.notes!.map((n) => n.id)).toEqual(['r1'])
+  await apply({ write: new Map([[`${p}wiki/stars.json`, JSON.stringify(['e9'])]]), snapshot: await readLocalFiles() })
+  expect((await getBook(book.id))!.wikiStars).toEqual(['e9'])
+  await apply({ remove: [`${p}wiki/stars.json`, `${p}notes.json`], snapshot: await readLocalFiles() })
+  expect((await getBook(book.id))!.wikiStars).toBeUndefined()
+  expect((await getBook(book.id))!.notes).toBeUndefined()
 })

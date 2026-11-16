@@ -179,7 +179,8 @@ body.resizing {
   font-family: var(--font-display);
   font-size: 1.15rem;
   font-weight: 500;
-  line-height: 1.25;
+  /* Same rhythm as the chapter list in the outline section. */
+  line-height: 1.5;
 }
 
 .chapter-list a::before {

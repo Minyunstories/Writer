@@ -31,12 +31,21 @@ export function useSidebarWidth(): [number, (width: number) => void] {
 }
 
 /** The grip on the sidebar's right edge: drag it, or use the arrow keys. */
-export function SidebarHandle({ width, onWidth }: { width: number; onWidth: (width: number) => void }) {
+export function SidebarHandle({ width, onWidth, onCollapse }: { width: number; onWidth: (width: number) => void; onCollapse?: () => void }) {
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
     event.preventDefault()
     const startX = event.clientX
     const startWidth = width
-    const move = (moveEvent: globalThis.PointerEvent) => onWidth(startWidth + moveEvent.clientX - startX)
+    const move = (moveEvent: globalThis.PointerEvent) => {
+      const next = startWidth + moveEvent.clientX - startX
+      // Pulled well past the narrowest width: the sidebar folds away.
+      if (onCollapse && next < MIN_WIDTH - 60) {
+        up()
+        onCollapse()
+        return
+      }
+      onWidth(next)
+    }
     const up = () => {
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', up)
