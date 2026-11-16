@@ -3,14 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { SYNCED_EVENT } from '../storage/connection'
 import { createChapter, deleteChapter, getBook, listChapters, updateChapter } from '../storage/db'
-import {
-  createEntry,
-  createFolder,
-  deleteFolder,
-  listEntries,
-  listFolders,
-  renameFolder,
-} from '../storage/wiki'
+import { createEntry, createFolder, deleteFolder, listEntries, listFolders, moveWikiItem, renameFolder, stepWikiItem } from '../storage/wiki'
 import type { Book, Chapter, WikiEntry, WikiFolder } from '../types'
 import { Outline } from '../outline/Outline'
 import { SyncStatus } from '../sync/SyncStatus'
@@ -401,6 +394,13 @@ export function BookView({ renderChapter }: Props) {
                 onCreateEntry={handleCreateEntry}
                 onRenameFolder={(folder) => setDialog({ kind: 'renameFolder', folder })}
                 onDeleteFolder={(folder) => setDialog({ kind: 'deleteFolder', folder })}
+                order={book.wikiOrder}
+                onMove={(item, target) =>
+                  void attempt(async () => {
+                    await moveWikiItem(book.id, item, target)
+                  })
+                }
+                onStep={(item, direction) => void attempt(() => stepWikiItem(book.id, item, direction))}
               />
             }
           />

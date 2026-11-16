@@ -1,6 +1,6 @@
 import { beforeEach, expect, test } from 'vitest'
 import { createBook, createChapter, getBook, getChapter, listBooks, listChapters, resetDatabaseForTests, savePlace, setBookStyle, setChapterDate, updateChapter } from '../storage/db'
-import { addImage, createEntry, createFolder, getEntry, getImage, listEntries, listFolders, setFolderTemplate, updateEntry } from '../storage/wiki'
+import { addImage, createEntry, createFolder, getEntry, getImage, listEntries, listFolders, moveWikiItem, setFolderTemplate, updateEntry } from '../storage/wiki'
 import type { FileSet } from './files'
 import { applyRemoteFiles, clearSyncState, loadSyncState, readLocalFiles, saveSyncState } from './local'
 
@@ -37,6 +37,7 @@ test('readLocalFiles returns every book as files', async () => {
       `${p}wiki/_images/${image.id}.webp`,
       `${p}wiki/${entry.id}.md`,
       `${p}wiki/folders.json`,
+      `${p}wiki/order.json`,
     ].sort(),
   )
 })
@@ -364,4 +365,24 @@ test('a colour picked here during the run is kept', async () => {
   await setBookStyle(book.id, { cover: '#6e2a26' })
   await apply({ write: new Map([[`${p}style.json`, JSON.stringify({ cover: '#283650' })]]), snapshot })
   expect((await getBook(book.id))!.cover).toBe('#6e2a26')
+})
+
+test('wiki order: taken over, kept when changed here during the run, cleared when removed', async () => {
+  const { p, book, entry, folder } = await seed()
+  const second = await createEntry(book.id, 'Zweiter', folder.id)
+  const snapshot = await readLocalFiles()
+  await apply({ write: new Map([[`${p}wiki/order.json`, JSON.stringify({ [folder.id]: [second.id, entry.id] })]]), snapshot })
+  expect((await getBook(book.id))!.wikiOrder?.[folder.id]).toEqual([second.id, entry.id])
+
+  const planned = await readLocalFiles()
+  await moveWikiItem(book.id, { kind: 'entry', id: entry.id }, { parentId: folder.id, beforeId: second.id })
+  await apply({ write: new Map([[`${p}wiki/order.json`, JSON.stringify({ [folder.id]: [second.id, entry.id] })]]), snapshot: planned })
+  expect((await getBook(book.id))!.wikiOrder?.[folder.id]).toEqual([entry.id, second.id])
+
+  // Both changed: the other device's order wins.
+  await apply({ conflicts: [{ path: `${p}wiki/order.json`, remote: JSON.stringify({ [folder.id]: [second.id, entry.id] }) }], snapshot: await readLocalFiles() })
+  expect((await getBook(book.id))!.wikiOrder?.[folder.id]).toEqual([second.id, entry.id])
+
+  await apply({ remove: [`${p}wiki/order.json`], snapshot: await readLocalFiles() })
+  expect((await getBook(book.id))!.wikiOrder).toBeUndefined()
 })

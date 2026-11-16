@@ -498,3 +498,16 @@ test('Neues Kapitel in a book with chapters opens the new chapter, not the first
   await new Promise((resolve) => setTimeout(resolve, 100))
   expect(screen.getByTestId('location')).toHaveTextContent(`/chapters/${created.id}`)
 })
+
+test('wiki: "Anordnen" in the book reorders entries and keeps the order', async () => {
+  const user = userEvent.setup()
+  const book = await createBook('Sturmlied')
+  await createEntry(book.id, 'Anna')
+  await createEntry(book.id, 'Ben')
+  renderAt(`/book/${book.id}/wiki`)
+  await screen.findByRole('link', { name: 'Ben' })
+  await user.click(screen.getByRole('button', { name: 'Anordnen' }))
+  await user.click(screen.getByRole('button', { name: 'Ben nach oben' }))
+  await waitFor(async () => expect((await db.getBook(book.id))!.wikiOrder?._root).toEqual([expect.any(String), expect.any(String)]))
+  await waitFor(() => expect([...document.querySelectorAll('.wiki-tree-entry a')].map((a) => a.textContent)).toEqual(['Ben', 'Anna']))
+})

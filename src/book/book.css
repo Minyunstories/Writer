@@ -315,6 +315,63 @@ button.icon.danger:hover {
   color: var(--text);
 }
 
+.wiki-tree-entry-row {
+  display: flex;
+  align-items: center;
+  border-radius: 8px;
+  border-top: 2px solid transparent;
+}
+
+.wiki-tree-entry-row > a {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Where a dragged item lands: before an entry, or into a folder. */
+.wiki-tree-entry-row.drop-before {
+  border-top-color: var(--accent);
+}
+
+.wiki-tree-row.drop-into {
+  background: var(--accent-soft);
+  outline: 1px dashed var(--accent);
+}
+
+.wiki-tree [draggable='true'] {
+  cursor: grab;
+}
+
+.wiki-tree.arranging .wiki-tree-row button.icon,
+.wiki-tree.arranging .wiki-tree-entry-row button.icon {
+  opacity: 1;
+}
+
+.wiki-tree-root-drop {
+  margin-top: 0.5rem;
+  padding: 0.8rem;
+  border: 1px dashed var(--border-strong);
+  border-radius: 10px;
+  color: var(--text-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.wiki-tree-root-drop.active {
+  border-color: var(--accent);
+  color: var(--text);
+  background: var(--accent-soft);
+}
+
+button.wiki-tree-arrange {
+  grid-column: 1 / -1;
+}
+
+button.wiki-tree-arrange.on {
+  border-style: solid;
+  border-color: var(--accent);
+  color: var(--text);
+}
+
 .wiki-tree-actions button {
   font-size: 13px;
   white-space: nowrap;

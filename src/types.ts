@@ -13,6 +13,8 @@ export interface Book {
   highlight?: string
   /** Where text was last changed, so the book reopens there. */
   place?: BookPlace
+  /** The writer's order of wiki folders and entries: folder id (or "_root") to ids. */
+  wikiOrder?: Record<string, string[]>
 }
 
 export interface BookPlace {

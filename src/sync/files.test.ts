@@ -172,3 +172,20 @@ test('junk in style, dates and place is ignored field by field', () => {
   expect(back.chapters.find((c) => c.id === 'c1')!.date).toBeUndefined()
   expect(back.chapters.find((c) => c.id === 'c2')!.date).toBe('x'.repeat(40))
 })
+
+test('the wiki order lives in its own file', () => {
+  const plain = bundleToFiles(bundle)
+  expect(plain.has('books/b1/wiki/order.json')).toBe(false)
+  const ordered: BookBundle = { ...bundle, book: { ...book, wikiOrder: { f1: ['f2', 'e1'], _root: ['f1', 'e2'] } } }
+  const files = bundleToFiles(ordered)
+  expect(files.get('books/b1/book.json')).toBe(plain.get('books/b1/book.json'))
+  expect(files.get('books/b1/wiki/folders.json')).toBe(plain.get('books/b1/wiki/folders.json'))
+  expect(JSON.parse(files.get('books/b1/wiki/order.json') as string)).toEqual({ _root: ['f1', 'e2'], f1: ['f2', 'e1'] })
+  expect(classifyPath('books/b1/wiki/order.json')).toEqual({ bookId: 'b1', kind: 'wikiOrder', id: 'b1' })
+  const back = filesToBundle('b1', files)
+  expect(back.book.wikiOrder).toEqual({ _root: ['f1', 'e2'], f1: ['f2', 'e1'] })
+  expect(bundleToFiles(back).get('books/b1/wiki/order.json')).toBe(files.get('books/b1/wiki/order.json'))
+
+  files.set('books/b1/wiki/order.json', JSON.stringify({ _root: 'x', f1: ['a', 3] }))
+  expect(filesToBundle('b1', files).book.wikiOrder).toEqual({ f1: ['a'] })
+})

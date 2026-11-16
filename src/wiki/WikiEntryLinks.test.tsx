@@ -144,3 +144,35 @@ test('a second property with a template name is shown, not hidden', async () => 
   expect(screen.getByLabelText('Alter')).toHaveValue('27')
   expect(screen.getByDisplayValue('zweiter Wert')).toBeInTheDocument()
 })
+
+test('properties can be arranged: own fields within the entry, template fields for the folder', async () => {
+  const { chars, pascal, user } = await setup(async ({ pascal }) => {
+    await updateEntry(pascal.id, {
+      properties: [
+        { id: 'p1', key: 'Größe', value: '1,80' },
+        { id: 'p2', key: 'Alter', value: '27' },
+        { id: 'p3', key: 'Beruf', value: 'Schmied' },
+      ],
+    })
+  })
+  expect(screen.queryByRole('button', { name: 'Größe nach unten' })).not.toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: 'Eigenschaften anordnen' }))
+  expect(screen.getByRole('button', { name: 'Größe nach oben' })).toBeDisabled()
+  await user.click(screen.getByRole('button', { name: 'Größe nach unten' }))
+  await waitFor(async () => expect((await getEntry(pascal.id))!.properties.map((p) => p.key)).toEqual(['Beruf', 'Alter', 'Größe']))
+  await user.click(screen.getByRole('button', { name: 'Alter nach oben' }))
+  await waitFor(async () => expect((await listFolders(chars.bookId)).find((f) => f.id === chars.id)!.template).toEqual(['Alter', 'Augenfarbe']))
+  await user.click(screen.getByRole('button', { name: 'Fertig' }))
+  expect(screen.queryByRole('button', { name: 'Alter nach oben' })).not.toBeInTheDocument()
+})
+
+test('a value can have several lines', async () => {
+  const { pascal, user } = await setup()
+  await user.click(screen.getByRole('button', { name: 'Eigenschaft hinzufügen' }))
+  await user.type(screen.getByLabelText('Eigenschaft'), 'Beruf')
+  const value = screen.getByLabelText('Wert')
+  expect(value.tagName).toBe('TEXTAREA')
+  await user.type(value, 'Erster Hofschmied{Enter}des Nordens')
+  await waitFor(async () => expect((await getEntry(pascal.id))!.properties[0].value).toBe('Erster Hofschmied\ndes Nordens'))
+  expect(screen.getByLabelText('Augenfarbe').tagName).toBe('TEXTAREA')
+})

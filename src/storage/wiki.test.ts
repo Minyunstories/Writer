@@ -1,5 +1,6 @@
 import { openDB } from 'idb'
 import { beforeEach, expect, test } from 'vitest'
+import { orderedChildren } from '../wiki/order'
 import { createBook, deleteBook, getChapter, listBooks, resetDatabaseForTests } from './db'
 import {
   addImage,
@@ -13,6 +14,9 @@ import {
   listFolders,
   removeImage,
   changeTemplate,
+  moveTemplateField,
+  moveWikiItem,
+  stepWikiItem,
   renameFolder,
   setFolderTemplate,
   updateEntry,
@@ -129,4 +133,79 @@ test('template changes work on the stored template', async () => {
   await changeTemplate(folder.id, { remove: 'Alter' })
   await changeTemplate(folder.id, { remove: 'Größe' })
   expect((await listFolders(book.id))[0].template).toBeUndefined()
+})
+
+async function tree(bookId: string, parentId: string | null = null) {
+  const { getBook } = await import('./db')
+  const kids = orderedChildren(parentId, await listFolders(bookId), await listEntries(bookId), (await getBook(bookId))!.wikiOrder)
+  return { folders: kids.folders.map((x) => x.name), entries: kids.entries.map((x) => x.name) }
+}
+
+test('new folders and entries go to the end of their folder', async () => {
+  const book = await createBook('B')
+  await createEntry(book.id, 'Zora')
+  await createEntry(book.id, 'Anna')
+  await createFolder(book.id, 'Orte')
+  await createFolder(book.id, 'Leute')
+  expect(await tree(book.id)).toEqual({ folders: ['Orte', 'Leute'], entries: ['Zora', 'Anna'] })
+})
+
+test('moving: before a sibling, into a folder; cycles and too deep folders are refused', async () => {
+  const book = await createBook('B')
+  const orte = await createFolder(book.id, 'Orte')
+  const leute = await createFolder(book.id, 'Leute')
+  const anna = await createEntry(book.id, 'Anna')
+  const ben = await createEntry(book.id, 'Ben')
+  expect(await moveWikiItem(book.id, { kind: 'entry', id: ben.id }, { parentId: null, beforeId: anna.id })).toBe(true)
+  expect((await tree(book.id)).entries).toEqual(['Ben', 'Anna'])
+  expect(await moveWikiItem(book.id, { kind: 'entry', id: anna.id }, { parentId: leute.id, beforeId: null })).toBe(true)
+  expect((await getEntry(anna.id))!.folderId).toBe(leute.id)
+  expect((await tree(book.id, leute.id)).entries).toEqual(['Anna'])
+  expect((await tree(book.id)).entries).toEqual(['Ben'])
+
+  expect(await moveWikiItem(book.id, { kind: 'folder', id: leute.id }, { parentId: orte.id, beforeId: null })).toBe(true)
+  expect((await listFolders(book.id)).find((x) => x.id === leute.id)!.parentId).toBe(orte.id)
+  expect(await moveWikiItem(book.id, { kind: 'folder', id: orte.id }, { parentId: leute.id, beforeId: null })).toBe(false)
+  expect(await moveWikiItem(book.id, { kind: 'folder', id: orte.id }, { parentId: orte.id, beforeId: null })).toBe(false)
+  expect((await listFolders(book.id)).find((x) => x.id === orte.id)!.parentId).toBeNull()
+
+  // Five levels at most (0–4).
+  let parent: string | null = null
+  const chain: string[] = []
+  for (let level = 0; level < 5; level++) {
+    const folder: { id: string } = await createFolder(book.id, `Ebene ${level}`, parent)
+    chain.push(folder.id)
+    parent = folder.id
+  }
+  const loose = await createFolder(book.id, 'Lose')
+  expect(await moveWikiItem(book.id, { kind: 'folder', id: loose.id }, { parentId: chain[4], beforeId: null })).toBe(false)
+  expect(await moveWikiItem(book.id, { kind: 'folder', id: loose.id }, { parentId: chain[3], beforeId: null })).toBe(true)
+  expect(await moveWikiItem(book.id, { kind: 'entry', id: ben.id }, { parentId: chain[4], beforeId: null })).toBe(true)
+})
+
+test('stepping moves one place among its own kind', async () => {
+  const book = await createBook('B')
+  const a = await createEntry(book.id, 'A')
+  await createEntry(book.id, 'B')
+  const c = await createEntry(book.id, 'C')
+  await stepWikiItem(book.id, { kind: 'entry', id: c.id }, 'up')
+  expect((await tree(book.id)).entries).toEqual(['A', 'C', 'B'])
+  await stepWikiItem(book.id, { kind: 'entry', id: a.id }, 'up')
+  expect((await tree(book.id)).entries).toEqual(['A', 'C', 'B'])
+  await stepWikiItem(book.id, { kind: 'entry', id: a.id }, 'down')
+  expect((await tree(book.id)).entries).toEqual(['C', 'A', 'B'])
+  const x = await createFolder(book.id, 'X')
+  await createFolder(book.id, 'Y')
+  await stepWikiItem(book.id, { kind: 'folder', id: x.id }, 'down')
+  expect(await tree(book.id)).toEqual({ folders: ['Y', 'X'], entries: ['C', 'A', 'B'] })
+})
+
+test('template fields move up and down', async () => {
+  const book = await createBook('B')
+  const folder = await createFolder(book.id, 'Characters')
+  await setFolderTemplate(folder.id, ['A', 'B', 'C'])
+  await moveTemplateField(folder.id, 'C', 'up')
+  expect((await listFolders(book.id))[0].template).toEqual(['A', 'C', 'B'])
+  await moveTemplateField(folder.id, 'A', 'up')
+  expect((await listFolders(book.id))[0].template).toEqual(['A', 'C', 'B'])
 })

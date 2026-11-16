@@ -55,7 +55,8 @@ test('a second device without data receives everything, images included', async 
   const image = await addImage(entry.id, { type: 'image/webp', data: new Uint8Array([9, 0, 255, 13]).buffer, width: 2, height: 2 })
   await sync(A)
   const result = await sync(B)
-  expect(result.pulled).toBe(5)
+  // book.json, two chapters, the entry, its image and the wiki order.
+  expect(result.pulled).toBe(6)
   expect(result.pushed).toBe(0)
   expect(await chaptersOf(B)).toEqual([['Anfang', 'eins'], ['Sturm', 'zwei']])
   expect((await listEntries(book.id))[0]).toMatchObject({ name: 'Pascal', imageIds: [image.id] })
@@ -366,7 +367,7 @@ test('text files travel inside the commit; only images need separate uploads', a
   }
   await sync(A)
   expect(blobs).toBe(1)
-  expect((await repo.files()).size).toBe(5)
+  expect((await repo.files()).size).toBe(6)
   await sync(B)
   expect((await chaptersOf(B)).length).toBe(2)
 })

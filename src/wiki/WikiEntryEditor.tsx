@@ -11,6 +11,7 @@ import {
   getImage,
   removeImage,
   changeTemplate,
+  moveTemplateField,
   updateEntry,
   type EntryPatch,
 } from '../storage/wiki'
@@ -118,6 +119,8 @@ export function WikiEntryEditor({
   const [confirmDelete, setConfirmDelete] = useState(false)
   // The property whose name is being typed: it keeps its own row until the field is left.
   const [editingKey, setEditingKey] = useState<string | null>(null)
+  /** Arrows instead of pin and remove buttons, to change the order of the properties. */
+  const [arranging, setArranging] = useState(false)
   /** Bumped when the notes were replaced from storage, so the notes field starts over with the new text. */
   const [notesVersion, setNotesVersion] = useState(0)
   const [imageToRemove, setImageToRemove] = useState<string | null>(null)
@@ -318,6 +321,44 @@ export function WikiEntryEditor({
     }
   }
   const pinLabel = top ? `Feld für alle Einträge in „${top.name}"` : ''
+
+  /** Own fields swap places within the entry; template fields swap places in the folder. */
+  const stepOwn = (id: string, direction: 'up' | 'down') => {
+    const own = ownProperties.map((property) => property.id)
+    const index = own.indexOf(id)
+    const otherId = own[direction === 'up' ? index - 1 : index + 1]
+    if (index < 0 || !otherId) return
+    const properties = [...entry.properties]
+    const a = properties.findIndex((property) => property.id === id)
+    const b = properties.findIndex((property) => property.id === otherId)
+    ;[properties[a], properties[b]] = [properties[b], properties[a]]
+    change({ properties })
+  }
+  const stepTemplate = async (key: string, direction: 'up' | 'down') => {
+    if (!top) return
+    try {
+      await moveTemplateField(top.id, key, direction)
+      onChangedRef.current()
+    } catch {
+      setSaveFailed(true)
+    }
+  }
+  const arrows = (name: string, index: number, count: number, step: (direction: 'up' | 'down') => void) => (
+    <span className="wiki-arrows">
+      <button className="ghost icon" aria-label={`${name} nach oben`} title="Nach oben" disabled={index === 0} onClick={() => step('up')}>
+        ↑
+      </button>
+      <button
+        className="ghost icon"
+        aria-label={`${name} nach unten`}
+        title="Nach unten"
+        disabled={index === count - 1}
+        onClick={() => step('down')}
+      >
+        ↓
+      </button>
+    </span>
+  )
   const linkProps = { matcher: otherMatcher, onOpen: onOpenEntry }
 
   const reloadImages = async () => {
@@ -443,7 +484,18 @@ export function WikiEntryEditor({
       </div>
 
       <div className="wiki-field">
-        <span className="wiki-label">Eigenschaften</span>
+        <div className="wiki-field-head">
+          <span className="wiki-label">Eigenschaften</span>
+          {template.length + ownProperties.length > 1 && (
+            <button
+              className={`ghost wiki-arrange${arranging ? ' on' : ''}`}
+              aria-label={arranging ? undefined : 'Eigenschaften anordnen'}
+              onClick={() => setArranging((on) => !on)}
+            >
+              {arranging ? 'Fertig' : 'Anordnen'}
+            </button>
+          )}
+        </div>
         {(template.length > 0 || ownProperties.length > 0) && (
           <ul className="wiki-properties">
             {template.map((key, index) => (
@@ -458,19 +510,23 @@ export function WikiEntryEditor({
                   onChange={(value) => setTemplateValue(key, value)}
                   {...linkProps}
                 />
-                <button
-                  className="ghost icon wiki-pin"
-                  aria-pressed={true}
-                  aria-label={pinLabel}
-                  title={`${pinLabel} (an)`}
-                  onClick={() => void setPinned(key, false)}
-                >
-                  ★
-                </button>
+                {arranging ? (
+                  arrows(key, index, template.length, (direction) => void stepTemplate(key, direction))
+                ) : (
+                  <button
+                    className="ghost icon wiki-pin"
+                    aria-pressed={true}
+                    aria-label={pinLabel}
+                    title={`${pinLabel} (an)`}
+                    onClick={() => void setPinned(key, false)}
+                  >
+                    ★
+                  </button>
+                )}
               </li>
             ))}
-            {ownProperties.map((property) => (
-              <li key={property.id}>
+            {ownProperties.map((property, index) => (
+              <li key={property.id} className={arranging ? 'arranging' : undefined}>
                 <input
                   type="text"
                   aria-label="Eigenschaft"
@@ -487,28 +543,34 @@ export function WikiEntryEditor({
                   onChange={(value) => setProperty(property.id, { value })}
                   {...linkProps}
                 />
-                {top ? (
-                  <button
-                    className="ghost icon wiki-pin"
-                    aria-pressed={false}
-                    aria-label={pinLabel}
-                    title={pinLabel}
-                    disabled={!property.key.trim()}
-                    onClick={() => void setPinned(property.key, true)}
-                  >
-                    ☆
-                  </button>
+                {arranging ? (
+                  arrows(property.key.trim() || 'Eigenschaft', index, ownProperties.length, (direction) => stepOwn(property.id, direction))
                 ) : (
-                  <span />
+                  <>
+                    {top ? (
+                      <button
+                        className="ghost icon wiki-pin"
+                        aria-pressed={false}
+                        aria-label={pinLabel}
+                        title={pinLabel}
+                        disabled={!property.key.trim()}
+                        onClick={() => void setPinned(property.key, true)}
+                      >
+                        ☆
+                      </button>
+                    ) : (
+                      <span />
+                    )}
+                    <button
+                      className="ghost icon"
+                      aria-label="Eigenschaft entfernen"
+                      title="Eigenschaft entfernen"
+                      onClick={() => change({ properties: entry.properties.filter((p) => p.id !== property.id) })}
+                    >
+                      ×
+                    </button>
+                  </>
                 )}
-                <button
-                  className="ghost icon"
-                  aria-label="Eigenschaft entfernen"
-                  title="Eigenschaft entfernen"
-                  onClick={() => change({ properties: entry.properties.filter((p) => p.id !== property.id) })}
-                >
-                  ×
-                </button>
               </li>
             ))}
           </ul>

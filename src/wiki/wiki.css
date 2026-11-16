@@ -114,7 +114,45 @@
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) auto auto;
   gap: 0.4em;
+  /* Long values grow downwards; names and buttons stay at the top of the row. */
+  align-items: start;
+}
+
+textarea.wiki-value {
+  display: block;
+  width: 100%;
+  min-height: 2.4em;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.5rem 0.7rem;
+  line-height: 1.45;
+  resize: none;
+  overflow: hidden;
+  font: inherit;
+  color: inherit;
+}
+
+.wiki-field-head {
+  display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 0.5em;
+}
+
+button.wiki-arrange {
+  padding: 0.2rem 0.6rem;
+  font-size: 0.8em;
+  color: var(--text-muted);
+}
+
+button.wiki-arrange.on {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.wiki-arrows {
+  display: inline-flex;
 }
 
 .wiki-properties li.wiki-template-row {
@@ -144,8 +182,10 @@
   border-radius: 8px;
   padding: 0.5rem 0.7rem;
   min-height: 2.4em;
+  line-height: 1.45;
   cursor: text;
   overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 .wiki-inline-link {
@@ -283,9 +323,19 @@
 .markdown-field {
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 0.7em 0.8em;
-  font-family: 'Literata', serif;
+  border-radius: 10px;
+  padding: 0.9em 1em;
+  font-family: var(--font-text);
+  font-size: 1.1em;
+}
+
+/* Notes read like the chapter text: more air between lines and paragraphs. */
+.markdown-field .cm-scroller {
+  line-height: 1.8;
+}
+
+.markdown-field .cm-line {
+  padding-bottom: 0.45em;
 }
 
 .wiki-check {

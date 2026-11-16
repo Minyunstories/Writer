@@ -6,8 +6,9 @@
   --surface-2: #292725;
   --border: #383532;
   --border-strong: #4a4642;
-  --text: #efe9e2;
-  --text-muted: #aaa29a;
+  /* Softer than white: less glare over long writing sessions. */
+  --text: #d9d1c6;
+  --text-muted: #a39b92;
   --accent: #d58d62;
   --accent-soft: rgba(213, 141, 98, 0.18);
   --link-line: rgba(213, 141, 98, 0.65);

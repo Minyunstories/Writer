@@ -1,4 +1,5 @@
-import { useState, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
+import { useAutoHeight } from '../lib/useAutoHeight'
 import type { Matcher } from './linker'
 
 interface Props {
@@ -12,18 +13,22 @@ interface Props {
 }
 
 /**
- * A one-line value. Names of wiki entries in it are shown as links; a click
- * anywhere else switches to editing.
+ * A value that may run over several lines and grows with its text. Names of wiki entries
+ * in it are shown as links; a click anywhere else switches to editing.
  */
 export function LinkedValue({ id, value, ariaLabel, placeholder, matcher, onChange, onOpen }: Props) {
   const [editing, setEditing] = useState(false)
   const matches = onOpen ? matcher.find(value) : []
+  const fieldRef = useRef<HTMLTextAreaElement>(null)
+  useAutoHeight(fieldRef, value, editing || matches.length === 0)
 
   if (editing || matches.length === 0) {
     return (
-      <input
+      <textarea
+        ref={fieldRef}
         id={id}
-        type="text"
+        rows={1}
+        className="wiki-value"
         aria-label={ariaLabel}
         placeholder={placeholder}
         value={value}

@@ -5,6 +5,8 @@ import type { Book, Chapter, FontId, WikiEntry, WikiFolder, WikiImage } from '..
 import {
   bundleToFiles,
   classifyPath,
+  orderFile as orderText,
+  parseOrder,
   placeFile as placeText,
   styleFile as styleText,
   entryToFile,
@@ -70,7 +72,7 @@ export async function readLocalFiles(): Promise<FileSet> {
   return files
 }
 
-const KIND_ORDER = ['book', 'style', 'place', 'folders', 'templates', 'chapter', 'outline', 'tags', 'dates', 'entry', 'image']
+const KIND_ORDER = ['book', 'style', 'place', 'folders', 'templates', 'chapter', 'outline', 'tags', 'dates', 'entry', 'wikiOrder', 'image']
 
 /**
  * Applies changes from the repository to this device, file by file, in one transaction.
@@ -285,6 +287,26 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
     await books.put(next)
   }
 
+  /**
+   * The wiki order: the repository's, unless it was changed here after the run was planned.
+   * When both sides changed it, the other device's order wins; items it does not list stay
+   * visible at the end of their folder.
+   */
+  async function writeOrder(path: string, bookId: string, data: FileData | undefined, conflict: boolean) {
+    const order = parseOrder(data)
+    if (!order) {
+      skipped.push(path)
+      return
+    }
+    const book = await books.get(bookId)
+    if (!book) return
+    if (!conflict && (snapshotText(path) ?? '') !== (orderText(book) ?? '')) return
+    const next: Book = { ...book }
+    if (Object.keys(order).length > 0) next.wikiOrder = order
+    else delete next.wikiOrder
+    await books.put(next)
+  }
+
   /** The last place: the newer one wins, from wherever it comes. */
   async function writePlace(path: string, bookId: string, data: FileData) {
     const place = cleanPlace(parseJson<unknown>(data))
@@ -475,6 +497,7 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
       else if (info.kind === 'style') await writeStyle(path, info.bookId, data, conflict)
       else if (info.kind === 'place') await writePlace(path, info.bookId, data)
       else if (info.kind === 'dates') await writeDates(path, info.bookId, data, conflict)
+      else if (info.kind === 'wikiOrder') await writeOrder(path, info.bookId, data, conflict)
       else if (info.kind === 'templates') await writeTemplates(path, info.bookId, data, conflict)
       else await writeImage(path, info.bookId, info.id, data)
     }
@@ -496,6 +519,7 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
       else if (info.kind === 'dates') await writeDates(item.path, info.bookId, '{}', false)
       else if (info.kind === 'style') await removeStyle(item.path, info.bookId)
       else if (info.kind === 'place') await removePlace(item.path, info.bookId)
+      else if (info.kind === 'wikiOrder') await writeOrder(item.path, info.bookId, '{}', false)
       else if (info.kind === 'templates') await writeTemplates(item.path, info.bookId, '{}', false)
       else if (info.kind === 'folders') {
         for (const key of await folders.index('bookId').getAllKeys(info.bookId)) await folders.delete(key)

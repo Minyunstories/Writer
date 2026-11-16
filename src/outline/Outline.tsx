@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ZoomControl } from '../book/ZoomControl'
 import { MAX_DATE_LENGTH } from '../lib/bookStyle'
+import { useAutoHeight } from '../lib/useAutoHeight'
 import { useAutosave } from '../lib/useAutosave'
 import { countWords, formatWordCount } from '../lib/wordCount'
 import { useZoom } from '../lib/zoom'
@@ -55,6 +56,8 @@ interface CardProps {
 /** The free-text date left of a chapter on the timeline, saved while typing, and its dot on the rail. */
 function DateField({ chapter, onError }: { chapter: Chapter; onError: () => void }) {
   const [value, setValue] = useState(chapter.date ?? '')
+  const fieldRef = useRef<HTMLTextAreaElement>(null)
+  useAutoHeight(fieldRef, value)
   /** What is in the field and not yet stored. */
   const typed = useRef<string | null>(null)
 
@@ -96,6 +99,7 @@ function DateField({ chapter, onError }: { chapter: Chapter; onError: () => void
       <div className="outline-date">
         {/* A text area, so a long date wraps in the narrow phone column; Enter finishes it. */}
         <textarea
+          ref={fieldRef}
           rows={1}
           className={value.trim() ? 'filled' : ''}
           value={value}

@@ -84,6 +84,8 @@ export function bundleToFiles({ book, chapters, folders, entries, images }: Book
   if (dates) files.set(`${prefix}dates.json`, dates)
   const place = placeFile(book)
   if (place) files.set(`${prefix}place.json`, place)
+  const order = orderFile(book)
+  if (order) files.set(`${prefix}wiki/order.json`, order)
 
   for (const chapter of ordered) {
     files.set(`${prefix}chapters/${chapter.id}.md`, chapter.content)
@@ -156,6 +158,27 @@ export function datesFile(ordered: Chapter[]): string | undefined {
 /** place.json: where text was last changed. */
 export function placeFile(book: Pick<Book, 'place'>): string | undefined {
   return book.place ? json({ chapterId: book.place.chapterId, offset: book.place.offset, at: book.place.at }) : undefined
+}
+
+/** wiki/order.json: the writer's order of folders and entries. Undefined when there is none. */
+export function orderFile(book: Pick<Book, 'wikiOrder'>): string | undefined {
+  const keys = Object.keys(book.wikiOrder ?? {})
+    .filter((key) => book.wikiOrder![key].length > 0)
+    .sort((a, b) => (a === '_root' ? -1 : b === '_root' ? 1 : a.localeCompare(b)))
+  return keys.length > 0 ? json(Object.fromEntries(keys.map((key) => [key, book.wikiOrder![key]]))) : undefined
+}
+
+/** The usable lists of a wiki/order.json; null when the file is not a JSON object. */
+export function parseOrder(data: FileData | undefined): Record<string, string[]> | null {
+  const parsed = parseJson<unknown>(data)
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+  const order: Record<string, string[]> = {}
+  for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+    if (!Array.isArray(value)) continue
+    const ids = value.filter((id): id is string => typeof id === 'string' && id.length > 0)
+    if (ids.length > 0) order[key] = ids
+  }
+  return order
 }
 
 /** The usable colours of a style.json; null when the file is not a JSON object. */
@@ -282,6 +305,8 @@ export function filesToBundle(bookId: string, files: FileSet): BookBundle {
   if (style.highlight) book.highlight = style.highlight
   const place = cleanPlace(parseJson<unknown>(files.get(`${prefix}place.json`)))
   if (place) book.place = place
+  const wikiOrder = parseOrder(files.get(`${prefix}wiki/order.json`))
+  if (wikiOrder && Object.keys(wikiOrder).length > 0) book.wikiOrder = wikiOrder
 
   const folderList = parseJson<Omit<WikiFolder, 'bookId'>[]>(files.get(`${prefix}wiki/folders.json`))
   const templateMap = parseJson<Record<string, unknown>>(files.get(`${prefix}wiki/templates.json`)) ?? {}
@@ -334,7 +359,7 @@ export function filesToBundle(bookId: string, files: FileSet): BookBundle {
   return { book, chapters, folders, entries, images }
 }
 
-export type PathKind = 'book' | 'chapter' | 'outline' | 'folders' | 'entry' | 'image' | 'tags' | 'templates' | 'style' | 'dates' | 'place'
+export type PathKind = 'book' | 'chapter' | 'outline' | 'folders' | 'entry' | 'image' | 'tags' | 'templates' | 'style' | 'dates' | 'place' | 'wikiOrder'
 
 /** What a repository path holds, or null for files the app does not manage. */
 export function classifyPath(path: string): { bookId: string; kind: PathKind; id: string } | null {
@@ -349,6 +374,7 @@ export function classifyPath(path: string): { bookId: string; kind: PathKind; id
   if (rest === 'dates.json') return { bookId, kind: 'dates', id: bookId }
   if (rest === 'place.json') return { bookId, kind: 'place', id: bookId }
   if (rest === 'wiki/templates.json') return { bookId, kind: 'templates', id: bookId }
+  if (rest === 'wiki/order.json') return { bookId, kind: 'wikiOrder', id: bookId }
   const match = /^(chapters|outline|wiki\/_images|wiki)\/([^/]+)$/.exec(rest)
   if (!match) return null
   const [, folder, file] = match
