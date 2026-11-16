@@ -21,7 +21,7 @@ export interface SyncOptions {
 }
 
 const MAX_ATTEMPTS = 3
-const COMMIT_MESSAGE = 'MinyunWriter: Synchronisation'
+const COMMIT_MESSAGE = 'Writer: Synchronisation'
 /** Text up to this size travels inside the commit request; larger files are uploaded on their own. */
 const INLINE_FILE_LIMIT = 200_000
 const INLINE_TOTAL_LIMIT = 2_000_000

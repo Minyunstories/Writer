@@ -9,5 +9,5 @@ test('shows the app name on the dashboard route', async () => {
       <AppRoutes />
     </MemoryRouter>,
   )
-  expect(await screen.findByRole('heading', { name: 'MinyunWriter' })).toBeInTheDocument()
+  expect(await screen.findByRole('heading', { name: 'Writer' })).toBeInTheDocument()
 })

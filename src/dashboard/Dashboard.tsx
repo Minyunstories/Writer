@@ -90,7 +90,7 @@ export function Dashboard() {
     <div className="dashboard">
       <header className="dashboard-header">
         <img className="dashboard-logo" src={FEATHER} alt="" />
-        <h1>MinyunWriter</h1>
+        <h1>Writer</h1>
         <div className="dashboard-header-actions">
           <SyncStatus />
           <button className="primary dashboard-new" aria-label="Neues Buch" onClick={() => setDialog({ kind: 'create' })}>

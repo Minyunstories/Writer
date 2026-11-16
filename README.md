@@ -1,4 +1,4 @@
-# MinyunWriter
+# Writer
 
 Eine Schreib-App für den Browser: Bücher mit Kapiteln, einem Wiki und einer Outline.
 

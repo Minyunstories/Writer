@@ -54,9 +54,9 @@ function fromBase64(base64: string): Uint8Array {
   return bytes
 }
 
-const README = `# MinyunWriter
+const README = `# Writer
 
-Dieses Repository enthält Bücher aus MinyunWriter. Die App schreibt und liest den Ordner \`books/\`.
+Dieses Repository enthält Bücher aus Writer. Die App schreibt und liest den Ordner \`books/\`.
 Die Dateien sind normales Markdown und JSON und bleiben auch ohne die App lesbar.
 `
 
@@ -140,7 +140,7 @@ export function createGitHubApi(config: { owner: string; repo: string; token: st
       const name = await defaultBranch()
       if (parent === null) {
         // The Git Data API refuses repositories without commits; start one with a README.
-        await request('PUT', '/contents/README.md', { message: 'MinyunWriter einrichten', content: toBase64(toBytes(README)), branch: name })
+        await request('PUT', '/contents/README.md', { message: 'Writer einrichten', content: toBase64(toBytes(README)), branch: name })
         const head = await api.getHead()
         if (!head) throw new GitHubError('other', 'Das Repository konnte nicht eingerichtet werden')
         parent = head.commit

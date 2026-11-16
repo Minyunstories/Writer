@@ -13,7 +13,7 @@ export default defineConfig({
       injectRegister: false,
       includeAssets: ['apple-touch-icon.png', 'favicon.svg'],
       manifest: {
-        name: 'MinyunWriter',
+        name: 'Writer',
         short_name: 'Writer',
         description: 'Schreiben mit Kapiteln, Wiki und Outline.',
         lang: 'de',
