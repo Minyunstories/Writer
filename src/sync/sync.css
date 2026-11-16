@@ -1,0 +1,128 @@
+.sync-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.35rem 0.6rem;
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex: none;
+}
+
+.sync-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex: none;
+}
+
+.sync-idle .sync-dot {
+  background: #6fcf97;
+}
+
+.sync-pending .sync-dot,
+.sync-offline .sync-dot {
+  background: #e0b34f;
+}
+
+.sync-running .sync-dot {
+  background: var(--accent);
+  animation: sync-pulse 1s ease-in-out infinite;
+}
+
+.sync-error .sync-dot {
+  background: var(--danger);
+}
+
+@keyframes sync-pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.sync-dialog {
+  width: min(520px, 100%);
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  gap: 0.8rem;
+}
+
+.sync-dialog p {
+  margin: 0;
+}
+
+.sync-current {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 14px;
+}
+
+.sync-field {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.sync-field input {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.5rem 0.7rem;
+  width: 100%;
+  color: var(--text);
+  font-size: 15px;
+}
+
+.sync-hint {
+  font-size: 13px;
+  margin-top: -0.4rem !important;
+}
+
+.sync-ok {
+  color: #6fcf97;
+}
+
+.sync-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.sync-secondary {
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--border);
+  justify-content: space-between;
+}
+
+.sync-help {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.sync-help summary {
+  cursor: pointer;
+}
+
+.sync-help ol {
+  margin: 0.5rem 0 0;
+  padding-left: 1.2rem;
+  display: grid;
+  gap: 0.3rem;
+}
+
+.sync-conflicts {
+  margin: 0;
+  padding-left: 1.2rem;
+  display: grid;
+  gap: 0.5rem;
+  font-size: 14px;
+}
+
+@media (max-width: 480px) {
+  .sync-status .sync-label {
+    display: none;
+  }
+}

@@ -1,0 +1,187 @@
+import type { Book, Chapter, FontId } from '../types'
+import { announceChange, cleanTitle, ConflictError, db, newId } from './connection'
+
+export { ConflictError, resetDatabaseForTests } from './connection'
+
+export async function listBooks(): Promise<Book[]> {
+  const books = await (await db()).getAll('books')
+  return books.sort((a, b) => b.updatedAt - a.updatedAt)
+}
+
+export async function getBook(id: string): Promise<Book | undefined> {
+  return (await db()).get('books', id)
+}
+
+export async function createBook(title: string): Promise<Book> {
+  const now = Date.now()
+  const font: FontId = 'literata'
+  const book: Book = {
+    id: newId(),
+    title: cleanTitle(title),
+    font,
+    chapterOrder: [],
+    createdAt: now,
+    updatedAt: now,
+  }
+  await (await db()).put('books', book)
+  announceChange()
+  return book
+}
+
+export async function updateBook(
+  id: string,
+  patch: Partial<Pick<Book, 'title' | 'font' | 'chapterOrder'>>,
+): Promise<Book> {
+  const tx = (await db()).transaction('books', 'readwrite')
+  const current = await tx.store.get(id)
+  if (!current) throw new Error(`Book not found: ${id}`)
+  const next: Book = { ...current, ...patch, updatedAt: Date.now() }
+  if (patch.title !== undefined) next.title = cleanTitle(patch.title)
+  await tx.store.put(next)
+  await tx.done
+  announceChange()
+  return next
+}
+
+const BOOK_OWNED_STORES = ['chapters', 'wikiFolders', 'wikiEntries', 'wikiImages'] as const
+
+export async function deleteBook(id: string): Promise<void> {
+  const tx = (await db()).transaction(['books', ...BOOK_OWNED_STORES], 'readwrite')
+  for (const name of BOOK_OWNED_STORES) {
+    const store = tx.objectStore(name)
+    const keys = await store.index('bookId').getAllKeys(id)
+    await Promise.all(keys.map((key) => store.delete(key)))
+  }
+  await tx.objectStore('books').delete(id)
+  await tx.done
+  announceChange()
+}
+
+export async function listChapters(bookId: string): Promise<Chapter[]> {
+  const database = await db()
+  const [book, chapters] = await Promise.all([
+    database.get('books', bookId),
+    database.getAllFromIndex('chapters', 'bookId', bookId),
+  ])
+  if (!book) return []
+  const byId = new Map(chapters.map((c) => [c.id, c]))
+  const ordered: Chapter[] = []
+  for (const id of book.chapterOrder) {
+    const chapter = byId.get(id)
+    if (chapter) {
+      ordered.push(chapter)
+      byId.delete(id)
+    }
+  }
+  // Chapters missing from the order are appended rather than hidden.
+  return [...ordered, ...byId.values()]
+}
+
+export async function getChapter(id: string): Promise<Chapter | undefined> {
+  return (await db()).get('chapters', id)
+}
+
+export async function createChapter(bookId: string, title: string, content = ''): Promise<Chapter> {
+  const tx = (await db()).transaction(['books', 'chapters'], 'readwrite')
+  const book = await tx.objectStore('books').get(bookId)
+  if (!book) throw new Error(`Book not found: ${bookId}`)
+  const now = Date.now()
+  const chapter: Chapter = {
+    id: newId(),
+    bookId,
+    title: cleanTitle(title),
+    content,
+    outline: '',
+    updatedAt: now,
+  }
+  await tx.objectStore('chapters').put(chapter)
+  await tx.objectStore('books').put({
+    ...book,
+    chapterOrder: [...book.chapterOrder, chapter.id],
+    updatedAt: now,
+  })
+  await tx.done
+  announceChange()
+  return chapter
+}
+
+export async function updateChapter(
+  id: string,
+  patch: Partial<Pick<Chapter, 'title' | 'content' | 'outline'>>,
+  options?: { expectedContent?: string; expectedOutline?: string },
+): Promise<Chapter> {
+  const tx = (await db()).transaction(['books', 'chapters'], 'readwrite')
+  const current = await tx.objectStore('chapters').get(id)
+  if (!current) throw new Error(`Chapter not found: ${id}`)
+  if (
+    patch.content !== undefined &&
+    options?.expectedContent !== undefined &&
+    current.content !== options.expectedContent
+  ) {
+    // Another tab or device saved different text in the meantime.
+    throw new ConflictError()
+  }
+  if (
+    patch.outline !== undefined &&
+    options?.expectedOutline !== undefined &&
+    (current.outline ?? '') !== options.expectedOutline
+  ) {
+    throw new ConflictError()
+  }
+  const now = Date.now()
+  const next: Chapter = { ...current, ...patch, updatedAt: now }
+  if (patch.title !== undefined) next.title = cleanTitle(patch.title)
+  await tx.objectStore('chapters').put(next)
+  const book = await tx.objectStore('books').get(current.bookId)
+  if (book) await tx.objectStore('books').put({ ...book, updatedAt: now })
+  await tx.done
+  announceChange()
+  return next
+}
+
+/**
+ * Moves a chapter next to another one. Works on the stored order inside one
+ * transaction, so moves decided on an outdated screen never undo each other.
+ * Ids of deleted chapters are dropped and chapters missing from the order are appended.
+ */
+export async function moveChapter(
+  bookId: string,
+  chapterId: string,
+  target: { before: string } | { after: string },
+): Promise<Book> {
+  const tx = (await db()).transaction(['books', 'chapters'], 'readwrite')
+  const book = await tx.objectStore('books').get(bookId)
+  if (!book) throw new Error(`Book not found: ${bookId}`)
+  const existing = new Set(await tx.objectStore('chapters').index('bookId').getAllKeys(bookId))
+  const order = book.chapterOrder.filter((id) => existing.delete(id))
+  order.push(...existing)
+
+  const targetId = 'before' in target ? target.before : target.after
+  if (chapterId !== targetId && order.includes(chapterId) && order.includes(targetId)) {
+    order.splice(order.indexOf(chapterId), 1)
+    order.splice(order.indexOf(targetId) + ('after' in target ? 1 : 0), 0, chapterId)
+  }
+  const next: Book = { ...book, chapterOrder: order, updatedAt: Date.now() }
+  await tx.objectStore('books').put(next)
+  await tx.done
+  announceChange()
+  return next
+}
+
+export async function deleteChapter(id: string): Promise<void> {
+  const tx = (await db()).transaction(['books', 'chapters'], 'readwrite')
+  const chapter = await tx.objectStore('chapters').get(id)
+  if (chapter) {
+    await tx.objectStore('chapters').delete(id)
+    const book = await tx.objectStore('books').get(chapter.bookId)
+    if (book) {
+      await tx.objectStore('books').put({
+        ...book,
+        chapterOrder: book.chapterOrder.filter((c) => c !== id),
+        updatedAt: Date.now(),
+      })
+    }
+  }
+  await tx.done
+  announceChange()
+}

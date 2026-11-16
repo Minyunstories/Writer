@@ -1,0 +1,175 @@
+.outline {
+  width: 100%;
+  max-width: 50rem;
+  margin: 0 auto;
+  padding: 1.25rem clamp(0.9rem, 4vw, 2rem) 5rem;
+}
+
+.outline-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1em;
+  font-size: 13px;
+}
+
+.outline-header h2 {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.outline-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.8em;
+}
+
+.outline-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.6em 0.8em 0.8em;
+  display: grid;
+  gap: 0.5em;
+  scroll-margin-top: 1rem;
+}
+
+.outline-card.dragging {
+  opacity: 0.45;
+}
+
+.outline-card.drop-target {
+  border-color: var(--accent);
+}
+
+.outline-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  min-width: 0;
+}
+
+.outline-handle {
+  cursor: grab;
+  color: var(--text-muted);
+  opacity: 0.6;
+  padding: 0.2em 0.1em;
+  user-select: none;
+}
+
+.outline-number {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  min-width: 1.4em;
+}
+
+.outline-title {
+  flex: 1;
+  min-width: 0;
+  font-family: 'Literata', serif;
+  font-size: 1.15em;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.outline-title:hover {
+  color: var(--accent);
+}
+
+.outline-words {
+  font-size: 0.82em;
+  white-space: nowrap;
+}
+
+.outline-card .markdown-field .cm-content {
+  min-height: 3.2em;
+}
+
+.outline-empty {
+  display: grid;
+  justify-items: center;
+  gap: 1rem;
+  padding: 4rem 1rem;
+}
+
+.outline-empty p {
+  margin: 0;
+}
+
+.outline-add {
+  margin-top: 1em;
+  width: 100%;
+  border-style: dashed;
+  color: var(--text-muted);
+}
+
+.outline-jump {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  counter-reset: chapter;
+}
+
+.outline-jump button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  padding: 0.5rem 0.6rem;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  counter-increment: chapter;
+}
+
+.outline-jump button::before {
+  content: counter(chapter);
+  display: inline-block;
+  min-width: 1.6em;
+  opacity: 0.6;
+}
+
+@media (hover: none) {
+  .outline-handle {
+    display: none;
+  }
+
+  .outline-card-header button.icon {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+
+  .outline-jump button {
+    padding: 0.7rem 0.6rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .outline-words {
+    display: none;
+  }
+}
+
+.outline-conflict {
+  padding: 0.7em 0.8em;
+  border: 1px solid var(--danger);
+  border-radius: 8px;
+  font-size: 0.93em;
+}
+
+.outline-conflict p {
+  margin: 0 0 0.3em;
+}
+
+.outline-conflict-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5em;
+  margin-top: 0.6em;
+}
