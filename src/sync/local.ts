@@ -6,6 +6,8 @@ import {
   bundleToFiles,
   classifyPath,
   colorsFile as colorsText,
+  parseTemplateBlocks,
+  templateBlocksFile as templateBlocksText,
   notesFile,
   parseNotes,
   orderFile as orderText,
@@ -76,7 +78,7 @@ export async function readLocalFiles(): Promise<FileSet> {
   return files
 }
 
-const KIND_ORDER = ['book', 'style', 'place', 'folders', 'templates', 'chapter', 'outline', 'tags', 'dates', 'entry', 'wikiOrder', 'folderColors', 'notes', 'stars', 'image']
+const KIND_ORDER = ['book', 'style', 'place', 'folders', 'templates', 'templateBlocks', 'chapter', 'outline', 'tags', 'dates', 'entry', 'wikiOrder', 'folderColors', 'notes', 'stars', 'image']
 
 /**
  * Applies changes from the repository to this device, file by file, in one transaction.
@@ -359,6 +361,28 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
     await books.put(next)
   }
 
+  /** Starred property blocks: the repository's, unless changed here after the run was planned. */
+  async function writeTemplateBlocks(path: string, bookId: string, data: FileData | undefined, conflict: boolean) {
+    const layouts = parseTemplateBlocks(data)
+    if (!layouts) {
+      skipped.push(path)
+      return
+    }
+    const own = await folders.index('bookId').getAll(bookId)
+    if (!conflict && (snapshotText(path) ?? '') !== (templateBlocksText(own) ?? '')) return
+    for (const folder of own) {
+      const layout = layouts[folder.id]
+      const next: WikiFolder = { ...folder }
+      delete next.templateBlocks
+      delete next.templateGroups
+      if (layout) {
+        next.templateBlocks = layout.blocks
+        if (Object.keys(layout.fields).length > 0) next.templateGroups = layout.fields
+      }
+      await folders.put(next)
+    }
+  }
+
   /** Folder colours: the repository's, unless changed here after the run was planned. */
   async function writeColors(path: string, bookId: string, data: FileData | undefined, conflict: boolean) {
     const colors = parseColors(data)
@@ -456,6 +480,8 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
       if (existing?.template?.length) next.template = existing.template
       // Colours live in wiki/colors.json.
       if (existing?.color) next.color = existing.color
+      if (existing?.templateBlocks) next.templateBlocks = existing.templateBlocks
+      if (existing?.templateGroups) next.templateGroups = existing.templateGroups
       await folders.put(next)
     }
   }
@@ -572,6 +598,7 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
       else if (info.kind === 'wikiOrder') await writeOrder(path, info.bookId, data, conflict)
       else if (info.kind === 'folderColors') await writeColors(path, info.bookId, data, conflict)
       else if (info.kind === 'notes') await writeNotes(path, info.bookId, data, conflict)
+      else if (info.kind === 'templateBlocks') await writeTemplateBlocks(path, info.bookId, data, conflict)
       else if (info.kind === 'stars') await writeStars(path, info.bookId, data, conflict)
       else if (info.kind === 'templates') await writeTemplates(path, info.bookId, data, conflict)
       else await writeImage(path, info.bookId, info.id, data)
@@ -597,6 +624,7 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
       else if (info.kind === 'wikiOrder') await writeOrder(item.path, info.bookId, '{}', false)
       else if (info.kind === 'folderColors') await writeColors(item.path, info.bookId, '{}', false)
       else if (info.kind === 'notes') await writeNotes(item.path, info.bookId, '[]', false)
+      else if (info.kind === 'templateBlocks') await writeTemplateBlocks(item.path, info.bookId, '{}', false)
       else if (info.kind === 'stars') await writeStars(item.path, info.bookId, '[]', false)
       else if (info.kind === 'templates') await writeTemplates(item.path, info.bookId, '{}', false)
       else if (info.kind === 'folders') {

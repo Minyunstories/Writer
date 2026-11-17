@@ -221,3 +221,28 @@ test('notes and stars live in their own files', () => {
   files.set('books/b1/notes.json', JSON.stringify([{ id: 'x' }, { id: 'n2', text: 'gut', done: 'ja', createdAt: 1, updatedAt: 1 }]))
   expect(filesToBundle('b1', files).book.notes).toEqual([{ id: 'n2', text: 'gut', done: false, createdAt: 1, updatedAt: 1 }])
 })
+
+test('property blocks: groups and own blocks travel in the entry, starred blocks in their own file', () => {
+  const grouped: BookBundle = {
+    ...bundle,
+    entries: bundle.entries.map((e, i) =>
+      i === 0 ? { ...e, blocks: ['Hobbys'], properties: [{ id: 'p1', key: 'Größe', value: '1,80', group: 'Aussehen' }, { id: 'p2', key: 'Angeln', value: 'ja', group: 'Hobbys' }] } : e,
+    ),
+    folders: bundle.folders.map((f) => (f.id === 'f1' ? { ...f, template: ['Augenfarbe'], templateBlocks: ['Aussehen'], templateGroups: { Augenfarbe: 'Aussehen' } } : f)),
+  }
+  const files = bundleToFiles(grouped)
+  expect(JSON.parse(files.get('books/b1/wiki/template-blocks.json') as string)).toEqual({ f1: { blocks: ['Aussehen'], fields: { Augenfarbe: 'Aussehen' } } })
+  expect(classifyPath('books/b1/wiki/template-blocks.json')).toEqual({ bookId: 'b1', kind: 'templateBlocks', id: 'b1' })
+  const back = filesToBundle('b1', files)
+  const entry = back.entries.find((e) => e.id === grouped.entries[0].id)!
+  expect(entry.blocks).toEqual(['Hobbys'])
+  expect(entry.properties.map((p) => p.group)).toEqual(['Aussehen', 'Hobbys'])
+  const folder = back.folders.find((f) => f.id === 'f1')!
+  expect(folder.templateBlocks).toEqual(['Aussehen'])
+  expect(folder.templateGroups).toEqual({ Augenfarbe: 'Aussehen' })
+  expect(bundleToFiles(back).get('books/b1/wiki/template-blocks.json')).toBe(files.get('books/b1/wiki/template-blocks.json'))
+  // Without blocks nothing changes in the files.
+  const plain = bundleToFiles(bundle)
+  expect(plain.has('books/b1/wiki/template-blocks.json')).toBe(false)
+  expect([...plain.values()].some((text) => typeof text === 'string' && text.includes('"group"'))).toBe(false)
+})

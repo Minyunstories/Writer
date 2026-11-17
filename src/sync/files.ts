@@ -51,6 +51,7 @@ export interface EntryHeader {
   folderId: string | null
   autoLink: boolean
   properties: WikiProperty[]
+  blocks?: string[]
   images: { id: string; type: string; width: number; height: number }[]
   createdAt: number
   updatedAt: number
@@ -86,6 +87,8 @@ export function bundleToFiles({ book, chapters, folders, entries, images }: Book
   if (place) files.set(`${prefix}place.json`, place)
   const order = orderFile(book)
   if (order) files.set(`${prefix}wiki/order.json`, order)
+  const blocks = templateBlocksFile(folders)
+  if (blocks) files.set(`${prefix}wiki/template-blocks.json`, blocks)
   const colors = colorsFile(folders)
   if (colors) files.set(`${prefix}wiki/colors.json`, colors)
   if (book.notes?.length) files.set(`${prefix}notes.json`, notesFile(book.notes))
@@ -112,7 +115,8 @@ export function bundleToFiles({ book, chapters, folders, entries, images }: Book
       aliases: entry.aliases,
       folderId: entry.folderId,
       autoLink: entry.autoLink,
-      properties: entry.properties.map(({ id, key, value }) => ({ id, key, value })),
+      properties: entry.properties.map(({ id, key, value, group }) => (group ? { id, key, value, group } : { id, key, value })),
+      ...(entry.blocks?.length ? { blocks: entry.blocks } : {}),
       images: entry.imageIds.flatMap((id) => {
         const image = imageById.get(id)
         return image ? [{ id, type: image.type, width: image.width, height: image.height }] : []
@@ -198,6 +202,34 @@ export function parseNotes(data: FileData | undefined): BookNote[] | null {
     if (typeof value.from === 'number' && value.from >= 0) note.from = value.from
     return [note]
   })
+}
+
+/** wiki/template-blocks.json: folder id to its starred blocks and which template field is in which. */
+export function templateBlocksFile(folders: WikiFolder[]): string | undefined {
+  const entries = [...folders]
+    .filter((folder) => folder.templateBlocks?.length)
+    .sort((a, b) => a.id.localeCompare(b.id))
+    .map((folder) => [folder.id, { blocks: folder.templateBlocks, fields: folder.templateGroups ?? {} }] as const)
+  return entries.length > 0 ? json(Object.fromEntries(entries)) : undefined
+}
+
+/** The usable content of a wiki/template-blocks.json; null when the file is not a JSON object. */
+export function parseTemplateBlocks(data: FileData | undefined): Record<string, { blocks: string[]; fields: Record<string, string> }> | null {
+  const parsed = parseJson<unknown>(data)
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+  const result: Record<string, { blocks: string[]; fields: Record<string, string> }> = {}
+  for (const [id, value] of Object.entries(parsed as Record<string, unknown>)) {
+    if (!value || typeof value !== 'object') continue
+    const blocks = stringList((value as { blocks?: unknown }).blocks)
+    if (blocks.length === 0) continue
+    const fields: Record<string, string> = {}
+    const rawFields = (value as { fields?: unknown }).fields
+    if (rawFields && typeof rawFields === 'object')
+      for (const [key, block] of Object.entries(rawFields as Record<string, unknown>))
+        if (typeof block === 'string' && blocks.includes(block)) fields[key] = block
+    result[id] = { blocks, fields }
+  }
+  return result
 }
 
 /** wiki/colors.json: folder id to colour, by folder id. Undefined when no folder has one. */
@@ -305,7 +337,13 @@ export function parseEntry(bookId: string, raw: string): { entry: WikiEntry; ima
       folderId: header.folderId ?? null,
       name: typeof header.name === 'string' && header.name.trim() ? header.name : 'Unbenannt',
       aliases: Array.isArray(header.aliases) ? header.aliases.filter((alias) => typeof alias === 'string') : [],
-      properties: Array.isArray(header.properties) ? header.properties : [],
+      properties: (Array.isArray(header.properties) ? header.properties : []).map((property: WikiProperty) => {
+        const group = typeof property.group === 'string' && property.group.trim() ? property.group : undefined
+        const { group: _ignored, ...rest } = property
+        void _ignored
+        return group ? { ...rest, group } : rest
+      }),
+      ...(stringList(header.blocks).length > 0 ? { blocks: stringList(header.blocks) } : {}),
       imageIds: imagesMeta.map((image) => image.id),
       body: raw.slice(end + HEADER_END.length),
       autoLink: header.autoLink !== false,
@@ -373,6 +411,7 @@ export function filesToBundle(bookId: string, files: FileSet): BookBundle {
   const folderList = parseJson<Omit<WikiFolder, 'bookId'>[]>(files.get(`${prefix}wiki/folders.json`))
   const templateMap = parseJson<Record<string, unknown>>(files.get(`${prefix}wiki/templates.json`)) ?? {}
   const colorMap = parseColors(files.get(`${prefix}wiki/colors.json`)) ?? {}
+  const blockMap = parseTemplateBlocks(files.get(`${prefix}wiki/template-blocks.json`)) ?? {}
   const folders: WikiFolder[] = (Array.isArray(folderList) ? folderList : [])
     .filter((folder) => folder && typeof folder.id === 'string')
     .map((folder) => {
@@ -386,6 +425,11 @@ export function filesToBundle(bookId: string, files: FileSet): BookBundle {
       const template = stringList(templateMap[folder.id])
       if (template.length > 0) parsed.template = template
       if (colorMap[folder.id]) parsed.color = colorMap[folder.id]
+      const layout = blockMap[folder.id]
+      if (layout) {
+        parsed.templateBlocks = layout.blocks
+        if (Object.keys(layout.fields).length > 0) parsed.templateGroups = layout.fields
+      }
       return parsed
     })
 
@@ -423,7 +467,7 @@ export function filesToBundle(bookId: string, files: FileSet): BookBundle {
   return { book, chapters, folders, entries, images }
 }
 
-export type PathKind = 'book' | 'chapter' | 'outline' | 'folders' | 'entry' | 'image' | 'tags' | 'templates' | 'style' | 'dates' | 'place' | 'wikiOrder' | 'folderColors' | 'notes' | 'stars'
+export type PathKind = 'book' | 'chapter' | 'outline' | 'folders' | 'entry' | 'image' | 'tags' | 'templates' | 'style' | 'dates' | 'place' | 'wikiOrder' | 'folderColors' | 'notes' | 'stars' | 'templateBlocks'
 
 /** What a repository path holds, or null for files the app does not manage. */
 export function classifyPath(path: string): { bookId: string; kind: PathKind; id: string } | null {
@@ -440,6 +484,7 @@ export function classifyPath(path: string): { bookId: string; kind: PathKind; id
   if (rest === 'wiki/templates.json') return { bookId, kind: 'templates', id: bookId }
   if (rest === 'wiki/order.json') return { bookId, kind: 'wikiOrder', id: bookId }
   if (rest === 'wiki/colors.json') return { bookId, kind: 'folderColors', id: bookId }
+  if (rest === 'wiki/template-blocks.json') return { bookId, kind: 'templateBlocks', id: bookId }
   if (rest === 'notes.json') return { bookId, kind: 'notes', id: bookId }
   if (rest === 'wiki/stars.json') return { bookId, kind: 'stars', id: bookId }
   const match = /^(chapters|outline|wiki\/_images|wiki)\/([^/]+)$/.exec(rest)

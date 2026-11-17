@@ -428,3 +428,15 @@ test('notes: taken over; when both devices changed them, both sets are merged by
   expect((await getBook(book.id))!.wikiStars).toBeUndefined()
   expect((await getBook(book.id))!.notes).toBeUndefined()
 })
+
+test('starred blocks: taken over from their file and kept by a pulled folders.json', async () => {
+  const { p, book, folder } = await seed()
+  const value = JSON.stringify({ [folder.id]: { blocks: ['Aussehen'], fields: { Augenfarbe: 'Aussehen' } } })
+  await apply({ write: new Map([[`${p}wiki/template-blocks.json`, value]]), snapshot: await readLocalFiles() })
+  expect((await listFolders(book.id))[0].templateBlocks).toEqual(['Aussehen'])
+  const now = await readLocalFiles()
+  await apply({ write: new Map([[`${p}wiki/folders.json`, now.get(`${p}wiki/folders.json`)!]]), snapshot: now })
+  expect((await listFolders(book.id))[0].templateGroups).toEqual({ Augenfarbe: 'Aussehen' })
+  await apply({ remove: [`${p}wiki/template-blocks.json`], snapshot: await readLocalFiles() })
+  expect((await listFolders(book.id))[0].templateBlocks).toBeUndefined()
+})

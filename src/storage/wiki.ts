@@ -101,6 +101,38 @@ export async function setFolderColor(id: string, color: string | null): Promise<
   return next
 }
 
+export interface TemplateLayout {
+  template: string[]
+  blocks: string[]
+  groups: Record<string, string>
+}
+
+/** Changes a folder's template fields and starred blocks together, inside one transaction. */
+export async function updateTemplateLayout(id: string, update: (layout: TemplateLayout) => TemplateLayout): Promise<WikiFolder> {
+  const tx = (await db()).transaction('wikiFolders', 'readwrite')
+  const current = await tx.store.get(id)
+  if (!current) throw new Error(`Folder not found: ${id}`)
+  const layout = update({
+    template: [...(current.template ?? [])],
+    blocks: [...(current.templateBlocks ?? [])],
+    groups: { ...current.templateGroups },
+  })
+  const next: WikiFolder = { ...current }
+  const template = cleanList(layout.template)
+  const blocks = cleanList(layout.blocks)
+  const groups = Object.fromEntries(Object.entries(layout.groups).filter(([key, block]) => template.includes(key) && blocks.includes(block)))
+  if (template.length > 0) next.template = template
+  else delete next.template
+  if (blocks.length > 0) next.templateBlocks = blocks
+  else delete next.templateBlocks
+  if (Object.keys(groups).length > 0) next.templateGroups = groups
+  else delete next.templateGroups
+  await tx.store.put(next)
+  await tx.done
+  announceChange()
+  return next
+}
+
 /** Moves one template field a place up or down. */
 export async function moveTemplateField(id: string, key: string, direction: 'up' | 'down'): Promise<WikiFolder> {
   const tx = (await db()).transaction('wikiFolders', 'readwrite')
@@ -260,7 +292,7 @@ export async function stepWikiItem(bookId: string, item: WikiItem, direction: 'u
   if (direction === 'down' && index < ids.length - 1) await moveWikiItem(bookId, item, { parentId, beforeId: ids[index + 2] ?? null })
 }
 
-export type EntryPatch = Partial<Pick<WikiEntry, 'name' | 'aliases' | 'properties' | 'body' | 'autoLink' | 'folderId'>>
+export type EntryPatch = Partial<Pick<WikiEntry, 'name' | 'aliases' | 'properties' | 'blocks' | 'body' | 'autoLink' | 'folderId'>>
 
 export async function updateEntry(
   id: string,
@@ -277,6 +309,7 @@ export async function updateEntry(
   const next: WikiEntry = { ...current, ...patch, updatedAt: Date.now() }
   if (patch.name !== undefined) next.name = cleanTitle(patch.name)
   if (patch.aliases !== undefined) next.aliases = cleanAliases(patch.aliases)
+  if (next.blocks && next.blocks.length === 0) delete next.blocks
   await tx.store.put(next)
   await tx.done
   announceChange()

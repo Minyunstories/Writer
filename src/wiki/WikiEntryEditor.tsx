@@ -10,16 +10,16 @@ import {
   getEntry,
   getImage,
   removeImage,
-  changeTemplate,
-  moveTemplateField,
   updateEntry,
+  updateTemplateLayout,
   type EntryPatch,
+  type TemplateLayout,
 } from '../storage/wiki'
-import type { Chapter, WikiEntry, WikiFolder, WikiProperty, ZoomArea } from '../types'
+import type { Chapter, WikiEntry, WikiFolder, ZoomArea } from '../types'
 import { ConfirmDialog } from '../ui/Dialogs'
 import { prepareImage } from './image'
 import { buildMatcher } from './linker'
-import { LinkedValue } from './LinkedValue'
+import { PropertyBlocks } from './PropertyBlocks'
 import { MarkdownField } from './MarkdownField'
 import { mentionsOf, topFolderOf } from './mentions'
 import { createWikiLinks } from './wikiLinks'
@@ -134,10 +134,6 @@ export function WikiEntryEditor({
   const [saveFailed, setSaveFailed] = useState(false)
   const [imageError, setImageError] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
-  // The property whose name is being typed: it keeps its own row until the field is left.
-  const [editingKey, setEditingKey] = useState<string | null>(null)
-  /** Arrows instead of pin and remove buttons, to change the order of the properties. */
-  const [arranging, setArranging] = useState(false)
   /** Bumped when the notes were replaced from storage, so the notes field starts over with the new text. */
   const [notesVersion, setNotesVersion] = useState(0)
   const [imageToRemove, setImageToRemove] = useState<string | null>(null)
@@ -307,76 +303,20 @@ export function WikiEntryEditor({
     }
   }
 
-  const setProperty = (id: string, patch: Partial<WikiProperty>) =>
-    change({ properties: entry.properties.map((p) => (p.id === id ? { ...p, ...patch } : p)) })
-
-  // Template fields come from the entry's top-level folder; their values belong to this entry.
+  // Template fields and starred blocks come from the entry's top-level folder.
   const top = topFolderOf(entry.folderId, folders)
-  const template = top?.template ?? []
-  // Each template field shows the first property with its name. A field name still being
-  // typed stays in its own row, and further properties with the same name stay visible.
-  const templateOwner = new Map<string, string>()
-  for (const property of entry.properties) {
-    const key = property.key.trim()
-    if (template.includes(key) && !templateOwner.has(key) && property.id !== editingKey) templateOwner.set(key, property.id)
-  }
-  const shownInTemplate = new Set(templateOwner.values())
-  const valueOf = (key: string) => entry.properties.find((property) => property.id === templateOwner.get(key))
-  const ownProperties = entry.properties.filter((property) => !shownInTemplate.has(property.id))
-  const setTemplateValue = (key: string, value: string) => {
-    const existing = valueOf(key)
-    if (existing) setProperty(existing.id, { value })
-    else change({ properties: [...entry.properties, { id: crypto.randomUUID(), key, value }] })
-  }
-  const setPinned = async (key: string, pinned: boolean) => {
-    if (!top || !key.trim()) return
-    try {
-      await changeTemplate(top.id, pinned ? { add: key } : { remove: key })
-      onChangedRef.current()
-    } catch {
-      setSaveFailed(true)
-    }
-  }
-  const pinLabel = top ? `Feld für alle Einträge in „${top.name}"` : ''
-
-  /** Own fields swap places within the entry; template fields swap places in the folder. */
-  const stepOwn = (id: string, direction: 'up' | 'down') => {
-    const own = ownProperties.map((property) => property.id)
-    const index = own.indexOf(id)
-    const otherId = own[direction === 'up' ? index - 1 : index + 1]
-    if (index < 0 || !otherId) return
-    const properties = [...entry.properties]
-    const a = properties.findIndex((property) => property.id === id)
-    const b = properties.findIndex((property) => property.id === otherId)
-    ;[properties[a], properties[b]] = [properties[b], properties[a]]
-    change({ properties })
-  }
-  const stepTemplate = async (key: string, direction: 'up' | 'down') => {
+  const layout: TemplateLayout | null = top
+    ? { template: top.template ?? [], blocks: top.templateBlocks ?? [], groups: top.templateGroups ?? {} }
+    : null
+  const changeLayout = async (update: (layout: TemplateLayout) => TemplateLayout) => {
     if (!top) return
     try {
-      await moveTemplateField(top.id, key, direction)
+      await updateTemplateLayout(top.id, update)
       onChangedRef.current()
     } catch {
       setSaveFailed(true)
     }
   }
-  const arrows = (name: string, index: number, count: number, step: (direction: 'up' | 'down') => void) => (
-    <span className="wiki-arrows">
-      <button className="ghost icon" aria-label={`${name} nach oben`} title="Nach oben" disabled={index === 0} onClick={() => step('up')}>
-        ↑
-      </button>
-      <button
-        className="ghost icon"
-        aria-label={`${name} nach unten`}
-        title="Nach unten"
-        disabled={index === count - 1}
-        onClick={() => step('down')}
-      >
-        ↓
-      </button>
-    </span>
-  )
-  const linkProps = { matcher: otherMatcher, onOpen: onOpenEntry }
 
   const reloadImages = async () => {
     const stored = await getEntry(entryId)
@@ -514,107 +454,16 @@ export function WikiEntryEditor({
         </select>
       </div>
 
-      <div className="wiki-field">
-        <div className="wiki-field-head">
-          <span className="wiki-label">Eigenschaften</span>
-          {template.length + ownProperties.length > 1 && (
-            <button
-              className={`ghost wiki-arrange${arranging ? ' on' : ''}`}
-              aria-label={arranging ? undefined : 'Eigenschaften anordnen'}
-              onClick={() => setArranging((on) => !on)}
-            >
-              {arranging ? 'Fertig' : 'Anordnen'}
-            </button>
-          )}
-        </div>
-        {(template.length > 0 || ownProperties.length > 0) && (
-          <ul className="wiki-properties">
-            {template.map((key, index) => (
-              <li key={`template-${key}`} className="wiki-template-row">
-                <label htmlFor={`${ids}-template-${index}`} className="wiki-template-key">
-                  {key}
-                </label>
-                <LinkedValue
-                  id={`${ids}-template-${index}`}
-                  value={valueOf(key)?.value ?? ''}
-                  placeholder="–"
-                  onChange={(value) => setTemplateValue(key, value)}
-                  {...linkProps}
-                />
-                {arranging ? (
-                  arrows(key, index, template.length, (direction) => void stepTemplate(key, direction))
-                ) : (
-                  <button
-                    className="ghost icon wiki-pin"
-                    aria-pressed={true}
-                    aria-label={pinLabel}
-                    title={`${pinLabel} (an)`}
-                    onClick={() => void setPinned(key, false)}
-                  >
-                    ★
-                  </button>
-                )}
-              </li>
-            ))}
-            {ownProperties.map((property, index) => (
-              <li key={property.id} className={arranging ? 'arranging' : undefined}>
-                <input
-                  type="text"
-                  aria-label="Eigenschaft"
-                  placeholder="z. B. Augenfarbe"
-                  value={property.key}
-                  onFocus={() => setEditingKey(property.id)}
-                  onBlur={() => setEditingKey(null)}
-                  onChange={(event) => setProperty(property.id, { key: event.target.value })}
-                />
-                <LinkedValue
-                  value={property.value}
-                  ariaLabel="Wert"
-                  placeholder="Wert"
-                  onChange={(value) => setProperty(property.id, { value })}
-                  {...linkProps}
-                />
-                {arranging ? (
-                  arrows(property.key.trim() || 'Eigenschaft', index, ownProperties.length, (direction) => stepOwn(property.id, direction))
-                ) : (
-                  <>
-                    {top ? (
-                      <button
-                        className="ghost icon wiki-pin"
-                        aria-pressed={false}
-                        aria-label={pinLabel}
-                        title={pinLabel}
-                        disabled={!property.key.trim()}
-                        onClick={() => void setPinned(property.key, true)}
-                      >
-                        ☆
-                      </button>
-                    ) : (
-                      <span />
-                    )}
-                    <button
-                      className="ghost icon"
-                      aria-label="Eigenschaft entfernen"
-                      title="Eigenschaft entfernen"
-                      onClick={() => change({ properties: entry.properties.filter((p) => p.id !== property.id) })}
-                    >
-                      ×
-                    </button>
-                  </>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-        <button
-          className="wiki-add"
-          onClick={() =>
-            change({ properties: [...entry.properties, { id: crypto.randomUUID(), key: '', value: '' }] })
-          }
-        >
-          Eigenschaft hinzufügen
-        </button>
-      </div>
+      <PropertyBlocks
+        properties={entry.properties}
+        blocks={entry.blocks ?? []}
+        layout={layout}
+        folderName={top?.name ?? ''}
+        matcher={otherMatcher}
+        onOpen={onOpenEntry}
+        onEntry={(patch) => change(patch)}
+        onLayout={(update) => void changeLayout(update)}
+      />
 
       <div className="wiki-field">
         <span className="wiki-label">Bilder</span>

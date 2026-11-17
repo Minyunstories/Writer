@@ -112,7 +112,7 @@
 
 .wiki-properties li {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) auto auto;
+  grid-template-columns: auto minmax(0, 2fr) minmax(0, 3fr) auto;
   gap: 0.4em;
   /* Long values grow downwards; names and buttons stay at the top of the row. */
   align-items: start;
@@ -156,7 +156,7 @@ button.wiki-arrange.on {
 }
 
 .wiki-properties li.wiki-template-row {
-  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) auto;
+  /* The star sits where own rows have star and ×, so values line up. */
   margin-right: 2.6rem;
 }
 
@@ -551,5 +551,118 @@ button.wiki-star.on {
 @media (max-width: 600px) {
   .notes-button-label {
     display: none;
+  }
+}
+
+/* Property blocks: a heading, its fields, and room to drop more. */
+.wiki-block {
+  display: grid;
+  gap: 0.4em;
+  border-radius: 10px;
+}
+
+.wiki-block:not(.wiki-block-loose) {
+  margin-top: 0.6em;
+  padding: 0.5em 0.6em 0.6em;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 60%, var(--bg));
+}
+
+.wiki-block.starred {
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
+}
+
+.wiki-block.drop-into {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.wiki-block-head {
+  display: flex;
+  align-items: center;
+  gap: 0.3em;
+}
+
+input.wiki-block-name {
+  flex: 1;
+  min-width: 0;
+  padding: 0.2em 0.3em;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 0.78em;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+input.wiki-block-name:hover,
+input.wiki-block-name:focus {
+  border-color: var(--border);
+  outline: none;
+}
+
+.wiki-block-empty {
+  margin: 0;
+  padding: 0.6em;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  font-size: 0.82em;
+  color: var(--text-muted);
+}
+
+.wiki-properties li.drop-before {
+  box-shadow: 0 -2px 0 var(--accent);
+}
+
+.wiki-grip {
+  align-self: center;
+  padding: 0 0.15em;
+  color: var(--text-muted);
+  opacity: 0.45;
+  cursor: grab;
+  user-select: none;
+}
+
+.wiki-grip:hover {
+  opacity: 1;
+}
+
+.wiki-row-tools,
+.wiki-arrange-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2em;
+}
+
+select.wiki-block-choice {
+  max-width: 7.5rem;
+  padding: 0.3rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  font-size: 0.8em;
+}
+
+button.wiki-add-block {
+  justify-self: start;
+  margin-top: 0.6em;
+}
+
+/* Computer: drag with the grip; no arrows. Touch: arrows, no grips. */
+@media (hover: hover) and (pointer: fine) {
+  button.wiki-arrange {
+    display: none;
+  }
+}
+
+@media (hover: none) {
+  .wiki-grip {
+    display: none;
+  }
+
+  .wiki-properties li {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) auto;
   }
 }

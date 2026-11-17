@@ -65,6 +65,10 @@ export interface WikiFolder {
   template?: string[]
   /** Colour of the folder in the wiki, chosen by the writer. Only used on top-level folders. */
   color?: string
+  /** Starred property blocks every entry in this folder shows, in order. */
+  templateBlocks?: string[]
+  /** Template field to its starred block; fields not listed stand outside any block. */
+  templateGroups?: Record<string, string>
   createdAt: number
 }
 
@@ -72,6 +76,8 @@ export interface WikiProperty {
   id: string
   key: string
   value: string
+  /** The block the property stands in, e.g. "Aussehen". Missing: outside any block. */
+  group?: string
 }
 
 export interface WikiEntry {
@@ -81,6 +87,8 @@ export interface WikiEntry {
   name: string
   aliases: string[]
   properties: WikiProperty[]
+  /** This entry's own property blocks, in order (starred blocks come from the folder). */
+  blocks?: string[]
   imageIds: string[]
   body: string
   autoLink: boolean

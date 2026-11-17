@@ -159,7 +159,8 @@ test('properties can be arranged: own fields within the entry, template fields f
   await user.click(screen.getByRole('button', { name: 'Eigenschaften anordnen' }))
   expect(screen.getByRole('button', { name: 'Größe nach oben' })).toBeDisabled()
   await user.click(screen.getByRole('button', { name: 'Größe nach unten' }))
-  await waitFor(async () => expect((await getEntry(pascal.id))!.properties.map((p) => p.key)).toEqual(['Beruf', 'Alter', 'Größe']))
+  // Own fields in their new order; where the template field's value sits in the list does not matter.
+  await waitFor(async () => expect((await getEntry(pascal.id))!.properties.map((p) => p.key).filter((key) => key !== 'Alter')).toEqual(['Beruf', 'Größe']))
   await user.click(screen.getByRole('button', { name: 'Alter nach oben' }))
   await waitFor(async () => expect((await listFolders(chars.bookId)).find((f) => f.id === chars.id)!.template).toEqual(['Alter', 'Augenfarbe']))
   await user.click(screen.getByRole('button', { name: 'Fertig' }))
@@ -175,4 +176,64 @@ test('a value can have several lines', async () => {
   await user.type(value, 'Erster Hofschmied{Enter}des Nordens')
   await waitFor(async () => expect((await getEntry(pascal.id))!.properties[0].value).toBe('Erster Hofschmied\ndes Nordens'))
   expect(screen.getByLabelText('Augenfarbe').tagName).toBe('TEXTAREA')
+})
+
+function dragOnto(source: Element, target: Element) {
+  const data = new Map<string, string>()
+  const dataTransfer = {
+    setData: (type: string, value: string) => data.set(type, value),
+    getData: (type: string) => data.get(type) ?? '',
+    get types() {
+      return [...data.keys()]
+    },
+    effectAllowed: 'all',
+    dropEffect: 'move',
+  }
+  fireEvent.dragStart(source, { dataTransfer })
+  fireEvent.dragOver(target, { dataTransfer })
+  fireEvent.drop(target, { dataTransfer })
+  fireEvent.dragEnd(source, { dataTransfer })
+}
+
+test('blocks: named by hand, filled, and starred for every entry of the folder', async () => {
+  const { chars, pascal, user } = await setup(async ({ pascal }) => {
+    await updateEntry(pascal.id, { properties: [{ id: 'p1', key: 'Größe', value: '1,80' }] })
+  })
+  await user.click(screen.getByRole('button', { name: '+ Block' }))
+  const name = screen.getByRole('textbox', { name: 'Name des Blocks „Neuer Block"' })
+  await waitFor(() => expect(name).toHaveFocus())
+  await user.keyboard('Aussehen{Enter}')
+  const block = await screen.findByRole('region', { name: 'Block Aussehen' })
+  // Drag "Größe" into the block.
+  const grip = screen.getByDisplayValue('Größe').closest('li')!.querySelector('.wiki-grip')!
+  dragOnto(grip, block)
+  await waitFor(async () => expect((await getEntry(pascal.id))!.properties[0].group).toBe('Aussehen'))
+  await user.click(within(block).getByRole('button', { name: 'Block „Aussehen" für alle Einträge in „Characters"' }))
+  await waitFor(async () => {
+    const folder = (await listFolders(chars.bookId)).find((f) => f.id === chars.id)!
+    expect(folder.templateBlocks).toEqual(['Aussehen'])
+    expect(folder.template).toEqual(['Augenfarbe', 'Alter', 'Größe'])
+    expect(folder.templateGroups).toEqual({ Größe: 'Aussehen' })
+  })
+  // A template field is dragged into the starred block too.
+  const starred = await screen.findByRole('region', { name: 'Block Aussehen' })
+  dragOnto(screen.getByText('Augenfarbe').closest('li')!.querySelector('.wiki-grip')!, starred)
+  await waitFor(async () => expect((await listFolders(chars.bookId)).find((f) => f.id === chars.id)!.templateGroups).toEqual({ Größe: 'Aussehen', Augenfarbe: 'Aussehen' }))
+  // Unstarred: gone from the folder, kept in this entry.
+  await user.click(within(await screen.findByRole('region', { name: 'Block Aussehen' })).getByRole('button', { name: /^Block „Aussehen" für alle/ }))
+  await waitFor(async () => {
+    const folder = (await listFolders(chars.bookId)).find((f) => f.id === chars.id)!
+    expect(folder.templateBlocks).toBeUndefined()
+    expect(folder.template).toEqual(['Alter'])
+  })
+  await waitFor(async () => expect((await getEntry(pascal.id))!.blocks).toEqual(['Aussehen']))
+})
+
+test('fields are dragged into order on a computer', async () => {
+  const { pascal } = await setup(async ({ pascal }) => {
+    await updateEntry(pascal.id, { properties: [{ id: 'a', key: 'Eins', value: '' }, { id: 'b', key: 'Zwei', value: '' }] })
+  })
+  const row = (key: string) => screen.getByDisplayValue(key).closest('li')!
+  dragOnto(row('Zwei').querySelector('.wiki-grip')!, row('Eins'))
+  await waitFor(async () => expect((await getEntry(pascal.id))!.properties.map((p) => p.key)).toEqual(['Zwei', 'Eins']))
 })
