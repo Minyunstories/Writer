@@ -1,6 +1,6 @@
 import { markdown } from '@codemirror/lang-markdown'
 import { EditorSelection, type Extension } from '@codemirror/state'
-import { keymap, type Command, type KeyBinding } from '@codemirror/view'
+import { EditorView, keymap, type Command, type KeyBinding } from '@codemirror/view'
 import type { MarkdownConfig } from '@lezer/markdown'
 import { livePreview } from './livePreview'
 
@@ -75,7 +75,14 @@ export const formatKeys: KeyBinding[] = [
   { key: 'Mod-Shift-h', run: toggleHighlight },
 ]
 
-/** Markdown with highlights, live formatting and the format shortcuts. */
+/** Typing a third dot turns "..." into an ellipsis (…), in chapters and notes alike. */
+export const ellipsis = EditorView.inputHandler.of((view, from, to, text) => {
+  if (text !== '.' || from !== to || view.state.sliceDoc(from - 2, from) !== '..') return false
+  view.dispatch({ changes: { from: from - 2, to, insert: '…' }, selection: { anchor: from - 1 }, userEvent: 'input.type' })
+  return true
+})
+
+/** Markdown with highlights, live formatting, the format shortcuts and typographic dots. */
 export function writingMarkdown(): Extension {
-  return [keymap.of(formatKeys), markdown({ addKeymap: false, extensions: [highlightSyntax] }), livePreview()]
+  return [keymap.of(formatKeys), markdown({ addKeymap: false, extensions: [highlightSyntax] }), livePreview(), ellipsis]
 }

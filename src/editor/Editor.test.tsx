@@ -203,3 +203,15 @@ test('the place is where text changed, not where the cursor went afterwards', as
   view.dispatch({ selection: { anchor: 0 } })
   await waitFor(async () => expect((await getBook(book.id))!.place).toMatchObject({ chapterId: chapter.id, offset: 21 }), { timeout: 3000 })
 })
+
+test('three typed dots become an ellipsis', async () => {
+  const { view } = await setup('Und dann')
+  view.dispatch({ selection: { anchor: 8 } })
+  for (const dot of ['.', '.', '.']) {
+    const { from, to } = view.state.selection.main
+    const handled = view.state.facet(EditorView.inputHandler).some((handler) => handler(view, from, to, dot, () => view.state.update({ changes: { from, to, insert: dot } })))
+    if (!handled) view.dispatch({ changes: { from, to, insert: dot }, selection: { anchor: from + 1 } })
+  }
+  expect(view.state.doc.toString()).toBe('Und dann…')
+  expect(view.state.selection.main.head).toBe(9)
+})
