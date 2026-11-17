@@ -3,17 +3,17 @@ import { layoutProperties, moveName, moveOwnProperty, moveTemplateKey, newBlockN
 
 const p = (id: string, key: string, group?: string) => ({ id, key, value: '', ...(group ? { group } : {}) })
 
-test('sections: outside blocks first, then starred blocks, then own blocks; template before own', () => {
+test('sections: starred blocks, then own blocks, then fields outside blocks; template before own', () => {
   const properties = [p('1', 'Augenfarbe'), p('2', 'Größe', 'Aussehen'), p('3', 'Angeln', 'Hobbys'), p('4', 'Beruf'), p('5', 'Narbe', 'Merkmale')]
   const layout = { template: ['Alter', 'Augenfarbe'], blocks: ['Aussehen'], groups: { Augenfarbe: 'Aussehen' } }
   const sections = layoutProperties(properties, ['Hobbys'], layout)
-  expect(sections.map((s) => [s.name, s.starred])).toEqual([[null, false], ['Aussehen', true], ['Hobbys', false], ['Merkmale', false]])
+  expect(sections.map((s) => [s.name, s.starred])).toEqual([['Aussehen', true], ['Hobbys', false], ['Merkmale', false], [null, false]])
   const keys = (i: number) => sections[i].rows.map((r) => (r.kind === 'template' ? `★${r.key}` : r.property.key))
-  expect(keys(0)).toEqual(['★Alter', 'Beruf'])
-  expect(keys(1)).toEqual(['★Augenfarbe', 'Größe'])
-  expect(keys(2)).toEqual(['Angeln'])
-  expect(keys(3)).toEqual(['Narbe'])
-  const eye = sections[1].rows[0]
+  expect(keys(3)).toEqual(['★Alter', 'Beruf'])
+  expect(keys(0)).toEqual(['★Augenfarbe', 'Größe'])
+  expect(keys(1)).toEqual(['Angeln'])
+  expect(keys(2)).toEqual(['Narbe'])
+  const eye = sections[0].rows[0]
   expect(eye.kind === 'template' && eye.property?.id).toBe('1')
 })
 

@@ -562,7 +562,7 @@ button.wiki-star.on {
 }
 
 .wiki-block:not(.wiki-block-loose) {
-  margin-top: 0.6em;
+  margin-bottom: 0.6em;
   padding: 0.5em 0.6em 0.6em;
   border: 1px solid var(--border);
   background: color-mix(in srgb, var(--surface) 60%, var(--bg));

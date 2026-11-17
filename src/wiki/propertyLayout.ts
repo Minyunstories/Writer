@@ -12,8 +12,8 @@ export interface PropertySection {
 }
 
 /**
- * Arranges an entry's properties: fields outside blocks, then the folder's starred blocks, then
- * the entry's own blocks. In each, template fields come before the entry's own fields. A template
+ * Arranges an entry's properties: the folder's starred blocks, then the entry's own blocks, then
+ * the fields outside any block. In each, template fields come before the entry's own fields. A template
  * field shows the first property with its name; a name still being typed keeps its own row.
  */
 export function layoutProperties(
@@ -43,7 +43,7 @@ export function layoutProperties(
       ...own.filter((property) => (property.group ?? null) === name || (name === null && property.group && !starred.includes(property.group) && !blocks.includes(property.group))).map((property): PropertyRow => ({ kind: 'own', property })),
     ],
   })
-  return [section(null, false), ...starred.map((name) => section(name, true)), ...blocks.map((name) => section(name, false))]
+  return [...starred.map((name) => section(name, true)), ...blocks.map((name) => section(name, false)), section(null, false)]
 }
 
 /** Moves an own property into a block (null: outside blocks), before another property or to the block's end. */
