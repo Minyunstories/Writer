@@ -246,3 +246,15 @@ test('property blocks: groups and own blocks travel in the entry, starred blocks
   expect(plain.has('books/b1/wiki/template-blocks.json')).toBe(false)
   expect([...plain.values()].some((text) => typeof text === 'string' && text.includes('"group"'))).toBe(false)
 })
+
+test('spelling settings live in their own file', () => {
+  const plain = bundleToFiles(bundle)
+  const spelling = { dialect: 'british' as const, words: ['Nysss', 'Guidelight'], ignored: ['123'] }
+  const files = bundleToFiles({ ...bundle, book: { ...book, spelling } })
+  expect(files.get('books/b1/book.json')).toBe(plain.get('books/b1/book.json'))
+  expect(JSON.parse(files.get('books/b1/spelling.json') as string)).toEqual(spelling)
+  expect(classifyPath('books/b1/spelling.json')).toEqual({ bookId: 'b1', kind: 'spelling', id: 'b1' })
+  expect(filesToBundle('b1', files).book.spelling).toEqual(spelling)
+  files.set('books/b1/spelling.json', JSON.stringify({ dialect: 'klingon', words: ['ok', 4] }))
+  expect(filesToBundle('b1', files).book.spelling).toEqual({ words: ['ok'] })
+})

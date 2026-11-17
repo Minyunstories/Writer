@@ -7,6 +7,7 @@ import { createBook, deleteBook, listBooks, listChapters, nextCover, setBookStyl
 import { SyncStatus } from '../sync/SyncStatus'
 import type { Book } from '../types'
 import { ConfirmDialog, PromptDialog } from '../ui/Dialogs'
+import { updateSpelling } from '../storage/spelling'
 import { BookMenu } from './BookMenu'
 import './Dashboard.css'
 
@@ -147,6 +148,11 @@ export function Dashboard() {
                 book={book}
                 onCover={(cover) => void restyle(book.id, { cover })}
                 onHighlight={(highlight) => void restyle(book.id, { highlight })}
+                onDialect={(dialect) =>
+                  void updateSpelling(book.id, (current) => ({ ...current, dialect }))
+                    .catch(() => setError('Das hat nicht geklappt. Bitte versuche es noch einmal.'))
+                    .then(refresh)
+                }
                 onRename={() => {
                   setMenuFor(null)
                   setDialog({ kind: 'rename', book })

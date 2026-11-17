@@ -19,6 +19,18 @@ export interface Book {
   wikiStars?: string[]
   /** The notepad: ideas waiting for a better place, newest first. */
   notes?: BookNote[]
+  /** Spelling and grammar check: English variant, words that are right, ignored spots. */
+  spelling?: BookSpelling
+}
+
+export type EnglishDialect = 'american' | 'british' | 'australian' | 'canadian'
+
+export interface BookSpelling {
+  dialect?: EnglishDialect
+  /** Words the check accepts, e.g. invented names or a character's way of speaking. */
+  words?: string[]
+  /** Spots the writer chose to ignore, as Harper's context hashes. */
+  ignored?: string[]
 }
 
 export interface BookNote {

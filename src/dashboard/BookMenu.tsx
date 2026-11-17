@@ -1,18 +1,19 @@
 import { useEffect, useRef } from 'react'
 import { COVERS, coverOf, HIGHLIGHTS, highlightOf } from '../lib/bookStyle'
-import type { Book } from '../types'
+import type { Book, EnglishDialect } from '../types'
 
 interface Props {
   book: Book
   onCover: (color: string) => void
   onHighlight: (color: string) => void
+  onDialect: (dialect: EnglishDialect) => void
   onRename: () => void
   onDelete: () => void
   onClose: () => void
 }
 
 /** The "⋯" menu of a book on the shelf: colours, rename, delete. */
-export function BookMenu({ book, onCover, onHighlight, onRename, onDelete, onClose }: Props) {
+export function BookMenu({ book, onCover, onHighlight, onDialect, onRename, onDelete, onClose }: Props) {
   const ref = useRef<HTMLDivElement>(null)
   const label = `Buchmenü für ${book.title}`
   const cover = coverOf(book)
@@ -67,6 +68,20 @@ export function BookMenu({ book, onCover, onHighlight, onRename, onDelete, onClo
           />
         ))}
       </div>
+      <label className="book-menu-label" htmlFor={`dialect-${book.id}`}>
+        Englisch der Prüfung
+      </label>
+      <select
+        id={`dialect-${book.id}`}
+        className="book-menu-select"
+        value={book.spelling?.dialect ?? 'american'}
+        onChange={(event) => onDialect(event.target.value as EnglishDialect)}
+      >
+        <option value="american">Amerikanisch</option>
+        <option value="british">Britisch</option>
+        <option value="canadian">Kanadisch</option>
+        <option value="australian">Australisch</option>
+      </select>
       <div className="book-menu-rule" />
       <button type="button" className="book-menu-action" onClick={onRename}>
         Umbenennen

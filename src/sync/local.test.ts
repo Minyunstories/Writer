@@ -1,6 +1,7 @@
 import { beforeEach, expect, test } from 'vitest'
 import { createBook, createChapter, getBook, getChapter, listBooks, listChapters, resetDatabaseForTests, savePlace, setBookStyle, setChapterDate, updateChapter } from '../storage/db'
 import { addNote, updateNote } from '../storage/notes'
+import { updateSpelling } from '../storage/spelling'
 import { addImage, createEntry, createFolder, getEntry, getImage, listEntries, listFolders, moveWikiItem, setFolderColor, setFolderTemplate, updateEntry } from '../storage/wiki'
 import type { FileSet } from './files'
 import { applyRemoteFiles, clearSyncState, loadSyncState, readLocalFiles, saveSyncState } from './local'
@@ -439,4 +440,16 @@ test('starred blocks: taken over from their file and kept by a pulled folders.js
   expect((await listFolders(book.id))[0].templateGroups).toEqual({ Augenfarbe: 'Aussehen' })
   await apply({ remove: [`${p}wiki/template-blocks.json`], snapshot: await readLocalFiles() })
   expect((await listFolders(book.id))[0].templateBlocks).toBeUndefined()
+})
+
+test('spelling: both devices added words, both lists are kept', async () => {
+  const { p, book } = await seed()
+  await updateSpelling(book.id, (current) => ({ ...current, words: ['Hiersss'] }))
+  await apply({
+    conflicts: [{ path: `${p}spelling.json`, remote: JSON.stringify({ dialect: 'british', words: ['Dortsss'] }) }],
+    snapshot: await readLocalFiles(),
+  })
+  expect((await getBook(book.id))!.spelling).toEqual({ dialect: 'british', words: ['Dortsss', 'Hiersss'] })
+  await apply({ remove: [`${p}spelling.json`], snapshot: await readLocalFiles() })
+  expect((await getBook(book.id))!.spelling).toBeUndefined()
 })

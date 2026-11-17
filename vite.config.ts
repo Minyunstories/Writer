@@ -33,6 +33,15 @@ export default defineConfig({
         // Everything the app needs offline. Only woff2 fonts: every browser that can install the app reads them.
         globPatterns: ['**/*.{js,css,html,woff2,png,webmanifest}'],
         navigateFallback: 'index.html',
+        // The grammar check (Harper) is large: kept once it was used, not downloaded up front.
+        globIgnores: ['**/harper*', '**/*.wasm'],
+        runtimeCaching: [
+          {
+            urlPattern: ({ url }) => /harper|\.wasm$/.test(url.pathname),
+            handler: 'CacheFirst',
+            options: { cacheName: 'grammar', expiration: { maxEntries: 10 } },
+          },
+        ],
         cleanupOutdatedCaches: true,
       },
     }),

@@ -288,3 +288,10 @@ button.book-new {
     width: auto;
   }
 }
+
+select.book-menu-select {
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+}

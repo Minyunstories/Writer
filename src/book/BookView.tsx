@@ -13,7 +13,11 @@ import { ConfirmDialog, PromptDialog } from '../ui/Dialogs'
 import { buildMatcher } from '../wiki/linker'
 import { WikiEntryEditor } from '../wiki/WikiEntryEditor'
 import { createWikiLinks } from '../wiki/wikiLinks'
+import { grammarCheck } from '../grammar/grammarCheck'
+import { GRAMMAR_EVENT, isGrammarOn, recheckAll } from '../grammar/grammarSetting'
+import { checkText, knownWords } from '../grammar/harper'
 import { NotesPanel } from '../notes/NotesPanel'
+import { updateSpelling } from '../storage/spelling'
 import { addNote, deleteNote, moveNoteToChapter, moveNoteToEntry, setEntryStar, updateNote } from '../storage/notes'
 import { WikiHome } from '../wiki/WikiHome'
 import { WikiSidebar } from '../wiki/WikiSidebar'
@@ -168,9 +172,28 @@ export function BookView({ renderChapter }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [bookId],
   )
+  const bookRef = useRef(book)
+  bookRef.current = book
   const extensions = useMemo(
     () => [
       links.extension,
+      grammarCheck({
+        enabled: isGrammarOn,
+        recheckEvent: GRAMMAR_EVENT,
+        check: (text) => {
+          const spelling = bookRef.current?.spelling
+          const names = entriesRef.current.flatMap((entry) => [entry.name, ...entry.aliases])
+          return checkText(text, spelling, knownWords(spelling, names))
+        },
+        onAddWord: (word) =>
+          void attempt(async () => {
+            await updateSpelling(bookId, (current) => ({ ...current, words: [...(current.words ?? []), word] }))
+          }).then(recheckAll),
+        onIgnore: (hash) =>
+          void attempt(async () => {
+            await updateSpelling(bookId, (current) => ({ ...current, ignored: [...(current.ignored ?? []), hash] }))
+          }).then(recheckAll),
+      }),
       wikiCompletion({
         entries: () => entriesRef.current,
         topFolders: () => foldersRef.current.filter((folder) => !folder.parentId),
@@ -191,6 +214,11 @@ export function BookView({ renderChapter }: Props) {
   useEffect(() => {
     links.setMatcher(buildMatcher(entries))
   }, [links, entries])
+  // New wiki names or another English variant: check again.
+  const spellingKey = JSON.stringify([book?.spelling?.dialect, entries.map((entry) => [entry.name, entry.aliases])])
+  useEffect(() => {
+    recheckAll()
+  }, [spellingKey])
 
   const activeChapter = section === 'chapters' ? chapters.find((c) => c.id === itemId) : undefined
 

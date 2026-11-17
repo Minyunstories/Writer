@@ -9,6 +9,7 @@ import { SYNCED_EVENT } from '../storage/connection'
 import { createChapter, getChapter, savePlace, updateBook } from '../storage/db'
 import type { Book, Chapter, FontId } from '../types'
 import { editorTheme } from './editorTheme'
+import { isGrammarOn, setGrammarOn } from '../grammar/grammarSetting'
 import { toggleHighlight, writingMarkdown } from './markdownSetup'
 import { ChapterSaver, type SaveState } from './saver'
 import { StatusBar } from './StatusBar'
@@ -356,6 +357,7 @@ export function Editor({ book, chapter, onChanged, extraExtensions, jumpTo, onJu
           <span className="editor-highlight-swatch" aria-hidden="true" />
           Markieren
         </button>
+        <GrammarToggle />
         <span className="editor-toolbar-divider" aria-hidden="true" />
         <label className="editor-font">
           <span className="muted">Schrift</span>
@@ -415,5 +417,25 @@ export function Editor({ book, chapter, onChanged, extraExtensions, jumpTo, onJu
 
       <StatusBar words={words} saveState={saveState} />
     </div>
+  )
+}
+
+/** Switches the English spelling and grammar check on or off on this device. */
+function GrammarToggle() {
+  const [on, setOn] = useState(isGrammarOn)
+  return (
+    <button
+      type="button"
+      className={`editor-grammar${on ? ' on' : ''}`}
+      aria-pressed={on}
+      title="Rechtschreib- und Grammatikprüfung (Englisch, läuft nur auf diesem Gerät)"
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={() => {
+        setGrammarOn(!on)
+        setOn(!on)
+      }}
+    >
+      Prüfung
+    </button>
   )
 }

@@ -110,3 +110,15 @@ test('renaming changes the card title', async () => {
   await user.click(screen.getByRole('button', { name: 'Speichern' }))
   expect(await screen.findByRole('article', { name: 'Windlied' })).toBeInTheDocument()
 })
+
+test('the book menu sets the English variant of the check', async () => {
+  const user = userEvent.setup()
+  const book = await createBook('Sturmlied')
+  renderDashboard()
+  const card = await screen.findByRole('article', { name: 'Sturmlied' })
+  await user.click(within(card).getByRole('button', { name: 'Buchmenü für Sturmlied' }))
+  const select = screen.getByLabelText('Englisch der Prüfung')
+  expect(select).toHaveValue('american')
+  await user.selectOptions(select, 'british')
+  await waitFor(async () => expect((await getBook(book.id))!.spelling?.dialect).toBe('british'))
+})

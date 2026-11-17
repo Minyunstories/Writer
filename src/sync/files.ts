@@ -1,4 +1,5 @@
 import { cleanDate, cleanPlace, isColor } from '../lib/bookStyle'
+import { cleanSpelling } from '../storage/spelling'
 import type { Book, BookNote, Chapter, FontId, WikiEntry, WikiFolder, WikiImage, WikiProperty } from '../types'
 import type { FileData } from './hash'
 
@@ -93,6 +94,7 @@ export function bundleToFiles({ book, chapters, folders, entries, images }: Book
   if (colors) files.set(`${prefix}wiki/colors.json`, colors)
   if (book.notes?.length) files.set(`${prefix}notes.json`, notesFile(book.notes))
   if (book.wikiStars?.length) files.set(`${prefix}wiki/stars.json`, json(book.wikiStars))
+  if (book.spelling) files.set(`${prefix}spelling.json`, json(book.spelling))
 
   for (const chapter of ordered) {
     files.set(`${prefix}chapters/${chapter.id}.md`, chapter.content)
@@ -401,6 +403,8 @@ export function filesToBundle(bookId: string, files: FileSet): BookBundle {
   if (style.highlight) book.highlight = style.highlight
   const place = cleanPlace(parseJson<unknown>(files.get(`${prefix}place.json`)))
   if (place) book.place = place
+  const spelling = cleanSpelling(parseJson<unknown>(files.get(`${prefix}spelling.json`)))
+  if (spelling) book.spelling = spelling
   const notes = parseNotes(files.get(`${prefix}notes.json`))
   if (notes?.length) book.notes = notes
   const stars = stringList(parseJson<unknown>(files.get(`${prefix}wiki/stars.json`)))
@@ -467,7 +471,7 @@ export function filesToBundle(bookId: string, files: FileSet): BookBundle {
   return { book, chapters, folders, entries, images }
 }
 
-export type PathKind = 'book' | 'chapter' | 'outline' | 'folders' | 'entry' | 'image' | 'tags' | 'templates' | 'style' | 'dates' | 'place' | 'wikiOrder' | 'folderColors' | 'notes' | 'stars' | 'templateBlocks'
+export type PathKind = 'book' | 'chapter' | 'outline' | 'folders' | 'entry' | 'image' | 'tags' | 'templates' | 'style' | 'dates' | 'place' | 'wikiOrder' | 'folderColors' | 'notes' | 'stars' | 'templateBlocks' | 'spelling'
 
 /** What a repository path holds, or null for files the app does not manage. */
 export function classifyPath(path: string): { bookId: string; kind: PathKind; id: string } | null {
@@ -486,6 +490,7 @@ export function classifyPath(path: string): { bookId: string; kind: PathKind; id
   if (rest === 'wiki/colors.json') return { bookId, kind: 'folderColors', id: bookId }
   if (rest === 'wiki/template-blocks.json') return { bookId, kind: 'templateBlocks', id: bookId }
   if (rest === 'notes.json') return { bookId, kind: 'notes', id: bookId }
+  if (rest === 'spelling.json') return { bookId, kind: 'spelling', id: bookId }
   if (rest === 'wiki/stars.json') return { bookId, kind: 'stars', id: bookId }
   const match = /^(chapters|outline|wiki\/_images|wiki)\/([^/]+)$/.exec(rest)
   if (!match) return null
