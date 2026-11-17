@@ -1,3 +1,4 @@
+import { EditorState } from '@codemirror/state'
 import { EditorView, runScopeHandlers } from '@codemirror/view'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -214,4 +215,13 @@ test('three typed dots become an ellipsis', async () => {
   }
   expect(view.state.doc.toString()).toBe('Und dann…')
   expect(view.state.selection.main.head).toBe(9)
+})
+
+test('while typing, the line being written is kept in the middle of the screen', async () => {
+  const { typewriter } = await import('./markdownSetup')
+  const state = EditorState.create({ doc: 'abc', extensions: typewriter })
+  const typed = state.update({ changes: { from: 3, insert: 'd' }, userEvent: 'input.type' })
+  expect(typed.effects.length).toBe(1)
+  const moved = state.update({ selection: { anchor: 1 }, userEvent: 'select.pointer' })
+  expect(moved.effects.length).toBe(0)
 })

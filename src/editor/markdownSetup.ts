@@ -1,5 +1,5 @@
 import { markdown } from '@codemirror/lang-markdown'
-import { EditorSelection, type Extension } from '@codemirror/state'
+import { EditorSelection, EditorState, type Extension } from '@codemirror/state'
 import { EditorView, keymap, type Command, type KeyBinding } from '@codemirror/view'
 import type { MarkdownConfig } from '@lezer/markdown'
 import { livePreview } from './livePreview'
@@ -81,6 +81,13 @@ export const ellipsis = EditorView.inputHandler.of((view, from, to, text) => {
   view.dispatch({ changes: { from: from - 2, to, insert: '…' }, selection: { anchor: from - 1 }, userEvent: 'input.type' })
   return true
 })
+
+/** Typewriter scrolling: while typing, the line being written stays in the middle of the screen. */
+export const typewriter = EditorState.transactionExtender.of((tr) =>
+  tr.docChanged && (tr.isUserEvent('input') || tr.isUserEvent('delete'))
+    ? { effects: EditorView.scrollIntoView(tr.newSelection.main.head, { y: 'center' }) }
+    : null,
+)
 
 /** Markdown with highlights, live formatting, the format shortcuts and typographic dots. */
 export function writingMarkdown(): Extension {

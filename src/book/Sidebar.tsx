@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import type { Book, Chapter } from '../types'
 
-export type Section = 'chapters' | 'wiki' | 'outline'
+export type Section = 'chapters' | 'wiki' | 'outline' | 'manuscript'
 
 const TABS: { id: Section; label: string }[] = [
   { id: 'chapters', label: 'Kapitel' },
@@ -46,7 +46,7 @@ export function Sidebar({
           <button
             key={tab.id}
             role="tab"
-            aria-selected={section === tab.id}
+            aria-selected={section === tab.id || (tab.id === 'chapters' && section === 'manuscript')}
             className="ghost sidebar-tab"
             onClick={() => onSelectSection(tab.id)}
           >
@@ -55,8 +55,16 @@ export function Sidebar({
         ))}
       </div>
 
-      {section === 'chapters' && (
+      {(section === 'chapters' || section === 'manuscript') && (
         <>
+          <Link
+            to={`/book/${book.id}/manuscript`}
+            className={`sidebar-manuscript${section === 'manuscript' ? ' active' : ''}`}
+            aria-current={section === 'manuscript' ? 'page' : undefined}
+            onClick={onNavigate}
+          >
+            Manuskript lesen
+          </Link>
           {chapters.length === 0 ? (
             <p className="muted sidebar-empty">Noch keine Kapitel</p>
           ) : (

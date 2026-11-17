@@ -68,7 +68,8 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: clamp(1.5rem, 6vh, 4rem) clamp(1.1rem, 5vw, 3rem) 40vh;
+  /* Room below the text, so even the last line can sit in the middle while typing. */
+  padding: clamp(1.5rem, 6vh, 4rem) clamp(1.1rem, 5vw, 3rem) 55vh;
 }
 
 /* The letterbox: a centred column with a comfortable line length. */

@@ -10,7 +10,7 @@ import { createChapter, getChapter, savePlace, updateBook } from '../storage/db'
 import type { Book, Chapter, FontId } from '../types'
 import { editorTheme } from './editorTheme'
 import { isGrammarOn, setGrammarOn } from '../grammar/grammarSetting'
-import { toggleHighlight, writingMarkdown } from './markdownSetup'
+import { toggleHighlight, typewriter, writingMarkdown } from './markdownSetup'
 import { ChapterSaver, type SaveState } from './saver'
 import { StatusBar } from './StatusBar'
 import './editor.css'
@@ -169,6 +169,7 @@ export function Editor({ book, chapter, onChanged, extraExtensions, jumpTo, onJu
           extensions: [
             history(),
             writingMarkdown(),
+            typewriter,
             keymap.of([...defaultKeymap, ...historyKeymap]),
             flashField,
             EditorView.lineWrapping,

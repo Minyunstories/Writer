@@ -1,0 +1,126 @@
+.manuscript {
+  max-width: 68ch;
+  margin: 0 auto;
+  padding: clamp(1.5rem, 6vh, 4rem) clamp(1.1rem, 5vw, 3rem) 6rem;
+  font-family: var(--font-text);
+  font-size: 1.12rem;
+  line-height: 1.8;
+}
+
+.manuscript-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 2.5rem;
+}
+
+.manuscript-head h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(2.2rem, 6vw, 3rem);
+  font-weight: 600;
+  line-height: 1.05;
+}
+
+button.manuscript-print {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.manuscript-chapter + .manuscript-chapter {
+  margin-top: 3.5rem;
+  padding-top: 2.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.manuscript-chapter h2 {
+  margin: 0 0 1.2rem;
+}
+
+button.manuscript-chapter-title {
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: var(--font-display);
+  font-size: 2rem;
+  font-weight: 600;
+  line-height: 1.15;
+  text-align: left;
+  color: var(--text);
+}
+
+button.manuscript-chapter-title:hover:not(:disabled) {
+  background: none;
+  color: var(--accent);
+}
+
+.manuscript p,
+.manuscript-subhead {
+  margin: 0 0 0.7em;
+  cursor: text;
+  border-radius: 4px;
+}
+
+.manuscript p:hover,
+.manuscript-subhead:hover {
+  background: color-mix(in srgb, var(--surface-2) 60%, transparent);
+}
+
+.manuscript-subhead {
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  font-weight: 600;
+}
+
+.manuscript mark {
+  background: var(--mw-highlight, rgba(213, 141, 98, 0.3));
+  color: inherit;
+  border-radius: 3px;
+}
+
+/* Printing (or saving as PDF): only the manuscript, black on white. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .manuscript,
+  .manuscript * {
+    visibility: visible;
+  }
+
+  .manuscript {
+    position: absolute;
+    inset: 0 auto auto 0;
+    max-width: none;
+    padding: 0;
+    color: #000;
+    font-size: 12pt;
+  }
+
+  .manuscript-print {
+    display: none;
+  }
+
+  .manuscript-chapter {
+    break-before: page;
+    border: none;
+  }
+
+  button.manuscript-chapter-title,
+  .manuscript-head h1 {
+    color: #000;
+  }
+
+  .manuscript mark {
+    background: none;
+  }
+}
+
+@media print {
+  @page {
+    margin: 2.2cm 2.5cm;
+  }
+}

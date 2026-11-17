@@ -581,3 +581,38 @@ button.wiki-tree-arrange.on {
   display: flex;
   gap: 0.25rem;
 }
+
+a.sidebar-manuscript {
+  display: block;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 13px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+a.sidebar-manuscript:hover,
+a.sidebar-manuscript.active {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+/* Printing the manuscript: let it run over all pages. */
+@media print {
+  .book,
+  .book-body,
+  .book-main,
+  .book-scroll {
+    display: block !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  .book-header,
+  .sidebar-wrap,
+  .sidebar-handle,
+  .book-panel {
+    display: none !important;
+  }
+}

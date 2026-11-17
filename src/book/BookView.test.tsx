@@ -624,3 +624,18 @@ test('a link straight to a later chapter opens that chapter on a fresh start', a
   await new Promise((resolve) => setTimeout(resolve, 100))
   expect(screen.getByTestId('location')).toHaveTextContent(`/chapters/${later.id}`)
 })
+
+test('manuscript: every chapter in one document; a click opens the chapter at that paragraph', async () => {
+  const user = userEvent.setup()
+  const book = await createBook('Sturmlied')
+  await createChapter(book.id, 'Anfang', 'Eins.')
+  const second = await createChapter(book.id, 'Sturm', 'Zwei.\nDrei.')
+  renderAt(`/book/${book.id}/chapters`, true)
+  await user.click(await screen.findByRole('link', { name: 'Manuskript lesen' }))
+  const doc = await screen.findByRole('article')
+  expect(within(doc).getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual(['Anfang', 'Sturm'])
+  await user.click(within(doc).getByText('Drei.'))
+  await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(`/chapters/${second.id}`))
+  const view = await editorView()
+  await waitFor(() => expect(view.state.selection.main.head).toBe(6))
+})

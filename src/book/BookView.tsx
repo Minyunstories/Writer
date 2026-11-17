@@ -16,6 +16,7 @@ import { createWikiLinks } from '../wiki/wikiLinks'
 import { grammarCheck } from '../grammar/grammarCheck'
 import { GRAMMAR_EVENT, isGrammarOn, recheckAll } from '../grammar/grammarSetting'
 import { checkText, knownWords } from '../grammar/harper'
+import { Manuscript } from '../manuscript/Manuscript'
 import { NotesPanel } from '../notes/NotesPanel'
 import { updateSpelling } from '../storage/spelling'
 import { addNote, deleteNote, moveNoteToChapter, moveNoteToEntry, setEntryStar, updateNote } from '../storage/notes'
@@ -60,7 +61,7 @@ function nextChapterTitle(chapters: Chapter[]): string {
   return `Kapitel ${number}`
 }
 
-const SECTIONS: Section[] = ['chapters', 'wiki', 'outline']
+const SECTIONS: Section[] = ['chapters', 'wiki', 'outline', 'manuscript']
 
 /** A mouse or trackpad: focusing the text does not open an on-screen keyboard. */
 function canHover(): boolean {
@@ -563,6 +564,15 @@ export function BookView({ renderChapter }: Props) {
                   Ersten Eintrag anlegen
                 </button>
               )}
+            </div>
+          )}
+          {section === 'manuscript' && (
+            <div className="book-scroll">
+              <Manuscript
+                title={book.title}
+                chapters={chapters}
+                onOpen={(chapterId, offset) => openChapterAt(chapterId, { from: offset, to: offset })}
+              />
             </div>
           )}
           {section === 'outline' && (
