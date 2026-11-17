@@ -18,6 +18,9 @@ import { GRAMMAR_EVENT, isGrammarOn, recheckAll } from '../grammar/grammarSettin
 import { checkText, knownWords } from '../grammar/harper'
 import { Manuscript } from '../manuscript/Manuscript'
 import { NotesPanel } from '../notes/NotesPanel'
+import type { FindOptions } from '../search/find'
+import { replaceMatches } from '../search/find'
+import { SearchPanel } from '../search/SearchPanel'
 import { updateSpelling } from '../storage/spelling'
 import { addNote, deleteNote, moveNoteToChapter, moveNoteToEntry, setEntryStar, updateNote } from '../storage/notes'
 import { WikiHome } from '../wiki/WikiHome'
@@ -93,6 +96,7 @@ export function BookView({ renderChapter }: Props) {
   const [freshEntryId, setFreshEntryId] = useState<string | null>(null)
   const [sidebarWidth, setSidebarWidth] = useSidebarWidth()
   const [notesOpen, setNotesOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
 
   /** Reloads folders and entries only; cheap enough to run after every wiki edit. */
   const reloadWiki = useCallback(async () => {
@@ -150,6 +154,7 @@ export function BookView({ renderChapter }: Props) {
   const openPanel = useCallback(
     (entryId: string) => {
       setNotesOpen(false)
+      setSearchOpen(false)
       setPanelStack([entryId])
       // Chapters may have changed since they were loaded; "Erwähnt in" should be current.
       void reload()
@@ -241,9 +246,45 @@ export function BookView({ renderChapter }: Props) {
   const openNotes = (book?.notes ?? []).filter((note) => !note.done).length
   const toggleNotes = () =>
     setNotesOpen((open) => {
-      if (!open) setPanelStack([])
+      if (!open) {
+        setPanelStack([])
+        setSearchOpen(false)
+      }
       return !open
     })
+  const toggleSearch = () =>
+    setSearchOpen((open) => {
+      if (!open) {
+        setPanelStack([])
+        setNotesOpen(false)
+        // Unsaved typing first, so the search sees the current text.
+        window.dispatchEvent(new Event('pagehide'))
+        void reload()
+      }
+      return !open
+    })
+  const toggleSearchRef = useRef(toggleSearch)
+  toggleSearchRef.current = toggleSearch
+
+  /** Replaces in every chapter, each against its stored text; open editors pick up the result. */
+  const replaceEverywhere = async (query: string, replacement: string, options: FindOptions) => {
+    window.dispatchEvent(new Event('pagehide'))
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    let count = 0
+    try {
+      for (const chapter of await listChapters(bookId)) {
+        const result = replaceMatches(chapter.content, query, replacement, options)
+        if (result.count === 0) continue
+        await updateChapter(chapter.id, { content: result.text }, { expectedContent: chapter.content })
+        count += result.count
+      }
+    } catch {
+      setActionError(true)
+    }
+    await reload()
+    window.dispatchEvent(new Event(SYNCED_EVENT))
+    return count
+  }
   const toggleNotesRef = useRef(toggleNotes)
   toggleNotesRef.current = toggleNotes
 
@@ -255,6 +296,11 @@ export function BookView({ renderChapter }: Props) {
       if (key === 'n' && event.shiftKey) {
         event.preventDefault()
         toggleNotesRef.current()
+        return
+      }
+      if (key === 'f' && event.shiftKey) {
+        event.preventDefault()
+        toggleSearchRef.current()
         return
       }
       if (key === 'b' && !event.shiftKey) {
@@ -407,6 +453,15 @@ export function BookView({ renderChapter }: Props) {
         <img className="book-logo" src={FEATHER} alt="" />
         <h1>{book.title}</h1>
         <span className="book-header-space" />
+        <button
+          className="notes-button search-button"
+          aria-pressed={searchOpen}
+          aria-label="Suchen und Ersetzen"
+          title="Im ganzen Buch suchen und ersetzen (Strg+Umschalt+F)"
+          onClick={() => toggleSearch()}
+        >
+          ⌕
+        </button>
         <button
           className="notes-button"
           aria-pressed={notesOpen}
@@ -591,6 +646,14 @@ export function BookView({ renderChapter }: Props) {
           )}
         </main>
 
+        {searchOpen && book && (
+          <SearchPanel
+            chapters={chapters}
+            onOpen={(chapterId, range) => openChapterAt(chapterId, range)}
+            onReplaceAll={replaceEverywhere}
+            onClose={() => setSearchOpen(false)}
+          />
+        )}
         {notesOpen && book && (
           <NotesPanel
             notes={book.notes ?? []}
@@ -619,7 +682,7 @@ export function BookView({ renderChapter }: Props) {
             onClose={() => setNotesOpen(false)}
           />
         )}
-        {!notesOpen && panelEntry && (
+        {!notesOpen && !searchOpen && panelEntry && (
           <aside className="book-panel" aria-label="Wiki-Eintrag">
             <header className="book-panel-header">
               <Link to={`/book/${book.id}/wiki/${panelEntry.id}`} className="book-panel-open">
