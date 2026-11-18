@@ -51,7 +51,7 @@ interface Props {
   /** Marked with a star, e.g. a main character. */
   starred?: boolean
   onStar?: (starred: boolean) => void
-  /** The entry's relationships, shown above "Erwähnt in". */
+  /** The entry's relationships, shown below the properties. */
   relations?: ReactNode
 }
 
@@ -548,6 +548,20 @@ export function WikiEntryEditor({
         onLayout={(update) => void changeLayout(update)}
       />
 
+      {relations}
+
+      <div className="wiki-field">
+        <span className="wiki-label">Notizen</span>
+        <MarkdownField
+          key={`${entry.id}-${notesVersion}`}
+          value={entry.body}
+          ariaLabel="Notizen"
+          placeholder="Freier Text …"
+          onChange={(body) => change({ body })}
+          extensions={notesExtensions}
+        />
+      </div>
+
       <div className="wiki-field">
         <span className="wiki-label">Bilder</span>
         {entry.imageIds.length > 0 && (
@@ -586,18 +600,6 @@ export function WikiEntryEditor({
         </label>
       </div>
 
-      <div className="wiki-field">
-        <span className="wiki-label">Notizen</span>
-        <MarkdownField
-          key={`${entry.id}-${notesVersion}`}
-          value={entry.body}
-          ariaLabel="Notizen"
-          placeholder="Freier Text …"
-          onChange={(body) => change({ body })}
-          extensions={notesExtensions}
-        />
-      </div>
-
       <label className="wiki-check">
         <input
           type="checkbox"
@@ -606,8 +608,6 @@ export function WikiEntryEditor({
         />
         Im Text automatisch verlinken
       </label>
-
-      {relations}
 
       {chapters && (
         <div className="wiki-field">
