@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { ZoomControl } from '../book/ZoomControl'
 import { useZoom } from '../lib/zoom'
 import { SYNCED_EVENT } from '../storage/connection'
@@ -10,6 +10,7 @@ import {
   getEntry,
   getImage,
   removeImage,
+  setPortrait,
   updateEntry,
   updateTemplateLayout,
   type EntryPatch,
@@ -20,6 +21,7 @@ import { ConfirmDialog } from '../ui/Dialogs'
 import { prepareImage } from './image'
 import { buildMatcher } from './linker'
 import { PropertyBlocks } from './PropertyBlocks'
+import { Timeline } from './Timeline'
 import { MarkdownField } from './MarkdownField'
 import { mentionsOf, topFolderOf } from './mentions'
 import { createWikiLinks } from './wikiLinks'
@@ -49,7 +51,11 @@ interface Props {
   /** Marked with a star, e.g. a main character. */
   starred?: boolean
   onStar?: (starred: boolean) => void
+  /** The entry's relationships, shown above "Erwähnt in". */
+  relations?: ReactNode
 }
+
+const TIMELINE_KEY = 'mw:wiki-timeline'
 
 /** Folders as a flat list with their full path, e.g. "Welt / Orte". */
 export function folderPaths(folders: WikiFolder[]): { id: string; path: string }[] {
@@ -69,11 +75,12 @@ export function folderPaths(folders: WikiFolder[]): { id: string; path: string }
     .sort((a, b) => a.path.localeCompare(b.path, 'de'))
 }
 
-function Thumbnail({ imageId, label, onRemove }: { imageId: string; label: string; onRemove: () => void }) {
+/** An object URL for a stored image, released again when no longer shown. */
+function useImageUrl(imageId: string | undefined): string | undefined {
   const [url, setUrl] = useState<string>()
-  const [open, setOpen] = useState(false)
-
   useEffect(() => {
+    setUrl(undefined)
+    if (!imageId) return
     let created: string | undefined
     let cancelled = false
     void getImage(imageId).then((image) => {
@@ -86,20 +93,66 @@ function Thumbnail({ imageId, label, onRemove }: { imageId: string; label: strin
       if (created) URL.revokeObjectURL(created)
     }
   }, [imageId])
+  return url
+}
+
+function Lightbox({ url, label, onClose }: { url: string; label: string; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+  return (
+    <div className="dialog-backdrop wiki-lightbox" onClick={onClose}>
+      <img src={url} alt={label} />
+    </div>
+  )
+}
+
+/** The entry's first image, large beside the name. */
+function Portrait({ imageId, name }: { imageId: string; name: string }) {
+  const url = useImageUrl(imageId)
+  const [open, setOpen] = useState(false)
+  return (
+    <>
+      <button className="wiki-portrait" onClick={() => setOpen(true)} title="Vergrößern">
+        <img src={url} alt={`Porträt von ${name}`} />
+      </button>
+      {open && url && <Lightbox url={url} label={`Porträt von ${name}`} onClose={() => setOpen(false)} />}
+    </>
+  )
+}
+
+interface ThumbnailProps {
+  imageId: string
+  label: string
+  portrait: boolean
+  onPortrait: () => void
+  onRemove: () => void
+}
+
+function Thumbnail({ imageId, label, portrait, onPortrait, onRemove }: ThumbnailProps) {
+  const url = useImageUrl(imageId)
+  const [open, setOpen] = useState(false)
 
   return (
     <li className="wiki-image">
       <button className="wiki-image-open" onClick={() => setOpen(true)} title="Vergrößern">
         <img src={url} alt={label} />
       </button>
+      {portrait ? (
+        <span className="wiki-image-badge">Porträt</span>
+      ) : (
+        <button className="wiki-image-badge wiki-image-portrait" onClick={onPortrait} title="Dieses Bild neben dem Namen zeigen">
+          Als Porträt
+        </button>
+      )}
       <button className="ghost icon wiki-image-remove" aria-label="Bild entfernen" title="Bild entfernen" onClick={onRemove}>
         ×
       </button>
-      {open && url && (
-        <div className="dialog-backdrop wiki-lightbox" onClick={() => setOpen(false)}>
-          <img src={url} alt={label} />
-        </div>
-      )}
+      {open && url && <Lightbox url={url} label={label} onClose={() => setOpen(false)} />}
     </li>
   )
 }
@@ -119,6 +172,7 @@ export function WikiEntryEditor({
   focusName = false,
   starred = false,
   onStar,
+  relations,
 }: Props) {
   const [entry, setEntry] = useState<WikiEntry | null | undefined>(undefined)
   const nameRef = useRef<HTMLInputElement>(null)
@@ -282,6 +336,21 @@ export function WikiEntryEditor({
   const notesLinks = useMemo(() => createWikiLinks({ onOpen: (id) => onOpenEntryRef.current?.(id) }), [])
   const notesExtensions = useMemo(() => [notesLinks.extension], [notesLinks])
   useEffect(() => notesLinks.setMatcher(otherMatcher), [notesLinks, otherMatcher])
+  const [timeline, setTimeline] = useState(() => {
+    try {
+      return localStorage.getItem(TIMELINE_KEY) === 'true'
+    } catch {
+      return false
+    }
+  })
+  const switchTimeline = (on: boolean) => {
+    setTimeline(on)
+    try {
+      localStorage.setItem(TIMELINE_KEY, String(on))
+    } catch {
+      // Only a convenience.
+    }
+  }
   const mentions = useMemo(() => (chapters ? mentionsOf(entryId, chapters, allMatcher) : []), [chapters, entryId, allMatcher])
 
   entryRef.current = entry ?? null
@@ -341,6 +410,15 @@ export function WikiEntryEditor({
     await reloadImages()
   }
 
+  const makePortrait = async (imageId: string) => {
+    try {
+      await setPortrait(imageId)
+    } catch {
+      setSaveFailed(true)
+    }
+    await reloadImages()
+  }
+
   const detach = async (imageId: string) => {
     try {
       await removeImage(imageId)
@@ -385,73 +463,78 @@ export function WikiEntryEditor({
         </p>
       )}
 
-      <div className="wiki-entry-title">
-        <input
-          ref={nameRef}
-          className="wiki-entry-name"
-          type="text"
-          aria-label="Name"
-          value={entry.name}
-          onChange={(event) => change({ name: event.target.value })}
-          onBlur={() => {
-            if (!entry.name.trim()) change({ name: 'Unbenannt' })
-          }}
-        />
-        {onStar && (
-          <button
-            className={`ghost icon wiki-star${starred ? ' on' : ''}`}
-            aria-pressed={starred}
-            aria-label={starred ? 'Stern entfernen' : 'Mit Stern markieren'}
-            title={starred ? 'Stern entfernen' : 'Mit Stern markieren, z. B. für Hauptfiguren'}
-            onClick={() => onStar(!starred)}
-          >
-            {starred ? '★' : '☆'}
-          </button>
-        )}
-      </div>
-
-      <div className="wiki-field">
-        <label htmlFor={`${ids}-alias`}>Auch bekannt als</label>
-        <div className="wiki-aliases">
-          {entry.aliases.map((alias) => (
-            <span key={alias} className="wiki-chip">
-              {alias}
+      <div className={entry.imageIds[0] ? 'wiki-entry-head with-portrait' : 'wiki-entry-head'}>
+        <div className="wiki-entry-head-main">
+          <div className="wiki-entry-title">
+            <input
+              ref={nameRef}
+              className="wiki-entry-name"
+              type="text"
+              aria-label="Name"
+              value={entry.name}
+              onChange={(event) => change({ name: event.target.value })}
+              onBlur={() => {
+                if (!entry.name.trim()) change({ name: 'Unbenannt' })
+              }}
+            />
+            {onStar && (
               <button
-                className="ghost"
-                aria-label={`„${alias}" entfernen`}
-                onClick={() => change({ aliases: entry.aliases.filter((a) => a !== alias) })}
+                className={`ghost icon wiki-star${starred ? ' on' : ''}`}
+                aria-pressed={starred}
+                aria-label={starred ? 'Stern entfernen' : 'Mit Stern markieren'}
+                title={starred ? 'Stern entfernen' : 'Mit Stern markieren, z. B. für Hauptfiguren'}
+                onClick={() => onStar(!starred)}
               >
-                ×
+                {starred ? '★' : '☆'}
               </button>
-            </span>
-          ))}
-          <input
-            id={`${ids}-alias`}
-            type="text"
-            value={aliasDraft}
-            placeholder="Name eingeben, Enter"
-            enterKeyHint="done"
-            onChange={(event) => setAliasDraft(event.target.value)}
-            onKeyDown={onAliasKey}
-            onBlur={addAlias}
-          />
-        </div>
-      </div>
+            )}
+          </div>
 
-      <div className="wiki-field wiki-field-row">
-        <label htmlFor={`${ids}-folder`}>Ordner</label>
-        <select
-          id={`${ids}-folder`}
-          value={entry.folderId ?? ''}
-          onChange={(event) => change({ folderId: event.target.value || null })}
-        >
-          <option value="">Kein Ordner</option>
-          {paths.map((folder) => (
-            <option key={folder.id} value={folder.id}>
-              {folder.path}
-            </option>
-          ))}
-        </select>
+          <div className="wiki-field">
+            <label htmlFor={`${ids}-alias`}>Auch bekannt als</label>
+            <div className="wiki-aliases">
+              {entry.aliases.map((alias) => (
+                <span key={alias} className="wiki-chip">
+                  {alias}
+                  <button
+                    className="ghost"
+                    aria-label={`„${alias}" entfernen`}
+                    onClick={() => change({ aliases: entry.aliases.filter((a) => a !== alias) })}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+              <input
+                id={`${ids}-alias`}
+                type="text"
+                value={aliasDraft}
+                placeholder="Name eingeben, Enter"
+                enterKeyHint="done"
+                onChange={(event) => setAliasDraft(event.target.value)}
+                onKeyDown={onAliasKey}
+                onBlur={addAlias}
+              />
+            </div>
+          </div>
+
+          <div className="wiki-field wiki-field-row">
+            <label htmlFor={`${ids}-folder`}>Ordner</label>
+            <select
+              id={`${ids}-folder`}
+              value={entry.folderId ?? ''}
+              onChange={(event) => change({ folderId: event.target.value || null })}
+            >
+              <option value="">Kein Ordner</option>
+              {paths.map((folder) => (
+                <option key={folder.id} value={folder.id}>
+                  {folder.path}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        {entry.imageIds[0] && <Portrait imageId={entry.imageIds[0]} name={entry.name} />}
       </div>
 
       <PropertyBlocks
@@ -474,6 +557,8 @@ export function WikiEntryEditor({
                 key={imageId}
                 imageId={imageId}
                 label={`Bild ${index + 1} von ${entry.name}`}
+                portrait={index === 0}
+                onPortrait={() => void makePortrait(imageId)}
                 onRemove={() => setImageToRemove(imageId)}
               />
             ))}
@@ -522,13 +607,29 @@ export function WikiEntryEditor({
         Im Text automatisch verlinken
       </label>
 
+      {relations}
+
       {chapters && (
         <div className="wiki-field">
-          <span className="wiki-label" id={`${ids}-mentions`}>
-            Erwähnt in
+          <span className="wiki-label-row">
+            <span className="wiki-label" id={`${ids}-mentions`}>
+              Erwähnt in
+            </span>
+            {mentions.length > 0 && (
+              <span className="wiki-view-switch">
+                <button className="ghost" aria-pressed={!timeline} onClick={() => switchTimeline(false)}>
+                  Liste
+                </button>
+                <button className="ghost" aria-pressed={timeline} onClick={() => switchTimeline(true)}>
+                  Zeitleiste
+                </button>
+              </span>
+            )}
           </span>
           {mentions.length === 0 ? (
             <p className="muted wiki-none">Noch in keinem Kapitel erwähnt</p>
+          ) : timeline ? (
+            <Timeline name={entry.name} chapters={chapters} mentions={mentions} onOpen={onOpenChapter} />
           ) : (
             <ul className="wiki-mentions" aria-labelledby={`${ids}-mentions`}>
               {mentions.map((mention) => {

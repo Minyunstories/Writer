@@ -26,6 +26,7 @@ import { autoVersion } from '../storage/versions'
 import { typographic } from '../editor/typography'
 import { addNote, deleteNote, moveNoteToChapter, moveNoteToEntry, setEntryStar, updateNote } from '../storage/notes'
 import { WikiHome } from '../wiki/WikiHome'
+import { RelationsSection } from '../wiki/RelationsSection'
 import { WikiSidebar } from '../wiki/WikiSidebar'
 import { SidebarHandle, useSidebarWidth } from './SidebarHandle'
 import { Sidebar, type Section } from './Sidebar'
@@ -700,6 +701,9 @@ export function BookView({ renderChapter }: Props) {
                 chapters={chapters}
                 zoomArea="wiki"
                 onOpenEntry={(entryId) => navigate(`/book/${book.id}/wiki/${entryId}`)}
+                relations={
+                  <RelationsSection book={book} entryId={activeEntry.id} entries={entries} onOpenEntry={(entryId) => navigate(`/book/${book.id}/wiki/${entryId}`)} onChanged={() => void reload()} />
+                }
                 onOpenChapter={openChapterAt}
                 focusName={activeEntry.id === freshEntryId}
                 onChanged={reloadWiki}
@@ -865,6 +869,7 @@ export function BookView({ renderChapter }: Props) {
                 chapters={chapters}
                 zoomArea="panel"
                 onOpenEntry={pushPanel}
+                relations={<RelationsSection book={book} entryId={panelEntry.id} entries={entries} onOpenEntry={pushPanel} onChanged={() => void reload()} />}
                 onOpenChapter={openChapterAt}
                 onChanged={reloadWiki}
                 onSaveFailed={() => setActionError(true)}

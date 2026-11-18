@@ -1,7 +1,7 @@
 import { cleanDate, cleanPlace, isColor } from '../lib/bookStyle'
 import { cleanSpelling } from '../storage/spelling'
 import { isStatus } from '../lib/chapterStatus'
-import type { Book, BookNote, Chapter, ChapterComment, ChapterStatus, ChapterVersion, FontId, WikiEntry, WikiFolder, WikiImage, WikiProperty } from '../types'
+import type { Book, BookNote, BookRelations, Relation, RelationType, Chapter, ChapterComment, ChapterStatus, ChapterVersion, FontId, WikiEntry, WikiFolder, WikiImage, WikiProperty } from '../types'
 import type { FileData } from './hash'
 
 export type { FileData } from './hash'
@@ -102,6 +102,8 @@ export function bundleToFiles({ book, chapters, folders, entries, images, versio
   const colors = colorsFile(folders)
   if (colors) files.set(`${prefix}wiki/colors.json`, colors)
   if (book.notes?.length) files.set(`${prefix}notes.json`, notesFile(book.notes))
+  const relations = book.relations && relationsFile(book.relations)
+  if (relations) files.set(`${prefix}wiki/relations.json`, relations)
   for (const version of versions) {
     if (!version.auto) files.set(`${prefix}versions/${version.chapterId}/${version.id}.json`, versionFile(version))
   }
@@ -225,6 +227,55 @@ export function parseComments(data: FileData | undefined): Record<string, Chapte
     if (comments.length) result[chapterId] = comments
   }
   return result
+}
+
+/** wiki/relations.json: kinds of relationship and the relationships. Undefined when empty. */
+export function relationsFile(relations: BookRelations): string | undefined {
+  if (!relations.types.length && !relations.relations.length && !relations.deleted?.length) return undefined
+  return json({
+    types: relations.types.map(({ id, forward, backward }) => ({ id, forward, ...(backward ? { backward } : {}) })),
+    relations: [...relations.relations]
+      .sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id))
+      .map(({ id, from, to, typeId, note, createdAt, updatedAt }) => ({ id, from, to, typeId, ...(note ? { note } : {}), createdAt, updatedAt })),
+    ...(relations.deleted?.length ? { deleted: [...relations.deleted].sort() } : {}),
+  })
+}
+
+export function parseRelations(data: FileData | undefined): BookRelations | null {
+  const value = parseJson<Record<string, unknown>>(data)
+  if (!value || typeof value !== 'object' || !Array.isArray(value.types) || !Array.isArray(value.relations)) return null
+  const str = (v: unknown): v is string => typeof v === 'string' && v.trim() !== ''
+  const types = value.types.flatMap((raw): RelationType[] => {
+    const t = raw as Record<string, unknown>
+    if (!t || !str(t.id) || !str(t.forward)) return []
+    return [{ id: t.id, forward: t.forward, ...(str(t.backward) ? { backward: t.backward } : {}) }]
+  })
+  const relations = value.relations.flatMap((raw): Relation[] => {
+    const r = raw as Record<string, unknown>
+    if (!r || !str(r.id) || !str(r.from) || !str(r.to) || !str(r.typeId)) return []
+    return [{ id: r.id, from: r.from, to: r.to, typeId: r.typeId, ...(str(r.note) ? { note: r.note } : {}), createdAt: Number(r.createdAt) || 0, updatedAt: Number(r.updatedAt) || 0 }]
+  })
+  const result: BookRelations = { types, relations }
+  const deleted = Array.isArray(value.deleted) ? value.deleted.filter(str) : []
+  if (deleted.length) result.deleted = deleted
+  return result
+}
+
+/** Both sides changed: everything from both, newer relationship versions win, deletions from either side kept. */
+export function mergeRelations(mine: BookRelations, theirs: BookRelations): BookRelations {
+  const deleted = [...new Set([...(mine.deleted ?? []), ...(theirs.deleted ?? [])])].sort()
+  const gone = new Set(deleted)
+  const types = new Map<string, RelationType>()
+  for (const type of [...theirs.types, ...mine.types]) if (!gone.has(type.id)) types.set(type.id, type)
+  const relations = new Map<string, Relation>()
+  for (const relation of [...theirs.relations, ...mine.relations]) {
+    if (gone.has(relation.id) || gone.has(relation.typeId)) continue
+    const other = relations.get(relation.id)
+    if (!other || other.updatedAt <= relation.updatedAt) relations.set(relation.id, relation)
+  }
+  const merged: BookRelations = { types: [...types.values()], relations: [...relations.values()].sort((a, b) => a.createdAt - b.createdAt) }
+  if (deleted.length) merged.deleted = deleted
+  return merged
 }
 
 /** place.json: where text was last changed. */
@@ -475,6 +526,8 @@ export function filesToBundle(bookId: string, files: FileSet): BookBundle {
   if (spelling) book.spelling = spelling
   const notes = parseNotes(files.get(`${prefix}notes.json`))
   if (notes?.length) book.notes = notes
+  const relations = parseRelations(files.get(`${prefix}wiki/relations.json`))
+  if (relations) book.relations = relations
   const stars = stringList(parseJson<unknown>(files.get(`${prefix}wiki/stars.json`)))
   if (stars.length > 0) book.wikiStars = stars
   const wikiOrder = parseOrder(files.get(`${prefix}wiki/order.json`))
@@ -558,7 +611,7 @@ export function parseVersion(bookId: string, data: FileData | undefined): Chapte
   return version
 }
 
-export type PathKind = 'book' | 'chapter' | 'outline' | 'folders' | 'entry' | 'image' | 'tags' | 'templates' | 'style' | 'dates' | 'place' | 'wikiOrder' | 'folderColors' | 'notes' | 'stars' | 'templateBlocks' | 'spelling' | 'collection' | 'version' | 'status' | 'comments'
+export type PathKind = 'book' | 'chapter' | 'outline' | 'folders' | 'entry' | 'image' | 'tags' | 'templates' | 'style' | 'dates' | 'place' | 'wikiOrder' | 'folderColors' | 'notes' | 'stars' | 'templateBlocks' | 'spelling' | 'collection' | 'version' | 'status' | 'comments' | 'relations'
 
 /** What a repository path holds, or null for files the app does not manage. */
 export function classifyPath(path: string): { bookId: string; kind: PathKind; id: string } | null {
@@ -577,6 +630,7 @@ export function classifyPath(path: string): { bookId: string; kind: PathKind; id
   if (rest === 'place.json') return { bookId, kind: 'place', id: bookId }
   if (rest === 'wiki/templates.json') return { bookId, kind: 'templates', id: bookId }
   if (rest === 'wiki/order.json') return { bookId, kind: 'wikiOrder', id: bookId }
+  if (rest === 'wiki/relations.json') return { bookId, kind: 'relations', id: bookId }
   if (rest === 'wiki/colors.json') return { bookId, kind: 'folderColors', id: bookId }
   if (rest === 'wiki/template-blocks.json') return { bookId, kind: 'templateBlocks', id: bookId }
   if (rest === 'notes.json') return { bookId, kind: 'notes', id: bookId }

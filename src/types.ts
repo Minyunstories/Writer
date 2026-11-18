@@ -21,6 +21,33 @@ export interface Book {
   notes?: BookNote[]
   /** Spelling and grammar check: English variant, words that are right, ignored spots. */
   spelling?: BookSpelling
+  /** Relationships between wiki entries, and the kinds the writer defined. */
+  relations?: BookRelations
+}
+
+/** A kind of relationship, named from each side: "Lehrer von" / "Schüler von". No backward name: the same both ways. */
+export interface RelationType {
+  id: string
+  forward: string
+  backward?: string
+}
+
+/** "from" is <forward> "to"; seen from "to", it is <backward>. */
+export interface Relation {
+  id: string
+  from: string
+  to: string
+  typeId: string
+  note?: string
+  createdAt: number
+  updatedAt: number
+}
+
+export interface BookRelations {
+  types: RelationType[]
+  relations: Relation[]
+  /** Ids of deleted types and relations, so a sync does not bring them back. */
+  deleted?: string[]
 }
 
 export type EnglishDialect = 'american' | 'british' | 'australian' | 'canadian'

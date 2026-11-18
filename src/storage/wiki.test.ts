@@ -221,3 +221,14 @@ test('a folder colour can be set and cleared; junk is ignored', async () => {
   await setFolderColor(folder.id, null)
   expect((await listFolders(book.id))[0].color).toBeUndefined()
 })
+
+test('an image becomes the portrait by moving it to the front', async () => {
+  const { setPortrait } = await import('./wiki')
+  const book = await createBook('B')
+  const entry = await createEntry(book.id, 'Mira')
+  const pixel = () => ({ type: 'image/webp', data: new Uint8Array([1]).buffer, width: 1, height: 1 })
+  const first = await addImage(entry.id, pixel())
+  const second = await addImage(entry.id, pixel())
+  await setPortrait(second.id)
+  expect((await getEntry(entry.id))!.imageIds).toEqual([second.id, first.id])
+})

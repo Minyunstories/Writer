@@ -349,6 +349,18 @@ export async function getImage(id: string): Promise<WikiImage | undefined> {
   return (await db()).get('wikiImages', id)
 }
 
+/** The first image is the entry's portrait: this one moves to the front. */
+export async function setPortrait(id: string): Promise<void> {
+  const tx = (await db()).transaction(['wikiEntries', 'wikiImages'], 'readwrite')
+  const image = await tx.objectStore('wikiImages').get(id)
+  const entry = image && (await tx.objectStore('wikiEntries').get(image.entryId))
+  if (entry && entry.imageIds[0] !== id && entry.imageIds.includes(id)) {
+    await tx.objectStore('wikiEntries').put({ ...entry, imageIds: [id, ...entry.imageIds.filter((other) => other !== id)], updatedAt: Date.now() })
+  }
+  await tx.done
+  announceChange()
+}
+
 export async function removeImage(id: string): Promise<void> {
   const tx = (await db()).transaction(['wikiEntries', 'wikiImages'], 'readwrite')
   const image = await tx.objectStore('wikiImages').get(id)

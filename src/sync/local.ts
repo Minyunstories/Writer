@@ -24,6 +24,9 @@ import {
   parseDates,
   parseStatus,
   parseComments,
+  parseRelations,
+  mergeRelations,
+  relationsFile,
   parseEntry,
   parseJson,
   parseStyle,
@@ -89,7 +92,7 @@ export async function readLocalFiles(): Promise<FileSet> {
   return files
 }
 
-const KIND_ORDER = ['book', 'style', 'place', 'folders', 'templates', 'templateBlocks', 'chapter', 'outline', 'tags', 'dates', 'status', 'comments', 'entry', 'wikiOrder', 'folderColors', 'notes', 'stars', 'spelling', 'collection', 'version', 'image']
+const KIND_ORDER = ['book', 'style', 'place', 'folders', 'templates', 'templateBlocks', 'chapter', 'outline', 'tags', 'dates', 'status', 'comments', 'entry', 'wikiOrder', 'folderColors', 'notes', 'relations', 'stars', 'spelling', 'collection', 'version', 'image']
 
 /**
  * Applies changes from the repository to this device, file by file, in one transaction.
@@ -383,6 +386,24 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
     if (!conflict && (snapshotText(path) ?? '') !== localText) return
     const next = conflict ? mergeCollections(local, remote) : remote
     await shared.put({ ...next, id: COLLECTION_ID })
+  }
+
+  /** Relationships: the repository's, unless changed here since the run was planned; on conflict merged. */
+  async function writeRelations(path: string, bookId: string, data: FileData | undefined, conflict: boolean) {
+    const remote = parseRelations(data)
+    if (!remote) {
+      skipped.push(path)
+      return
+    }
+    const book = await books.get(bookId)
+    if (!book) return
+    const localText = (book.relations && relationsFile(book.relations)) ?? ''
+    if (!conflict && (snapshotText(path) ?? '') !== localText) return
+    const next = conflict && book.relations ? mergeRelations(book.relations, remote) : remote
+    const updated: Book = { ...book }
+    if (relationsFile(next)) updated.relations = next
+    else delete updated.relations
+    await books.put(updated)
   }
 
   /** Spelling settings: the repository's, unless changed here; if both changed, word lists are joined. */
@@ -717,6 +738,7 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
       else if (info.kind === 'dates') await writeDates(path, info.bookId, data, conflict)
       else if (info.kind === 'status') await writeStatus(path, info.bookId, data)
       else if (info.kind === 'comments') await writeComments(path, info.bookId, data, conflict)
+      else if (info.kind === 'relations') await writeRelations(path, info.bookId, data, conflict)
       else if (info.kind === 'wikiOrder') await writeOrder(path, info.bookId, data, conflict)
       else if (info.kind === 'folderColors') await writeColors(path, info.bookId, data, conflict)
       else if (info.kind === 'notes') await writeNotes(path, info.bookId, data, conflict)
@@ -746,6 +768,7 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
       else if (info.kind === 'dates') await writeDates(item.path, info.bookId, '{}', false)
       else if (info.kind === 'status') await writeStatus(item.path, info.bookId, '{}')
       else if (info.kind === 'comments') await writeComments(item.path, info.bookId, '{}', false)
+      else if (info.kind === 'relations') await writeRelations(item.path, info.bookId, '{"types":[],"relations":[]}', false)
       else if (info.kind === 'style') await removeStyle(item.path, info.bookId)
       else if (info.kind === 'place') await removePlace(item.path, info.bookId)
       else if (info.kind === 'wikiOrder') await writeOrder(item.path, info.bookId, '{}', false)

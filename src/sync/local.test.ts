@@ -526,3 +526,23 @@ test('comments: taken over, kept when changed here during the run, merged by com
   await apply({ remove: [`${p}comments.json`], snapshot: await readLocalFiles() })
   expect((await getChapter(a.id))!.comments).toBeUndefined()
 })
+
+test('relationships: taken over, kept when changed here during the run, merged on conflict', async () => {
+  const { addRelation, addRelationType, deleteRelation } = await import('../storage/relations')
+  const { p, book } = await seed()
+  const remote = { types: [{ id: 't1', forward: 'Lehrer von', backward: 'Schüler von' }], relations: [{ id: 'r1', from: 'a', to: 'b', typeId: 't1', createdAt: 1, updatedAt: 1 }] }
+  await apply({ write: new Map([[`${p}wiki/relations.json`, JSON.stringify(remote)]]), snapshot: await readLocalFiles() })
+  expect((await getBook(book.id))!.relations).toEqual(remote)
+  const planned = await readLocalFiles()
+  const type = await addRelationType(book.id, 'befreundet mit')
+  await apply({ write: new Map([[`${p}wiki/relations.json`, JSON.stringify({ types: [], relations: [] })]]), snapshot: planned })
+  expect((await getBook(book.id))!.relations!.types).toHaveLength(2)
+  await addRelation(book.id, { from: 'c', to: 'd', typeId: type.id })
+  await deleteRelation(book.id, 'r1')
+  await applyFull({ conflicts: [{ path: `${p}wiki/relations.json`, remote: JSON.stringify(remote) }], snapshot: await readLocalFiles() })
+  const merged = (await getBook(book.id))!.relations!
+  expect(merged.relations.map((r) => r.from)).toEqual(['c'])
+  expect(merged.types.map((t) => t.forward).sort()).toEqual(['Lehrer von', 'befreundet mit'])
+  await apply({ remove: [`${p}wiki/relations.json`], snapshot: await readLocalFiles() })
+  expect((await getBook(book.id))!.relations).toBeUndefined()
+})

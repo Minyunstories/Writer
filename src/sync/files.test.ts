@@ -298,3 +298,15 @@ test('comments travel in comments.json, per chapter', () => {
   expect(classifyPath('books/b1/comments.json')).toEqual({ bookId: 'b1', kind: 'comments', id: 'b1' })
   expect(filesToBundle('b1', files).chapters.find((chapter) => chapter.id === id)!.comments).toEqual([comment])
 })
+
+test('relationships travel in wiki/relations.json', () => {
+  const relations = {
+    types: [{ id: 't1', forward: 'Lehrer von', backward: 'Schüler von' }],
+    relations: [{ id: 'r1', from: 'e1', to: 'e2', typeId: 't1', note: 'seit dem Brand', createdAt: 1, updatedAt: 2 }],
+    deleted: ['old'],
+  }
+  const files = bundleToFiles({ ...bundle, book: { ...book, relations } })
+  expect(classifyPath('books/b1/wiki/relations.json')).toEqual({ bookId: 'b1', kind: 'relations', id: 'b1' })
+  expect(filesToBundle('b1', files).book.relations).toEqual(relations)
+  expect(bundleToFiles({ ...bundle, book: { ...book, relations: { types: [], relations: [] } } }).has('books/b1/wiki/relations.json')).toBe(false)
+})

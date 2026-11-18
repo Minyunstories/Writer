@@ -201,3 +201,15 @@ test('an entry changed elsewhere while typing here is not overwritten; my versio
   await waitFor(() => expect(name).toHaveValue('Pascal'))
   await waitFor(() => expect(screen.getByLabelText('Notizen')).toHaveTextContent('vom anderen Gerät'))
 })
+
+test('the first image is the portrait beside the name; another image can take its place', async () => {
+  const { entry, user } = await setup()
+  await user.upload(screen.getByLabelText('Bild hinzufügen'), [new File(['x'], 'a.png', { type: 'image/png' }), new File(['y'], 'b.png', { type: 'image/png' })])
+  await screen.findByRole('img', { name: 'Bild 2 von Pascal' })
+  expect(screen.getByRole('img', { name: 'Porträt von Pascal' })).toBeInTheDocument()
+  const [first, second] = (await getEntry(entry.id))!.imageIds
+  const secondItem = screen.getByRole('img', { name: 'Bild 2 von Pascal' }).closest('li')!
+  await user.click(within(secondItem).getByRole('button', { name: 'Als Porträt' }))
+  await waitFor(async () => expect((await getEntry(entry.id))!.imageIds).toEqual([second, first]))
+  expect(within(screen.getByRole('img', { name: 'Bild 1 von Pascal' }).closest('li')!).getByText('Porträt')).toBeInTheDocument()
+})
