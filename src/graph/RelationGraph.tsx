@@ -274,21 +274,23 @@ export function RelationGraph({ book, entries, folders, onOpenEntry, onChanged }
             </button>
           ))}
         </span>
-        <button className="ghost" title="Alle Figuren ins Bild holen" onClick={fit}>
-          Alles zeigen
-        </button>
-        {book.graph && (
-          <button
-            className="ghost"
-            title="Alle Figuren wieder von selbst anordnen"
-            onClick={() => {
-              setDragged({})
-              void clearGraph(book.id).then(() => onChanged?.())
-            }}
-          >
-            Neu anordnen
+        <span className="relation-graph-actions">
+          <button className="ghost" title="Alle Figuren ins Bild holen" onClick={fit}>
+            Alles zeigen
           </button>
-        )}
+          {book.graph && (
+            <button
+              className="ghost"
+              title="Alle Figuren wieder von selbst anordnen"
+              onClick={() => {
+                setDragged({})
+                void clearGraph(book.id).then(() => onChanged?.())
+              }}
+            >
+              Neu anordnen
+            </button>
+          )}
+        </span>
       </div>
 
       {nodeIds.length === 0 ? (

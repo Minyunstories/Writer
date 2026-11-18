@@ -62,3 +62,10 @@ test('kinds can be hidden and the network narrowed to a folder', async () => {
   await user.selectOptions(screen.getByLabelText('Ordner'), 'Personen')
   expect(within(graph).getAllByRole('button').map((node) => node.getAttribute('aria-label')).sort()).toEqual(['Lea', 'Mira', 'Tom'])
 })
+
+test('"Alles zeigen" and "Neu anordnen" stay together in one group', () => {
+  render(<RelationGraph book={{ ...book, graph: { mira: { x: 0, y: 0 } } } as unknown as Book} entries={entries} folders={folders} onOpenEntry={vi.fn()} />)
+  const actions = screen.getByRole('button', { name: 'Alles zeigen' }).parentElement!
+  expect(actions).toHaveClass('relation-graph-actions')
+  expect(within(actions).getByRole('button', { name: 'Neu anordnen' })).toBeInTheDocument()
+})

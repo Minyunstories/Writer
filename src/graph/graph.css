@@ -1,6 +1,8 @@
 .relation-graph {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  /* The canvas row never gets smaller than the canvas (min-height below); if the page is too
+     short for it (phone), the page scrolls instead of laying the list over the network. */
+  grid-template-rows: auto minmax(320px, 1fr) auto auto;
   gap: 0.6rem;
   height: 100%;
   min-height: 0;
@@ -10,7 +12,7 @@
 .book-scroll.graph-mode {
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-y: auto;
 }
 
 .book-scroll.graph-mode .wiki-graph-page {
@@ -60,6 +62,12 @@
   width: 10px;
   height: 10px;
   border-radius: 50%;
+}
+
+.relation-graph-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
 }
 
 .relation-graph-canvas {
@@ -156,4 +164,16 @@
 .relation-graph-empty {
   margin: 0;
   font-size: 12px;
+}
+
+/* Phone: folder, then the kinds across the full width, then the two buttons. */
+@media (max-width: 600px) {
+  .relation-graph-tools label,
+  .relation-graph-tools select {
+    max-width: 100%;
+  }
+
+  .relation-graph-kinds {
+    flex-basis: 100%;
+  }
 }

@@ -55,6 +55,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
-    css: false,
+    // CSS is skipped in tests, except stylesheets whose sizes are checked as text.
+    css: { include: [/graph\.css/] },
   },
 })
