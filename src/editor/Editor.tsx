@@ -1,6 +1,7 @@
 import { showSynonyms, synonyms } from '../synonyms/synonymBox'
 import { autoVersion } from '../storage/versions'
 import { VersionsDialog } from '../versions/VersionsDialog'
+import { Icon } from '../ui/Icon'
 import { StatusPicker } from '../book/StatusPicker'
 import { addCommentAtSelection, commentMarks, refreshComments } from '../comments/commentMarks'
 import { addComment, COMMENTS_EVENT, deleteComment, placeComments, resolveAnchor, updateComment } from '../storage/comments'
@@ -433,7 +434,7 @@ export function Editor({ book, chapter, onChanged, extraExtensions, jumpTo, onJu
           }}
         >
           <span className="editor-highlight-swatch" aria-hidden="true" />
-          Markieren
+          <span className="tool-label">Markieren</span>
         </button>
         <button
           type="button"
@@ -447,7 +448,8 @@ export function Editor({ book, chapter, onChanged, extraExtensions, jumpTo, onJu
             view.focus()
           }}
         >
-          Synonyme
+          <Icon name="synonyms" />
+          <span className="tool-label">Synonyme</span>
         </button>
         <GrammarToggle />
  <button
@@ -460,17 +462,21 @@ export function Editor({ book, chapter, onChanged, extraExtensions, jumpTo, onJu
             view?.focus()
           }}
         >
-          Kommentar
+          <Icon name="comment" />
+          <span className="tool-label">Kommentar</span>
         </button>
         <button className="editor-highlight" title="Gesicherte Fassungen dieses Kapitels" onClick={() => setVersionsOpen(true)}>
-          Fassungen
+          <Icon name="versions" />
+          <span className="tool-label">Fassungen</span>
         </button>
         <button className="editor-highlight" title="Fokusmodus: nur der Text (Strg+Umschalt+Enter, Esc beendet)" onMouseDown={(event) => event.preventDefault()} onClick={toggleFocus}>
-          Fokus
+          <Icon name="focus" />
+          <span className="tool-label">Fokus</span>
         </button>
         <span className="editor-toolbar-divider" aria-hidden="true" />
         <label className="editor-font">
-          <span className="muted">Schrift</span>
+          <Icon name="font" />
+          <span className="muted tool-label">Schrift</span>
           <select value={font} onChange={(event) => void changeFont(event.target.value as FontId)}>
             {FONTS.map((f) => (
               <option key={f.id} value={f.id}>
@@ -568,7 +574,8 @@ function GrammarToggle() {
         setOn(!on)
       }}
     >
-      Prüfung
+      <Icon name="check" />
+      <span className="tool-label">Prüfung</span>
     </button>
   )
 }
