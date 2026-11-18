@@ -1,0 +1,37 @@
+.comments-chapter h3 {
+  margin: 0 0 0.4rem;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+}
+
+.note.comment {
+  box-shadow: inset 3px 0 0 rgba(120, 160, 220, 0.85);
+}
+
+.comment-jump {
+  display: grid;
+  gap: 0.25rem;
+  text-align: left;
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.comment-quote {
+  font-family: var(--font-text);
+  font-size: 13px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.comment-where {
+  margin: 0;
+  font-size: 12px;
+}
+
+.comments-error {
+  margin: 0;
+  color: var(--danger, #e07a6a);
+}

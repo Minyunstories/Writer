@@ -54,12 +54,19 @@ export function SyncStatus() {
   const sync = useSync()
   const [open, setOpen] = useState(false)
   if (!sync) return null
+  const waiting = sync.remoteWaiting && (sync.state === 'idle' || sync.state === 'pending')
+  const label = waiting ? 'Neues vom anderen Gerät' : LABEL[sync.state]
 
   return (
     <>
-      <button className={`ghost sync-status sync-${sync.state}`} aria-label={`Sync: ${LABEL[sync.state]}`} onClick={() => setOpen(true)}>
+      <button
+        className={`ghost sync-status sync-${waiting ? 'remote' : sync.state}`}
+        aria-label={`Sync: ${label}`}
+        title={waiting ? 'Ein anderes Gerät hat etwas geändert. Klicken und „Jetzt synchronisieren“ holt es hierher.' : undefined}
+        onClick={() => setOpen(true)}
+      >
         <span className="sync-dot" aria-hidden="true" />
-        <span className="sync-label">{LABEL[sync.state]}</span>
+        <span className="sync-label">{label}</span>
       </button>
       {open && <SyncSettingsDialog onClose={() => setOpen(false)} />}
       {sync.deletion && (

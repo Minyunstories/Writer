@@ -719,3 +719,17 @@ test('typography for the whole book changes the chapters and keeps a version fir
   await waitFor(async () => expect((await db.getChapter(first.id))!.content).toBe('“Hi,” she said – quietly.'))
   expect((await listVersions(first.id))[0].label).toBe('Vor der Typografie')
 })
+
+test('scenes of the open chapter are listed under it and jump to their start', async () => {
+  const user = userEvent.setup()
+  const book = await createBook('Sturmlied')
+  const chapter = await createChapter(book.id, 'Anfang', 'The storm came.\n\n***\n\nMorning came.')
+  renderAt(`/book/${book.id}/chapters/${chapter.id}`, true)
+  const nav = await screen.findByRole('navigation', { name: 'Buchnavigation' })
+  const second = await within(nav).findByRole('button', { name: /Szene 2.*Morning came\./ })
+  await user.click(second)
+  await waitFor(() => {
+    const dom = document.querySelector<HTMLElement>('.cm-editor')!
+    expect(EditorView.findFromDOM(dom)!.state.selection.main.head).toBe(22)
+  })
+})

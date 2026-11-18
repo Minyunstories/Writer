@@ -508,3 +508,21 @@ test('status: taken over, kept when set here during the run, cleared when remove
   await apply({ remove: [`${p}status.json`], snapshot: await readLocalFiles() })
   expect((await getChapter(a.id))!.status).toBeUndefined()
 })
+
+test('comments: taken over, kept when changed here during the run, merged by comment on conflict', async () => {
+  const { addComment, updateComment } = await import('../storage/comments')
+  const { p, a } = await seed()
+  const remote = { id: 'r1', from: 0, to: 3, quote: 'alt', text: 'Von dort', done: false, createdAt: 1, updatedAt: 1 }
+  await apply({ write: new Map([[`${p}comments.json`, JSON.stringify({ [a.id]: [remote] })]]), snapshot: await readLocalFiles() })
+  expect((await getChapter(a.id))!.comments!.map((c) => c.text)).toEqual(['Von dort'])
+  const planned = await readLocalFiles()
+  await updateComment(a.id, 'r1', { text: 'Hier geändert' })
+  await apply({ write: new Map([[`${p}comments.json`, JSON.stringify({})]]), snapshot: planned })
+  expect((await getChapter(a.id))!.comments!.map((c) => c.text)).toEqual(['Hier geändert'])
+  const mine = await addComment(a.id, { from: 1, to: 2, quote: 'l', text: 'Neu hier' })
+  await applyFull({ conflicts: [{ path: `${p}comments.json`, remote: JSON.stringify({ [a.id]: [remote] }) }], snapshot: await readLocalFiles() })
+  expect((await getChapter(a.id))!.comments!.map((c) => c.text).sort()).toEqual(['Hier geändert', 'Neu hier'])
+  expect(mine.id).toBeTruthy()
+  await apply({ remove: [`${p}comments.json`], snapshot: await readLocalFiles() })
+  expect((await getChapter(a.id))!.comments).toBeUndefined()
+})

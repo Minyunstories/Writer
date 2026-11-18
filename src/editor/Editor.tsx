@@ -2,6 +2,8 @@ import { showSynonyms, synonyms } from '../synonyms/synonymBox'
 import { autoVersion } from '../storage/versions'
 import { VersionsDialog } from '../versions/VersionsDialog'
 import { StatusPicker } from '../book/StatusPicker'
+import { addCommentAtSelection, commentMarks, refreshComments } from '../comments/commentMarks'
+import { addComment, COMMENTS_EVENT, deleteComment, placeComments, resolveAnchor, updateComment } from '../storage/comments'
 import { currentParagraph, FOCUS_EVENT, isFocusMode, setFocusMode } from './focusMode'
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
 import { Annotation, EditorSelection, EditorState, StateEffect, StateField, type Extension } from '@codemirror/state'
@@ -115,6 +117,30 @@ export function Editor({ book, chapter, onChanged, extraExtensions, jumpTo, onJu
   const [words, setWords] = useState(() => countWords(chapter.content))
   const [saveState, setSaveState] = useState<SaveState>('saved')
   const [versionsOpen, setVersionsOpen] = useState(false)
+  const [commentError, setCommentError] = useState(false)
+  const [commentHint, setCommentHint] = useState(false)
+  useEffect(() => {
+    if (!commentHint) return
+    const timer = window.setTimeout(() => setCommentHint(false), 3000)
+    return () => window.clearTimeout(timer)
+  }, [commentHint])
+  // Comments changed in the panel or by a sync run: show them here too.
+  useEffect(() => {
+    const onComments = (event: Event) => {
+      const id = (event as CustomEvent<string | undefined>).detail
+      if (id !== undefined && id !== null && id !== chapter.id) return
+      void getChapter(chapter.id).then((stored) => {
+        const view = viewRef.current
+        if (stored && view) refreshComments(view, (stored.comments ?? []).map((comment) => ({ ...comment, ...resolveAnchor(view.state.doc.toString(), comment) })))
+      })
+    }
+    window.addEventListener(COMMENTS_EVENT, onComments)
+    window.addEventListener(SYNCED_EVENT, onComments as EventListener)
+    return () => {
+      window.removeEventListener(COMMENTS_EVENT, onComments)
+      window.removeEventListener(SYNCED_EVENT, onComments as EventListener)
+    }
+  }, [chapter.id])
   const [focus, setFocus] = useState(isFocusMode)
   useEffect(() => {
     const onFocusChange = () => setFocus(isFocusMode())
@@ -177,9 +203,13 @@ export function Editor({ book, chapter, onChanged, extraExtensions, jumpTo, onJu
 
     void (async () => {
       let content = chapter.content
+      let comments = chapter.comments ?? []
       try {
         const stored = await getChapter(chapter.id)
-        if (stored) content = stored.content
+        if (stored) {
+          content = stored.content
+          comments = stored.comments ?? []
+        }
       } catch {
         if (!cancelled) setLoadError(true)
         return
@@ -198,6 +228,16 @@ export function Editor({ book, chapter, onChanged, extraExtensions, jumpTo, onJu
             writingMarkdown(),
             synonyms(),
             currentParagraph,
+            commentMarks(
+              comments.map((comment) => ({ ...comment, ...resolveAnchor(content, comment) })),
+              {
+                onAdd: (place) => addComment(chapter.id, { ...place, text: '' }),
+                onUpdate: (id, patch) => void updateComment(chapter.id, id, patch).catch(() => setCommentError(true)),
+                onDelete: (id) => void deleteComment(chapter.id, id).catch(() => setCommentError(true)),
+                onPlace: (places) => void placeComments(chapter.id, places).catch(() => {}),
+              },
+            ),
+            keymap.of([{ key: 'Mod-Alt-m', run: addCommentAtSelection, preventDefault: true }]),
             typewriter,
             keymap.of([...defaultKeymap, ...historyKeymap]),
             flashField,
@@ -410,6 +450,18 @@ export function Editor({ book, chapter, onChanged, extraExtensions, jumpTo, onJu
           Synonyme
         </button>
         <GrammarToggle />
+ <button
+          className="editor-highlight"
+          title="Kommentar zum markierten Text (Strg+Alt+M)"
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => {
+            const view = viewRef.current
+            if (view && !addCommentAtSelection(view)) setCommentHint(true)
+            view?.focus()
+          }}
+        >
+          Kommentar
+        </button>
         <button className="editor-highlight" title="Gesicherte Fassungen dieses Kapitels" onClick={() => setVersionsOpen(true)}>
           Fassungen
         </button>
@@ -430,6 +482,11 @@ export function Editor({ book, chapter, onChanged, extraExtensions, jumpTo, onJu
         <ZoomControl area="editor" />
       </div>
 
+      {(commentHint || commentError) && (
+        <p className="editor-hint" role="status">
+          {commentError ? 'Der Kommentar konnte nicht gespeichert werden.' : 'Erst den Text markieren, zu dem der Kommentar gehört.'}
+        </p>
+      )}
       {focus && (
         <button className="focus-exit ghost" onMouseDown={(event) => event.preventDefault()} onClick={toggleFocus}>
           Fokus beenden

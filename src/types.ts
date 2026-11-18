@@ -67,6 +67,20 @@ export interface Chapter {
   date?: string
   /** How far the chapter is. Missing when not set. */
   status?: ChapterStatus
+  /** Comments on parts of the text. Missing when there are none. */
+  comments?: ChapterComment[]
+  updatedAt: number
+}
+
+/** A comment on a stretch of chapter text. The quote finds the place again if the text moved. */
+export interface ChapterComment {
+  id: string
+  from: number
+  to: number
+  quote: string
+  text: string
+  done: boolean
+  createdAt: number
   updatedAt: number
 }
 

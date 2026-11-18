@@ -1,4 +1,5 @@
 import { StatusPicker } from '../book/StatusPicker'
+import { splitScenes } from '../lib/scenes'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ZoomControl } from '../book/ZoomControl'
@@ -154,6 +155,7 @@ function OutlineCard({
   onStatusChanged,
 }: CardProps) {
   const [over, setOver] = useState(false)
+  const scenes = useMemo(() => splitScenes(chapter.content), [chapter.content])
   // The note is read from storage, not from the chapter list, which may be outdated.
   const [loaded, setLoaded] = useState<{ text: string; version: number } | null>(null)
   const [conflict, setConflict] = useState(false)
@@ -318,6 +320,17 @@ function OutlineCard({
           </button>
         </header>
         <Tags tags={chapter.tags ?? []} suggestions={tagSuggestions} onChange={onTagsChange} onFilter={onFilter} />
+        {scenes.length > 1 && (
+          <ol className="outline-scenes" aria-label={`Szenen in „${chapter.title}“`}>
+            {scenes.map((scene, sceneIndex) => (
+              <li key={sceneIndex}>
+                <span className="outline-scene-number">{sceneIndex + 1}</span>
+                <span className="outline-scene-preview">{scene.preview || '(leer)'}</span>
+                <span className="muted outline-scene-words">{formatWordCount(scene.words)}</span>
+              </li>
+            ))}
+          </ol>
+        )}
         {mentionGroups.length > 0 && (
           <div className="outline-mentions">
             {mentionGroups.map((group) => {

@@ -417,3 +417,31 @@ input.outline-tag-input:focus {
     padding: 0 0.35em;
   }
 }
+
+.outline-scenes {
+  list-style: none;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.15rem;
+  font-size: 12px;
+}
+
+.outline-scenes li {
+  display: grid;
+  grid-template-columns: 1.5rem 1fr auto;
+  gap: 0.4rem;
+  align-items: baseline;
+}
+
+.outline-scene-number {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.outline-scene-preview {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-text);
+}

@@ -1,4 +1,5 @@
 import { statusLabel } from '../lib/chapterStatus'
+import type { Scene } from '../lib/scenes'
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import type { Book, Chapter } from '../types'
@@ -25,6 +26,9 @@ interface Props {
   onCreateChapter: () => void
   onRenameChapter: (chapter: Chapter) => void
   onDeleteChapter: (chapter: Chapter) => void
+  /** Scenes of the open chapter (shown when there are at least two). */
+  scenes?: Scene[]
+  onOpenScene?: (index: number) => void
 }
 
 export function Sidebar({
@@ -38,6 +42,8 @@ export function Sidebar({
   onNavigate,
   onCreateChapter,
   onRenameChapter,
+  scenes = [],
+  onOpenScene,
   onDeleteChapter,
 }: Props) {
   return (
@@ -99,6 +105,18 @@ export function Sidebar({
                     >
                       ×
                     </button>
+                    {active && scenes.length > 1 && (
+                      <ol className="scene-list" aria-label="Szenen">
+                        {scenes.map((scene, index) => (
+                          <li key={index}>
+                            <button className="scene-link" onClick={() => onOpenScene?.(index)}>
+                              <span className="scene-number">Szene {index + 1}</span>
+                              <span className="scene-preview">{scene.preview || '(leer)'}</span>
+                            </button>
+                          </li>
+                        ))}
+                      </ol>
+                    )}
                   </li>
                 )
               })}

@@ -42,10 +42,10 @@ beforeEach(async () => {
 
 test('first sync fills an empty repository; a second run changes nothing', async () => {
   const { book, one } = await seedA()
-  expect(await sync(A)).toEqual({ pushed: 3, pulled: 0, conflicts: [] })
+  expect(await sync(A)).toMatchObject({ pushed: 3, pulled: 0, conflicts: [], head: (await repo.getHead())?.commit })
   expect((await repo.files()).get(`books/${book.id}/chapters/${one.id}.md`)).toBe('eins')
   expect(repo.commits).toBe(1)
-  expect(await sync(A)).toEqual({ pushed: 0, pulled: 0, conflicts: [] })
+  expect(await sync(A)).toMatchObject({ pushed: 0, pulled: 0, conflicts: [] })
   expect(repo.commits).toBe(1)
 })
 
@@ -188,7 +188,7 @@ test('a run interrupted after the commit does not commit twice', async () => {
   const head = (await repo.getHead())!
   await repo.commit({ parent: head.commit, baseTree: head.tree, write: new Map([[[...files.keys()].find((p) => p.endsWith(`${one.id}.md`))!, sha]]), remove: [], inline: new Map(), message: 'm' })
   const commits = repo.commits
-  expect(await sync(A)).toEqual({ pushed: 0, pulled: 0, conflicts: [] })
+  expect(await sync(A)).toMatchObject({ pushed: 0, pulled: 0, conflicts: [] })
   expect(repo.commits).toBe(commits)
   expect((await loadSyncState(repo.id))!.base.size).toBe(files.size)
 })

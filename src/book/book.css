@@ -687,3 +687,56 @@ a.sidebar-manuscript.active {
   margin-right: 0.45rem;
   vertical-align: 0.1em;
 }
+
+/* Scenes of the open chapter, below its title. */
+.chapter-list li:has(.scene-list) {
+  flex-wrap: wrap;
+}
+
+.scene-list {
+  flex-basis: 100%;
+  list-style: none;
+  margin: 0 0 0.4rem;
+  padding: 0 0.5rem 0 2.35rem;
+  display: grid;
+  gap: 0.1rem;
+}
+
+.chapter-list .scene-list li {
+  counter-increment: none;
+  display: block;
+  background: none;
+}
+
+.scene-link {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.5rem;
+  align-items: baseline;
+  text-align: left;
+  border: none;
+  background: none;
+  padding: 0.2rem 0.4rem;
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.scene-link:hover {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.scene-number {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.scene-preview {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-text);
+}

@@ -238,3 +238,15 @@ test('focus mode: the button and the shortcut switch it, Esc and the exit button
   await user.click(screen.getByRole('button', { name: 'Fokus beenden' }))
   expect(document.body).not.toHaveClass('focus-mode')
 })
+
+test('comments: added on the selection, stored, and shown again when the chapter opens', async () => {
+  const { getChapter } = await import('../storage/db')
+  const user = userEvent.setup()
+  const { chapter, view } = await setup('The storm came late.')
+  view.dispatch({ selection: { anchor: 4, head: 9 } })
+  await user.click(screen.getByRole('button', { name: 'Kommentar' }))
+  const field = await screen.findByRole('textbox', { name: 'Kommentar' })
+  await user.type(field, 'Zu laut?{Enter}')
+  await waitFor(async () => expect((await getChapter(chapter.id))!.comments).toEqual([expect.objectContaining({ from: 4, to: 9, quote: 'storm', text: 'Zu laut?' })]))
+  expect(view.dom.querySelector('.cm-mw-comment')?.textContent).toBe('storm')
+})

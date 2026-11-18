@@ -206,3 +206,10 @@ button.editor-grammar.on::before {
 .focus-exit:focus-visible {
   opacity: 1;
 }
+
+.editor-hint {
+  margin: 0 0.75rem;
+  font-size: 13px;
+  color: var(--text-muted);
+  text-align: right;
+}

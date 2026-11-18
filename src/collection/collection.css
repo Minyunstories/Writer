@@ -161,9 +161,10 @@
 .panel-tabs button {
   border: none;
   border-radius: 999px;
-  padding: 0.3rem 0.8rem;
+  padding: 0.3rem 0.6rem;
   background: transparent;
   color: var(--text-muted);
+  font-size: 13px;
 }
 
 .panel-tabs button[aria-selected='true'] {
@@ -197,4 +198,12 @@
   background: var(--bg);
   color: var(--text);
   resize: vertical;
+}
+
+.book-panel-header:has(.panel-tabs) {
+  gap: 0.5rem;
+}
+
+.book-panel-header .panel-tabs {
+  min-width: 0;
 }

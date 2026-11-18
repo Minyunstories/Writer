@@ -35,7 +35,9 @@ import { AddToCollectionDialog } from '../collection/AddToCollectionDialog'
 import { collectionCompletionSource } from '../collection/collectionComplete'
 import { parseCatalogue } from '../collection/collectionFile'
 import { CollectionPanel } from '../collection/CollectionPanel'
+import { CommentsPanel } from '../comments/CommentsPanel'
 import { useCollection } from '../collection/useCollection'
+import { splitScenes, type Scene } from '../lib/scenes'
 import { addToCollection, deleteCollectionItem, importIntoCollection } from '../storage/collection'
 import { EditorView, keymap, ViewPlugin } from '@codemirror/view'
 import { Prec } from '@codemirror/state'
@@ -106,7 +108,7 @@ export function BookView({ renderChapter }: Props) {
   const [freshEntryId, setFreshEntryId] = useState<string | null>(null)
   const [sidebarWidth, setSidebarWidth] = useSidebarWidth()
   const [notesOpen, setNotesOpen] = useState(false)
-  const [notesTab, setNotesTab] = useState<'notes' | 'collection'>('notes')
+  const [notesTab, setNotesTab] = useState<'notes' | 'collection' | 'comments'>('notes')
   const collection = useCollection()
   const collectionRef = useRef(collection)
   collectionRef.current = collection
@@ -114,6 +116,8 @@ export function BookView({ renderChapter }: Props) {
   const [collecting, setCollecting] = useState<{ text: string; source?: { chapterId: string; offset: number } } | null>(null)
   /** The chapter editor, for putting collection items in at the cursor. */
   const editorViewRef = useRef<EditorView | null>(null)
+  /** Scenes of the open chapter, from the text as it is being written. */
+  const [scenes, setScenes] = useState<Scene[]>([])
   const [searchOpen, setSearchOpen] = useState(false)
 
   /** Reloads folders and entries only; cheap enough to run after every wiki edit. */
@@ -212,9 +216,20 @@ export function BookView({ renderChapter }: Props) {
       links.extension,
       ViewPlugin.define((view) => {
         editorViewRef.current = view
+        setScenes(splitScenes(view.state.doc.toString()))
+        let timer: ReturnType<typeof setTimeout> | undefined
         return {
+          update: (update) => {
+            if (!update.docChanged) return
+            clearTimeout(timer)
+            timer = setTimeout(() => setScenes(splitScenes(update.view.state.doc.toString())), 600)
+          },
           destroy: () => {
-            if (editorViewRef.current === view) editorViewRef.current = null
+            clearTimeout(timer)
+            if (editorViewRef.current === view) {
+              editorViewRef.current = null
+              setScenes([])
+            }
           },
         }
       }),
@@ -481,6 +496,9 @@ export function BookView({ renderChapter }: Props) {
       <button role="tab" aria-selected={notesTab === 'collection'} onClick={() => setNotesTab('collection')}>
         Sammlung
       </button>
+      <button role="tab" aria-selected={notesTab === 'comments'} onClick={() => setNotesTab('comments')}>
+        Kommentare
+      </button>
     </span>
   )
 
@@ -584,6 +602,16 @@ export function BookView({ renderChapter }: Props) {
             onCreateChapter={() => void handleCreate()}
             onRenameChapter={(chapter) => setDialog({ kind: 'rename', chapter })}
             onDeleteChapter={(chapter) => setDialog({ kind: 'delete', chapter })}
+            scenes={scenes}
+            onOpenScene={(index) => {
+              const view = editorViewRef.current
+              if (!view) return
+              const scene = splitScenes(view.state.doc.toString())[index]
+              if (!scene) return
+              view.dispatch({ selection: { anchor: scene.from }, effects: EditorView.scrollIntoView(scene.from, { y: 'start', yMargin: 80 }) })
+              view.focus()
+              closeSidebarOnPhone()
+            }}
             outline={
               chapters.length === 0 ? (
                 <p className="muted sidebar-empty">Noch keine Kapitel</p>
@@ -742,6 +770,9 @@ export function BookView({ renderChapter }: Props) {
             onTypography={typographyEverywhere}
             onClose={() => setSearchOpen(false)}
           />
+        )}
+        {notesOpen && book && notesTab === 'comments' && (
+          <CommentsPanel bookId={book.id} tabs={panelTabs} onOpen={(chapterId, range) => openChapterAt(chapterId, range)} onClose={() => setNotesOpen(false)} />
         )}
         {notesOpen && book && notesTab === 'collection' && (
           <CollectionPanel

@@ -1,7 +1,7 @@
 import { cleanDate, cleanPlace, isColor } from '../lib/bookStyle'
 import { cleanSpelling } from '../storage/spelling'
 import { isStatus } from '../lib/chapterStatus'
-import type { Book, BookNote, Chapter, ChapterStatus, ChapterVersion, FontId, WikiEntry, WikiFolder, WikiImage, WikiProperty } from '../types'
+import type { Book, BookNote, Chapter, ChapterComment, ChapterStatus, ChapterVersion, FontId, WikiEntry, WikiFolder, WikiImage, WikiProperty } from '../types'
 import type { FileData } from './hash'
 
 export type { FileData } from './hash'
@@ -91,6 +91,8 @@ export function bundleToFiles({ book, chapters, folders, entries, images, versio
   if (dates) files.set(`${prefix}dates.json`, dates)
   const status = statusFile(ordered)
   if (status) files.set(`${prefix}status.json`, status)
+  const comments = commentsFile(ordered)
+  if (comments) files.set(`${prefix}comments.json`, comments)
   const place = placeFile(book)
   if (place) files.set(`${prefix}place.json`, place)
   const order = orderFile(book)
@@ -186,6 +188,43 @@ export function parseStatus(data: FileData | undefined): Record<string, ChapterS
   const value = parseJson<unknown>(data)
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
   return Object.fromEntries(Object.entries(value).filter(([, status]) => isStatus(status))) as Record<string, ChapterStatus>
+}
+
+/** comments.json: chapter id to its comments, in chapter order. Undefined when there are none. */
+export function commentsFile(ordered: Chapter[]): string | undefined {
+  const entries = ordered
+    .filter((chapter) => chapter.comments?.length)
+    .map((chapter) => [chapter.id, chapter.comments!.map(({ id, from, to, quote, text, done, createdAt, updatedAt }) => ({ id, from, to, quote, text, done, createdAt, updatedAt }))] as const)
+  return entries.length > 0 ? json(Object.fromEntries(entries)) : undefined
+}
+
+/** The usable comments of a comments.json; null when the file is not a JSON object. */
+export function parseComments(data: FileData | undefined): Record<string, ChapterComment[]> | null {
+  const value = parseJson<unknown>(data)
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const result: Record<string, ChapterComment[]> = {}
+  for (const [chapterId, list] of Object.entries(value)) {
+    if (!Array.isArray(list)) continue
+    const comments = list.flatMap((raw): ChapterComment[] => {
+      if (!raw || typeof raw !== 'object') return []
+      const c = raw as Record<string, unknown>
+      if (typeof c.id !== 'string' || typeof c.text !== 'string') return []
+      return [
+        {
+          id: c.id,
+          from: Math.max(0, Number(c.from) || 0),
+          to: Math.max(0, Number(c.to) || 0),
+          quote: typeof c.quote === 'string' ? c.quote : '',
+          text: c.text,
+          done: c.done === true,
+          createdAt: Number(c.createdAt) || 0,
+          updatedAt: Number(c.updatedAt) || 0,
+        },
+      ]
+    })
+    if (comments.length) result[chapterId] = comments
+  }
+  return result
 }
 
 /** place.json: where text was last changed. */
@@ -398,6 +437,7 @@ export function filesToBundle(bookId: string, files: FileSet): BookBundle {
   const tagMap = parseJson<Record<string, unknown>>(files.get(`${prefix}tags.json`)) ?? {}
   const dateMap = parseDates(files.get(`${prefix}dates.json`)) ?? {}
   const statusMap = parseStatus(files.get(`${prefix}status.json`)) ?? {}
+  const commentMap = parseComments(files.get(`${prefix}comments.json`)) ?? {}
   const chapters: Chapter[] = [...listed, ...unlisted.map((id) => ({ id, title: 'Unbenannt' }))].map((meta) => {
     const chapter: Chapter = {
       id: meta.id,
@@ -413,6 +453,8 @@ export function filesToBundle(bookId: string, files: FileSet): BookBundle {
     if (date) chapter.date = date
     const status = statusMap[meta.id]
     if (status) chapter.status = status
+    const comments = commentMap[meta.id]
+    if (comments) chapter.comments = comments
     return chapter
   })
 
@@ -516,7 +558,7 @@ export function parseVersion(bookId: string, data: FileData | undefined): Chapte
   return version
 }
 
-export type PathKind = 'book' | 'chapter' | 'outline' | 'folders' | 'entry' | 'image' | 'tags' | 'templates' | 'style' | 'dates' | 'place' | 'wikiOrder' | 'folderColors' | 'notes' | 'stars' | 'templateBlocks' | 'spelling' | 'collection' | 'version' | 'status'
+export type PathKind = 'book' | 'chapter' | 'outline' | 'folders' | 'entry' | 'image' | 'tags' | 'templates' | 'style' | 'dates' | 'place' | 'wikiOrder' | 'folderColors' | 'notes' | 'stars' | 'templateBlocks' | 'spelling' | 'collection' | 'version' | 'status' | 'comments'
 
 /** What a repository path holds, or null for files the app does not manage. */
 export function classifyPath(path: string): { bookId: string; kind: PathKind; id: string } | null {
@@ -531,6 +573,7 @@ export function classifyPath(path: string): { bookId: string; kind: PathKind; id
   if (rest === 'style.json') return { bookId, kind: 'style', id: bookId }
   if (rest === 'dates.json') return { bookId, kind: 'dates', id: bookId }
   if (rest === 'status.json') return { bookId, kind: 'status', id: bookId }
+  if (rest === 'comments.json') return { bookId, kind: 'comments', id: bookId }
   if (rest === 'place.json') return { bookId, kind: 'place', id: bookId }
   if (rest === 'wiki/templates.json') return { bookId, kind: 'templates', id: bookId }
   if (rest === 'wiki/order.json') return { bookId, kind: 'wikiOrder', id: bookId }

@@ -4,7 +4,7 @@ import type { IDBPTransaction } from 'idb'
 import { cleanPlace } from '../lib/bookStyle'
 import { cleanSpelling } from '../storage/spelling'
 import { cleanList, db, newId, type Schema } from '../storage/connection'
-import type { Book, Chapter, Collection, FontId, WikiEntry, WikiFolder, WikiImage } from '../types'
+import type { Book, Chapter, ChapterComment, Collection, FontId, WikiEntry, WikiFolder, WikiImage } from '../types'
 import {
   bundleToFiles,
   classifyPath,
@@ -23,6 +23,7 @@ import {
   entryToFile,
   parseDates,
   parseStatus,
+  parseComments,
   parseEntry,
   parseJson,
   parseStyle,
@@ -88,7 +89,7 @@ export async function readLocalFiles(): Promise<FileSet> {
   return files
 }
 
-const KIND_ORDER = ['book', 'style', 'place', 'folders', 'templates', 'templateBlocks', 'chapter', 'outline', 'tags', 'dates', 'status', 'entry', 'wikiOrder', 'folderColors', 'notes', 'stars', 'spelling', 'collection', 'version', 'image']
+const KIND_ORDER = ['book', 'style', 'place', 'folders', 'templates', 'templateBlocks', 'chapter', 'outline', 'tags', 'dates', 'status', 'comments', 'entry', 'wikiOrder', 'folderColors', 'notes', 'stars', 'spelling', 'collection', 'version', 'image']
 
 /**
  * Applies changes from the repository to this device, file by file, in one transaction.
@@ -537,6 +538,38 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
     }
   }
 
+  /**
+   * Comments: the repository's, except for chapters whose comments changed here since the run
+   * was planned. When both sides changed them, they are merged by comment and the newer one wins.
+   */
+  async function writeComments(path: string, bookId: string, data: FileData | undefined, conflict: boolean) {
+    const remote = parseComments(data)
+    if (!remote) {
+      skipped.push(path)
+      return
+    }
+    const planned = parseComments(change.snapshot.get(path)) ?? {}
+    const same = (a: ChapterComment[] | undefined, b: ChapterComment[] | undefined) => JSON.stringify(a ?? []) === JSON.stringify(b ?? [])
+    for (const chapter of await chapters.index('bookId').getAll(bookId)) {
+      const local = chapter.comments ?? []
+      const theirs = remote[chapter.id] ?? []
+      let next = theirs
+      if (conflict) {
+        const byId = new Map(theirs.map((comment) => [comment.id, comment]))
+        for (const comment of local) {
+          const other = byId.get(comment.id)
+          if (!other || other.updatedAt < comment.updatedAt) byId.set(comment.id, comment)
+        }
+        next = [...byId.values()].sort((a, b) => a.from - b.from)
+      } else if (!same(local, planned[chapter.id])) continue
+      if (same(next, local)) continue
+      const updated: Chapter = { ...chapter }
+      if (next.length) updated.comments = next
+      else delete updated.comments
+      await chapters.put(updated)
+    }
+  }
+
   async function writeFolders(path: string, bookId: string, data: FileData, conflict: boolean) {
     const list = parseJson<Omit<WikiFolder, 'bookId'>[]>(data)
     if (!Array.isArray(list)) {
@@ -683,6 +716,7 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
       else if (info.kind === 'place') await writePlace(path, info.bookId, data)
       else if (info.kind === 'dates') await writeDates(path, info.bookId, data, conflict)
       else if (info.kind === 'status') await writeStatus(path, info.bookId, data)
+      else if (info.kind === 'comments') await writeComments(path, info.bookId, data, conflict)
       else if (info.kind === 'wikiOrder') await writeOrder(path, info.bookId, data, conflict)
       else if (info.kind === 'folderColors') await writeColors(path, info.bookId, data, conflict)
       else if (info.kind === 'notes') await writeNotes(path, info.bookId, data, conflict)
@@ -711,6 +745,7 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
       else if (info.kind === 'tags') await writeTags(item.path, info.bookId, '{}', false)
       else if (info.kind === 'dates') await writeDates(item.path, info.bookId, '{}', false)
       else if (info.kind === 'status') await writeStatus(item.path, info.bookId, '{}')
+      else if (info.kind === 'comments') await writeComments(item.path, info.bookId, '{}', false)
       else if (info.kind === 'style') await removeStyle(item.path, info.bookId)
       else if (info.kind === 'place') await removePlace(item.path, info.bookId)
       else if (info.kind === 'wikiOrder') await writeOrder(item.path, info.bookId, '{}', false)

@@ -289,3 +289,12 @@ test('chapter status travels in status.json', () => {
   expect(filesToBundle('b1', files).chapters.find((chapter) => chapter.id === id)!.status).toBe('revision')
   expect(bundleToFiles(bundle).has('books/b1/status.json')).toBe(false)
 })
+
+test('comments travel in comments.json, per chapter', () => {
+  const comment = { id: 'k1', from: 1, to: 4, quote: 'abc', text: 'Hm?', done: false, createdAt: 1, updatedAt: 2 }
+  const id = bundle.chapters[0].id
+  const files = bundleToFiles({ ...bundle, chapters: bundle.chapters.map((chapter, index) => (index === 0 ? { ...chapter, comments: [comment] } : chapter)) })
+  expect(JSON.parse(files.get('books/b1/comments.json') as string)).toEqual({ [id]: [comment] })
+  expect(classifyPath('books/b1/comments.json')).toEqual({ bookId: 'b1', kind: 'comments', id: 'b1' })
+  expect(filesToBundle('b1', files).chapters.find((chapter) => chapter.id === id)!.comments).toEqual([comment])
+})

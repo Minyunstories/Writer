@@ -271,3 +271,17 @@ test('new settings saved during a run are used right after it', async () => {
   release()
   await waitFor(async () => expect((await second.files()).size).toBe(1), { timeout: 3000 })
 })
+
+test('changes waiting in the repository from another device are pointed out', async () => {
+  configure()
+  const { unmount } = render(
+    <SyncProvider createApi={() => repo} changeDelay={40} retryDelay={60} checkEvery={50}>
+      <SyncStatus />
+    </SyncProvider>,
+  )
+  await status('Synchronisiert')
+  const head = (await repo.getHead())!
+  await repo.commit({ parent: head.commit, baseTree: head.tree, write: new Map(), inline: new Map([['books/x/book.json', '{}']]), remove: [], message: 'anderes Gerät' })
+  expect(await status('Neues vom anderen Gerät')).toBeInTheDocument()
+  unmount()
+})

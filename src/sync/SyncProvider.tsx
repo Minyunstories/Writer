@@ -13,6 +13,8 @@ interface SyncContextValue {
   settings: SyncSettings | null
   conflicts: ConflictNote[]
   lastSync: number | null
+  /** The repository has changes from another device that are not here yet. */
+  remoteWaiting: boolean
   /** Books deleted on another device, waiting for the writer's decision. */
   deletion: { titles: string[]; answer(deleteHere: boolean): void } | null
   syncNow(): void
@@ -36,17 +38,22 @@ interface Props {
   changeDelay?: number
   /** First pause before a failed run is repeated, in ms. Doubles up to 15 minutes. */
   retryDelay?: number
+  /** How often to look whether another device changed the repository, in ms. */
+  checkEvery?: number
 }
 
 const MAX_RETRY = 15 * 60_000
 
-export function SyncProvider({ children, createApi = createGitHubApi, changeDelay = 20_000, retryDelay = 60_000 }: Props) {
+export function SyncProvider({ children, createApi = createGitHubApi, changeDelay = 20_000, retryDelay = 60_000, checkEvery = 3 * 60_000 }: Props) {
   const [settings, setSettings] = useState<SyncSettings | null>(() => loadSettings())
   const [state, setState] = useState<SyncState>(() => (loadSettings() ? 'pending' : 'unconfigured'))
   const [errorKind, setErrorKind] = useState<GitHubErrorKind | null>(null)
   const [conflicts, setConflicts] = useState<ConflictNote[]>([])
   const [lastSync, setLastSync] = useState<number | null>(null)
   const [deletion, setDeletion] = useState<SyncContextValue['deletion']>(null)
+  const [remoteWaiting, setRemoteWaiting] = useState(false)
+  /** The repository's latest commit as of the last successful run. */
+  const knownHead = useRef<string | null | undefined>(undefined)
 
   const settingsRef = useRef(settings)
   settingsRef.current = settings
@@ -99,6 +106,8 @@ export function SyncProvider({ children, createApi = createGitHubApi, changeDela
         failures.current = 0
         pauseUntil.current = 0
         blocked.current = false
+        knownHead.current = result.head
+        if (alive.current) setRemoteWaiting(false)
         if (result.pulled > 0) window.dispatchEvent(new Event(SYNCED_EVENT))
         if (alive.current) {
           setErrorKind(null)
@@ -172,6 +181,22 @@ export function SyncProvider({ children, createApi = createGitHubApi, changeDela
     }
   }, [run, changeDelay])
 
+  // While the app is in view, look now and then whether another device changed the repository.
+  useEffect(() => {
+    const look = async () => {
+      const current = settingsRef.current
+      if (!current || running.current || knownHead.current === undefined || document.visibilityState !== 'visible') return
+      try {
+        const head = await createApiRef.current(current).getHead()
+        if (alive.current && !running.current && (head?.commit ?? null) !== knownHead.current) setRemoteWaiting(true)
+      } catch {
+        // Only a hint; the next real run reports problems.
+      }
+    }
+    const interval = setInterval(() => void look(), checkEvery)
+    return () => clearInterval(interval)
+  }, [checkEvery])
+
   const value = useMemo<SyncContextValue>(
     () => ({
       state,
@@ -179,6 +204,7 @@ export function SyncProvider({ children, createApi = createGitHubApi, changeDela
       settings,
       conflicts,
       lastSync,
+      remoteWaiting,
       deletion,
       syncNow: () => void run(true),
       async save(next) {
@@ -212,7 +238,7 @@ export function SyncProvider({ children, createApi = createGitHubApi, changeDela
       },
       dismissConflicts: () => setConflicts([]),
     }),
-    [state, errorKind, settings, conflicts, lastSync, deletion, run],
+    [state, errorKind, settings, conflicts, lastSync, remoteWaiting, deletion, run],
   )
 
   return <SyncContext.Provider value={value}>{children}</SyncContext.Provider>
