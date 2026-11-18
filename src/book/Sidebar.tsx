@@ -1,8 +1,8 @@
 import { statusLabel } from '../lib/chapterStatus'
 import type { Scene } from '../lib/scenes'
-import type { ReactNode } from 'react'
+import { Fragment, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import type { Book, Chapter } from '../types'
+import type { Book, Chapter, ChapterGroup } from '../types'
 
 export type Section = 'chapters' | 'wiki' | 'outline' | 'manuscript'
 
@@ -26,9 +26,21 @@ interface Props {
   onCreateChapter: () => void
   onRenameChapter: (chapter: Chapter) => void
   onDeleteChapter: (chapter: Chapter) => void
+  onRenameGroup?: (group: ChapterGroup) => void
+  onDeleteGroup?: (group: ChapterGroup) => void
   /** Scenes of the open chapter (shown when there are at least two). */
   scenes?: Scene[]
   onOpenScene?: (index: number) => void
+}
+
+const COLLAPSED_KEY = 'mw:collapsed-groups'
+
+function readCollapsed(): Set<string> {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? '[]') as string[])
+  } catch {
+    return new Set()
+  }
 }
 
 export function Sidebar({
@@ -44,8 +56,25 @@ export function Sidebar({
   onRenameChapter,
   scenes = [],
   onOpenScene,
+  onRenameGroup,
+  onDeleteGroup,
   onDeleteChapter,
 }: Props) {
+  const [collapsed, setCollapsed] = useState(readCollapsed)
+  const groups = new Map((book.chapterGroups ?? []).map((group) => [group.id, group]))
+  const groupOf = (chapter: Chapter | undefined) => (chapter?.group ? groups.get(chapter.group) : undefined)
+  const toggleGroup = (id: string) =>
+    setCollapsed((current) => {
+      const next = new Set(current)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      try {
+        localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...next]))
+      } catch {
+        // Only a convenience.
+      }
+      return next
+    })
   return (
     <nav className="sidebar" aria-label="Buchnavigation">
       <div className="sidebar-tabs" role="tablist">
@@ -76,12 +105,40 @@ export function Sidebar({
             <p className="muted sidebar-empty">Noch keine Kapitel</p>
           ) : (
             <ol className="chapter-list">
-              {chapters.map((chapter) => {
+              {chapters.map((chapter, index) => {
                 const active = chapter.id === activeChapterId
+                const group = groupOf(chapter)
+                const startsGroup = group && groupOf(chapters[index - 1]) !== group
+                const hiddenByGroup = group && collapsed.has(group.id) && !active
                 return (
-                  <li key={chapter.id} className={active ? 'active' : undefined}>
+                  <Fragment key={chapter.id}>
+                  {startsGroup && (
+                    <li className="chapter-group-head">
+                      <button
+                        className="ghost chapter-group-toggle"
+                        title={group.name}
+                        aria-expanded={!collapsed.has(group.id)}
+                        onClick={() => toggleGroup(group.id)}
+                      >
+                        <span aria-hidden="true">{collapsed.has(group.id) ? '▸' : '▾'}</span> {group.name}
+                      </button>
+                      {onRenameGroup && (
+                        <button className="ghost icon" aria-label={`Gruppe „${group.name}“ umbenennen`} title="Umbenennen" onClick={() => onRenameGroup(group)}>
+                          ✎
+                        </button>
+                      )}
+                      {onDeleteGroup && (
+                        <button className="ghost icon danger" aria-label={`Gruppe „${group.name}“ auflösen`} title="Gruppe auflösen (die Kapitel bleiben)" onClick={() => onDeleteGroup(group)}>
+                          ×
+                        </button>
+                      )}
+                    </li>
+                  )}
+                  {!hiddenByGroup && (
+                  <li className={[active ? 'active' : '', group ? 'in-group' : ''].filter(Boolean).join(' ') || undefined}>
                     <Link
                       to={`/book/${book.id}/chapters/${chapter.id}`}
+                      data-number={index + 1}
                       aria-current={active ? 'page' : undefined}
                       onClick={onNavigate}
                       title={statusLabel(chapter.status)}
@@ -118,6 +175,8 @@ export function Sidebar({
                       </ol>
                     )}
                   </li>
+                  )}
+                  </Fragment>
                 )
               })}
             </ol>

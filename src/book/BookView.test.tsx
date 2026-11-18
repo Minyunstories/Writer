@@ -751,3 +751,34 @@ test('wiki: the relationship network is a second view of the start page; a tap o
   expect(await screen.findByRole('complementary', { name: 'Wiki-Eintrag' })).toBeInTheDocument()
   await user.click(screen.getByRole('tab', { name: 'Übersicht' }))
 })
+
+test('chapters can be grouped under a heading in the list; the group folds, is renamed and dissolved', async () => {
+  const user = userEvent.setup()
+  const book = await createBook('Sturmlied')
+  const a = await createChapter(book.id, 'Anfang')
+  await createChapter(book.id, 'Ball')
+  await createChapter(book.id, 'Tanz')
+  renderAt(`/book/${book.id}/chapters/${a.id}`)
+  for (const [title, choice] of [
+    ['Ball', 'Neue Gruppe …'],
+    ['Tanz', 'Der Winterball'],
+  ]) {
+    const item = (await screen.findByRole('link', { name: title })).closest('li')!
+    await user.click(within(item).getByRole('button', { name: 'Kapitel umbenennen' }))
+    const dialog = screen.getByRole('dialog', { name: 'Kapitel bearbeiten' })
+    await user.selectOptions(within(dialog).getByLabelText('Gruppe'), choice)
+    if (choice === 'Neue Gruppe …') await user.type(within(dialog).getByLabelText('Name der neuen Gruppe'), 'Der Winterball')
+    await user.click(within(dialog).getByRole('button', { name: 'Speichern' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  }
+  const nav = screen.getByRole('navigation', { name: 'Buchnavigation' })
+  const toggle = await within(nav).findByRole('button', { name: 'Der Winterball' })
+  expect([...nav.querySelectorAll('.chapter-list > li')].map((li) => li.textContent?.replace(/[✎×▾▸]/g, '').trim())).toEqual(['Anfang', 'Der Winterball', 'Ball', 'Tanz'])
+  await user.click(toggle)
+  expect(within(nav).queryByRole('link', { name: 'Ball' })).not.toBeInTheDocument()
+  await user.click(toggle)
+  await user.click(within(nav).getByRole('button', { name: 'Gruppe „Der Winterball“ auflösen' }))
+  await user.click(screen.getByRole('button', { name: 'Auflösen' }))
+  await waitFor(() => expect(within(nav).queryByRole('button', { name: 'Der Winterball' })).not.toBeInTheDocument())
+  expect(within(nav).getByRole('link', { name: 'Ball' })).toBeInTheDocument()
+})

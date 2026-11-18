@@ -4,7 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { SYNCED_EVENT } from '../storage/connection'
 import { createChapter, deleteChapter, getBook, listChapters, updateChapter } from '../storage/db'
 import { createEntry, createFolder, deleteFolder, listEntries, listFolders, moveWikiItem, renameFolder, setFolderColor, stepWikiItem } from '../storage/wiki'
-import type { Book, Chapter, WikiEntry, WikiFolder } from '../types'
+import type { Book, Chapter, ChapterGroup, WikiEntry, WikiFolder } from '../types'
 import { Outline } from '../outline/Outline'
 import { SyncStatus } from '../sync/SyncStatus'
 import type { JumpTarget } from '../editor/Editor'
@@ -28,6 +28,8 @@ import { addNote, deleteNote, moveNoteToChapter, moveNoteToEntry, setEntryStar, 
 import { WikiHome } from '../wiki/WikiHome'
 import { RelationsSection } from '../wiki/RelationsSection'
 import { RelationGraph } from '../graph/RelationGraph'
+import { ChapterDialog, type GroupChoice } from './ChapterDialog'
+import { createGroup, deleteGroup, renameGroup, setChapterGroup } from '../storage/groups'
 import { WikiSidebar } from '../wiki/WikiSidebar'
 import { SidebarHandle, useSidebarWidth } from './SidebarHandle'
 import { Sidebar, type Section } from './Sidebar'
@@ -64,6 +66,8 @@ interface Props {
 
 type DialogState =
   | { kind: 'rename'; chapter: Chapter }
+  | { kind: 'renameGroup'; group: ChapterGroup }
+  | { kind: 'deleteGroup'; group: ChapterGroup }
   | { kind: 'delete'; chapter: Chapter }
   | { kind: 'newFolder'; parentId: string | null }
   | { kind: 'renameFolder'; folder: WikiFolder }
@@ -450,10 +454,13 @@ export function BookView({ renderChapter }: Props) {
       closeSidebarOnPhone()
     })
 
-  const handleRename = (chapter: Chapter, title: string) => {
+  const handleRename = (chapter: Chapter, title: string, group?: GroupChoice) => {
     setDialog(null)
     return attempt(async () => {
       await updateChapter(chapter.id, { title })
+      if (!group || !book) return
+      const groupId = 'newName' in group ? (await createGroup(book.id, group.newName)).id : group.id
+      await setChapterGroup(chapter.id, groupId)
     })
   }
 
@@ -621,6 +628,8 @@ export function BookView({ renderChapter }: Props) {
             onCreateChapter={() => void handleCreate()}
             onRenameChapter={(chapter) => setDialog({ kind: 'rename', chapter })}
             onDeleteChapter={(chapter) => setDialog({ kind: 'delete', chapter })}
+            onRenameGroup={(group) => setDialog({ kind: 'renameGroup', group })}
+            onDeleteGroup={(group) => setDialog({ kind: 'deleteGroup', group })}
             scenes={scenes}
             onOpenScene={(index) => {
               const view = editorViewRef.current
@@ -931,12 +940,36 @@ export function BookView({ renderChapter }: Props) {
         />
       )}
       {dialog?.kind === 'rename' && (
+        <ChapterDialog
+          chapter={dialog.chapter}
+          groups={book.chapterGroups ?? []}
+          onCancel={() => setDialog(null)}
+          onSave={(title, group) => handleRename(dialog.chapter, title, group)}
+        />
+      )}
+      {dialog?.kind === 'renameGroup' && (
         <PromptDialog
-          heading="Kapitel umbenennen"
-          initialValue={dialog.chapter.title}
+          heading="Gruppe umbenennen"
+          initialValue={dialog.group.name}
           confirmLabel="Speichern"
           onCancel={() => setDialog(null)}
-          onConfirm={(title) => handleRename(dialog.chapter, title)}
+          onConfirm={(name) => {
+            const group = dialog.group
+            setDialog(null)
+            void attempt(() => renameGroup(book.id, group.id, name))
+          }}
+        />
+      )}
+      {dialog?.kind === 'deleteGroup' && (
+        <ConfirmDialog
+          message={`Gruppe „${dialog.group.name}" auflösen? Die Kapitel bleiben erhalten.`}
+          confirmLabel="Auflösen"
+          onCancel={() => setDialog(null)}
+          onConfirm={() => {
+            const group = dialog.group
+            setDialog(null)
+            void attempt(() => deleteGroup(book.id, group.id))
+          }}
         />
       )}
       {dialog?.kind === 'delete' && (

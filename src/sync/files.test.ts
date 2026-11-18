@@ -317,3 +317,17 @@ test('places in the relationship network travel in wiki/graph.json', () => {
   expect(classifyPath('books/b1/wiki/graph.json')).toEqual({ bookId: 'b1', kind: 'graph', id: 'b1' })
   expect(filesToBundle('b1', files).book.graph).toEqual(graph)
 })
+
+test('chapter groups travel in groups.json', () => {
+  const id = bundle.chapters[0].id
+  const files = bundleToFiles({
+    ...bundle,
+    book: { ...book, chapterGroups: [{ id: 'g1', name: 'Der Winterball' }] },
+    chapters: bundle.chapters.map((chapter, index) => (index === 0 ? { ...chapter, group: 'g1' } : chapter)),
+  })
+  expect(JSON.parse(files.get('books/b1/groups.json') as string)).toEqual({ groups: [{ id: 'g1', name: 'Der Winterball' }], chapters: { [id]: 'g1' } })
+  expect(classifyPath('books/b1/groups.json')).toEqual({ bookId: 'b1', kind: 'groups', id: 'b1' })
+  const back = filesToBundle('b1', files)
+  expect(back.book.chapterGroups).toEqual([{ id: 'g1', name: 'Der Winterball' }])
+  expect(back.chapters.find((chapter) => chapter.id === id)!.group).toBe('g1')
+})

@@ -29,6 +29,8 @@ import {
   relationsFile,
   graphFile,
   parseGraph,
+  groupsFile,
+  parseGroups,
   parseEntry,
   parseJson,
   parseStyle,
@@ -94,7 +96,7 @@ export async function readLocalFiles(): Promise<FileSet> {
   return files
 }
 
-const KIND_ORDER = ['book', 'style', 'place', 'folders', 'templates', 'templateBlocks', 'chapter', 'outline', 'tags', 'dates', 'status', 'comments', 'entry', 'wikiOrder', 'folderColors', 'notes', 'relations', 'graph', 'stars', 'spelling', 'collection', 'version', 'image']
+const KIND_ORDER = ['book', 'style', 'place', 'folders', 'templates', 'templateBlocks', 'chapter', 'outline', 'tags', 'dates', 'status', 'groups', 'comments', 'entry', 'wikiOrder', 'folderColors', 'notes', 'relations', 'graph', 'stars', 'spelling', 'collection', 'version', 'image']
 
 /**
  * Applies changes from the repository to this device, file by file, in one transaction.
@@ -406,6 +408,34 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
     if (relationsFile(next)) updated.relations = next
     else delete updated.relations
     await books.put(updated)
+  }
+
+  /** Chapter groups: the repository's, unless changed here since the run was planned; on conflict joined (this device first). */
+  async function writeGroups(path: string, bookId: string, data: FileData | undefined, conflict: boolean) {
+    const remote = parseGroups(data)
+    if (!remote) {
+      skipped.push(path)
+      return
+    }
+    const book = await books.get(bookId)
+    if (!book) return
+    const own = await chapters.index('bookId').getAll(bookId)
+    const ordered = [...book.chapterOrder.flatMap((id) => own.filter((chapter) => chapter.id === id)), ...own.filter((chapter) => !book.chapterOrder.includes(chapter.id))]
+    const localText = groupsFile(book, ordered) ?? ''
+    if (!conflict && (snapshotText(path) ?? '') !== localText) return
+    const localGroups = book.chapterGroups ?? []
+    const groups = conflict ? [...localGroups, ...remote.groups.filter((group) => !localGroups.some((mine) => mine.id === group.id))] : remote.groups
+    const known = new Set(groups.map((group) => group.id))
+    await books.put(groups.length ? { ...book, chapterGroups: groups } : (({ chapterGroups: _gone, ...rest }) => rest)(book))
+    for (const chapter of own) {
+      const wanted = conflict ? (chapter.group ?? remote.chapters[chapter.id]) : remote.chapters[chapter.id]
+      const next = wanted && known.has(wanted) ? wanted : undefined
+      if (next === chapter.group) continue
+      const updated: Chapter = { ...chapter }
+      if (next) updated.group = next
+      else delete updated.group
+      await chapters.put(updated)
+    }
   }
 
   /** Network places: the repository's, unless moved here since the run was planned; on conflict joined, this device's places first. */
@@ -757,6 +787,7 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
       else if (info.kind === 'place') await writePlace(path, info.bookId, data)
       else if (info.kind === 'dates') await writeDates(path, info.bookId, data, conflict)
       else if (info.kind === 'status') await writeStatus(path, info.bookId, data)
+      else if (info.kind === 'groups') await writeGroups(path, info.bookId, data, conflict)
       else if (info.kind === 'comments') await writeComments(path, info.bookId, data, conflict)
       else if (info.kind === 'relations') await writeRelations(path, info.bookId, data, conflict)
       else if (info.kind === 'graph') await writeGraph(path, info.bookId, data, conflict)
@@ -788,6 +819,7 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
       else if (info.kind === 'tags') await writeTags(item.path, info.bookId, '{}', false)
       else if (info.kind === 'dates') await writeDates(item.path, info.bookId, '{}', false)
       else if (info.kind === 'status') await writeStatus(item.path, info.bookId, '{}')
+      else if (info.kind === 'groups') await writeGroups(item.path, info.bookId, '{"groups":[]}', false)
       else if (info.kind === 'comments') await writeComments(item.path, info.bookId, '{}', false)
       else if (info.kind === 'relations') await writeRelations(item.path, info.bookId, '{"types":[],"relations":[]}', false)
       else if (info.kind === 'graph') await writeGraph(item.path, info.bookId, '{}', false)

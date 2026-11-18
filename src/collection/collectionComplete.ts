@@ -19,7 +19,8 @@ export function collectionCompletionSource(items: () => CollectionItem[]) {
       .filter((item) => [item.text, item.category, item.group ?? '', ...(item.tags ?? [])].some((field) => field.toLowerCase().includes(query)))
       .slice(0, MAX_OPTIONS)
       .map((item) => ({
-        label: item.text,
+        // Shown without markup; the text itself goes in as written.
+        label: item.text.replace(/\*\*|__|==|[*_]/g, ''),
         detail: item.group ? `${item.category} · ${item.group}` : item.category,
         type: 'text',
         apply: item.text,

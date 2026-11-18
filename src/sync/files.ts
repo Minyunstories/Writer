@@ -1,7 +1,7 @@
 import { cleanDate, cleanPlace, isColor } from '../lib/bookStyle'
 import { cleanSpelling } from '../storage/spelling'
 import { isStatus } from '../lib/chapterStatus'
-import type { Book, BookNote, BookRelations, Relation, RelationType, Chapter, ChapterComment, ChapterStatus, ChapterVersion, FontId, WikiEntry, WikiFolder, WikiImage, WikiProperty } from '../types'
+import type { Book, BookNote, BookRelations, Relation, RelationType, Chapter, ChapterComment, ChapterGroup, ChapterStatus, ChapterVersion, FontId, WikiEntry, WikiFolder, WikiImage, WikiProperty } from '../types'
 import type { FileData } from './hash'
 
 export type { FileData } from './hash'
@@ -93,6 +93,8 @@ export function bundleToFiles({ book, chapters, folders, entries, images, versio
   if (status) files.set(`${prefix}status.json`, status)
   const comments = commentsFile(ordered)
   if (comments) files.set(`${prefix}comments.json`, comments)
+  const groups = groupsFile(book, ordered)
+  if (groups) files.set(`${prefix}groups.json`, groups)
   const place = placeFile(book)
   if (place) files.set(`${prefix}place.json`, place)
   const order = orderFile(book)
@@ -295,6 +297,29 @@ export function parseGraph(data: FileData | undefined): Record<string, { x: numb
     if (p && Number.isFinite(p.x) && Number.isFinite(p.y)) result[id] = { x: Math.round(p.x as number), y: Math.round(p.y as number) }
   }
   return result
+}
+
+/** groups.json: the chapter groups and which chapter is in which. Undefined when there are no groups. */
+export function groupsFile(book: Pick<Book, 'chapterGroups'>, ordered: Chapter[]): string | undefined {
+  const groups = book.chapterGroups ?? []
+  if (!groups.length) return undefined
+  return json({
+    groups: groups.map(({ id, name }) => ({ id, name })),
+    chapters: Object.fromEntries(ordered.filter((chapter) => chapter.group).map((chapter) => [chapter.id, chapter.group])),
+  })
+}
+
+export function parseGroups(data: FileData | undefined): { groups: ChapterGroup[]; chapters: Record<string, string> } | null {
+  const value = parseJson<Record<string, unknown>>(data)
+  if (!value || typeof value !== 'object' || !Array.isArray(value.groups)) return null
+  const groups = value.groups.flatMap((raw): ChapterGroup[] => {
+    const g = raw as Record<string, unknown>
+    return g && typeof g.id === 'string' && typeof g.name === 'string' && g.name.trim() ? [{ id: g.id, name: g.name }] : []
+  })
+  const chapters: Record<string, string> = {}
+  if (value.chapters && typeof value.chapters === 'object')
+    for (const [id, group] of Object.entries(value.chapters as Record<string, unknown>)) if (typeof group === 'string') chapters[id] = group
+  return { groups, chapters }
 }
 
 /** place.json: where text was last changed. */
@@ -508,6 +533,7 @@ export function filesToBundle(bookId: string, files: FileSet): BookBundle {
   const dateMap = parseDates(files.get(`${prefix}dates.json`)) ?? {}
   const statusMap = parseStatus(files.get(`${prefix}status.json`)) ?? {}
   const commentMap = parseComments(files.get(`${prefix}comments.json`)) ?? {}
+  const groupFile = parseGroups(files.get(`${prefix}groups.json`))
   const chapters: Chapter[] = [...listed, ...unlisted.map((id) => ({ id, title: 'Unbenannt' }))].map((meta) => {
     const chapter: Chapter = {
       id: meta.id,
@@ -525,6 +551,8 @@ export function filesToBundle(bookId: string, files: FileSet): BookBundle {
     if (status) chapter.status = status
     const comments = commentMap[meta.id]
     if (comments) chapter.comments = comments
+    const group = groupFile?.chapters[meta.id]
+    if (group) chapter.group = group
     return chapter
   })
 
@@ -547,6 +575,7 @@ export function filesToBundle(bookId: string, files: FileSet): BookBundle {
   if (notes?.length) book.notes = notes
   const relations = parseRelations(files.get(`${prefix}wiki/relations.json`))
   if (relations) book.relations = relations
+  if (groupFile?.groups.length) book.chapterGroups = groupFile.groups
   const graph = parseGraph(files.get(`${prefix}wiki/graph.json`))
   if (graph && Object.keys(graph).length) book.graph = graph
   const stars = stringList(parseJson<unknown>(files.get(`${prefix}wiki/stars.json`)))
@@ -632,7 +661,7 @@ export function parseVersion(bookId: string, data: FileData | undefined): Chapte
   return version
 }
 
-export type PathKind = 'book' | 'chapter' | 'outline' | 'folders' | 'entry' | 'image' | 'tags' | 'templates' | 'style' | 'dates' | 'place' | 'wikiOrder' | 'folderColors' | 'notes' | 'stars' | 'templateBlocks' | 'spelling' | 'collection' | 'version' | 'status' | 'comments' | 'relations' | 'graph'
+export type PathKind = 'book' | 'chapter' | 'outline' | 'folders' | 'entry' | 'image' | 'tags' | 'templates' | 'style' | 'dates' | 'place' | 'wikiOrder' | 'folderColors' | 'notes' | 'stars' | 'templateBlocks' | 'spelling' | 'collection' | 'version' | 'status' | 'comments' | 'relations' | 'graph' | 'groups'
 
 /** What a repository path holds, or null for files the app does not manage. */
 export function classifyPath(path: string): { bookId: string; kind: PathKind; id: string } | null {
@@ -647,6 +676,7 @@ export function classifyPath(path: string): { bookId: string; kind: PathKind; id
   if (rest === 'style.json') return { bookId, kind: 'style', id: bookId }
   if (rest === 'dates.json') return { bookId, kind: 'dates', id: bookId }
   if (rest === 'status.json') return { bookId, kind: 'status', id: bookId }
+  if (rest === 'groups.json') return { bookId, kind: 'groups', id: bookId }
   if (rest === 'comments.json') return { bookId, kind: 'comments', id: bookId }
   if (rest === 'place.json') return { bookId, kind: 'place', id: bookId }
   if (rest === 'wiki/templates.json') return { bookId, kind: 'templates', id: bookId }

@@ -184,7 +184,7 @@ body.resizing {
 }
 
 .chapter-list a::before {
-  content: counter(chapter);
+  content: attr(data-number);
   display: inline-block;
   min-width: 1.6rem;
   font-family: var(--font-ui);
@@ -739,4 +739,58 @@ a.sidebar-manuscript.active {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-family: var(--font-text);
+}
+
+/* Chapter groups: a heading over the chapters that belong together. */
+.chapter-list li.chapter-group-head {
+  counter-increment: none;
+  margin-top: 0.6rem;
+  background: none;
+}
+
+.chapter-group-toggle {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  padding: 0.35rem 0.5rem;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chapter-list li.chapter-group-head button.icon {
+  opacity: 0;
+}
+
+.chapter-list li.chapter-group-head:hover button.icon,
+.chapter-list li.chapter-group-head button.icon:focus-visible {
+  opacity: 1;
+}
+
+.chapter-list li.in-group {
+  margin-left: 0.6rem;
+  border-left: 2px solid var(--border);
+  border-radius: 0 10px 10px 0;
+}
+
+.chapter-dialog {
+  display: grid;
+  gap: 0.35rem;
+  min-width: min(26rem, 92vw);
+}
+
+.chapter-dialog label {
+  margin-top: 0.4rem;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.chapter-dialog-hint {
+  margin: 0.4rem 0 0;
+  font-size: 12px;
 }

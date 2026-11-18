@@ -561,3 +561,23 @@ test('graph places: taken over, kept when moved here during the run, joined on c
   await apply({ remove: [`${p}wiki/graph.json`], snapshot: await readLocalFiles() })
   expect((await getBook(book.id))!.graph).toBeUndefined()
 })
+
+test('groups: taken over, kept when changed here during the run, joined on conflict, cleared when removed', async () => {
+  const { createGroup, setChapterGroup } = await import('../storage/groups')
+  const { p, book, a, b } = await seed()
+  const remote = { groups: [{ id: 'g1', name: 'Winterball' }], chapters: { [a.id]: 'g1' } }
+  await apply({ write: new Map([[`${p}groups.json`, JSON.stringify(remote)]]), snapshot: await readLocalFiles() })
+  expect((await getBook(book.id))!.chapterGroups).toEqual(remote.groups)
+  expect((await getChapter(a.id))!.group).toBe('g1')
+  const planned = await readLocalFiles()
+  const mine = await createGroup(book.id, 'Belagerung')
+  await setChapterGroup(b.id, mine.id)
+  await apply({ write: new Map([[`${p}groups.json`, JSON.stringify({ groups: [], chapters: {} })]]), snapshot: planned })
+  expect((await getChapter(b.id))!.group).toBe(mine.id)
+  await applyFull({ conflicts: [{ path: `${p}groups.json`, remote: JSON.stringify({ groups: [{ id: 'g2', name: 'Flucht' }], chapters: { [a.id]: 'g2' } }) }], snapshot: await readLocalFiles() })
+  expect((await getBook(book.id))!.chapterGroups!.map((g) => g.name).sort()).toEqual(['Belagerung', 'Flucht', 'Winterball'])
+  expect((await getChapter(a.id))!.group).toBe('g1')
+  await apply({ remove: [`${p}groups.json`], snapshot: await readLocalFiles() })
+  expect((await getBook(book.id))!.chapterGroups).toBeUndefined()
+  expect((await getChapter(b.id))!.group).toBeUndefined()
+})

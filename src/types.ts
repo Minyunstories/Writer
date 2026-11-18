@@ -23,6 +23,8 @@ export interface Book {
   spelling?: BookSpelling
   /** Relationships between wiki entries, and the kinds the writer defined. */
   relations?: BookRelations
+  /** Groups of chapters, e.g. a story arc: "Der Winterball". */
+  chapterGroups?: ChapterGroup[]
   /** Where the writer placed entries in the relationship network. */
   graph?: Record<string, { x: number; y: number }>
 }
@@ -98,6 +100,8 @@ export interface Chapter {
   status?: ChapterStatus
   /** Comments on parts of the text. Missing when there are none. */
   comments?: ChapterComment[]
+  /** The group (story arc, part) the chapter belongs to. */
+  group?: string
   updatedAt: number
 }
 
@@ -208,4 +212,9 @@ export interface ChapterVersion {
   label?: string
   /** Made by the app (when the chapter was opened, before replacing). Kept on this device only. */
   auto: boolean
+}
+
+export interface ChapterGroup {
+  id: string
+  name: string
 }

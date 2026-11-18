@@ -1,6 +1,6 @@
 import { StatusPicker } from '../book/StatusPicker'
 import { splitScenes } from '../lib/scenes'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ZoomControl } from '../book/ZoomControl'
 import { MAX_DATE_LENGTH } from '../lib/bookStyle'
@@ -391,6 +391,7 @@ export function Outline({ book, chapters, onChanged, onError, onCreateChapter, e
   const [dragId, setDragId] = useState<string | null>(null)
   const [filter, setFilter] = useState<string | null>(null)
   const matcher = useMemo(() => buildMatcher(entries), [entries])
+  const groupNames = new Map((book.chapterGroups ?? []).map((group) => [group.id, group.name]))
   const allTags = useMemo(
     () => [...new Set(chapters.flatMap((chapter) => chapter.tags ?? []))].sort((a, b) => a.localeCompare(b, 'de')),
     [chapters],
@@ -466,11 +467,14 @@ export function Outline({ book, chapters, onChanged, onError, onCreateChapter, e
         </div>
       ) : (
         <ol className="outline-list">
-          {visible.map((chapter) => {
+          {visible.map((chapter, position) => {
             const index = chapters.indexOf(chapter)
+            const group = chapter.group ? groupNames.get(chapter.group) : undefined
+            const startsGroup = group !== undefined && visible[position - 1]?.group !== chapter.group
             return (
+              <Fragment key={chapter.id}>
+              {startsGroup && <li className="outline-group-head">{group}</li>}
               <OutlineCard
-                key={chapter.id}
                 book={book}
                 chapter={chapter}
                 index={index}
@@ -493,6 +497,7 @@ export function Outline({ book, chapters, onChanged, onError, onCreateChapter, e
                 folders={folders}
                 onOpenEntry={onOpenEntry}
               />
+              </Fragment>
             )
           })}
         </ol>
