@@ -1,3 +1,4 @@
+import { smartTypography } from './typography'
 import { markdown } from '@codemirror/lang-markdown'
 import { EditorSelection, EditorState, type Extension } from '@codemirror/state'
 import { EditorView, keymap, type Command, type KeyBinding } from '@codemirror/view'
@@ -89,7 +90,7 @@ export const typewriter = EditorState.transactionExtender.of((tr) =>
     : null,
 )
 
-/** Markdown with highlights, live formatting, the format shortcuts and typographic dots. */
+/** Markdown with highlights, live formatting, the format shortcuts, typographic dots, quotes and dashes. */
 export function writingMarkdown(): Extension {
-  return [keymap.of(formatKeys), markdown({ addKeymap: false, extensions: [highlightSyntax] }), livePreview(), ellipsis]
+  return [keymap.of(formatKeys), markdown({ addKeymap: false, extensions: [highlightSyntax] }), livePreview(), ellipsis, smartTypography]
 }

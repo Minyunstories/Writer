@@ -1,3 +1,4 @@
+import { statusLabel } from '../lib/chapterStatus'
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import type { Book, Chapter } from '../types'
@@ -77,7 +78,9 @@ export function Sidebar({
                       to={`/book/${book.id}/chapters/${chapter.id}`}
                       aria-current={active ? 'page' : undefined}
                       onClick={onNavigate}
+                      title={statusLabel(chapter.status)}
                     >
+                      {chapter.status && <span className={`status-dot status-${chapter.status}`} aria-hidden="true" />}
                       {chapter.title}
                     </Link>
                     <button

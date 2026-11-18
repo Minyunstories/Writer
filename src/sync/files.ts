@@ -1,6 +1,7 @@
 import { cleanDate, cleanPlace, isColor } from '../lib/bookStyle'
 import { cleanSpelling } from '../storage/spelling'
-import type { Book, BookNote, Chapter, FontId, WikiEntry, WikiFolder, WikiImage, WikiProperty } from '../types'
+import { isStatus } from '../lib/chapterStatus'
+import type { Book, BookNote, Chapter, ChapterStatus, ChapterVersion, FontId, WikiEntry, WikiFolder, WikiImage, WikiProperty } from '../types'
 import type { FileData } from './hash'
 
 export type { FileData } from './hash'
@@ -12,6 +13,8 @@ export interface BookBundle {
   folders: WikiFolder[]
   entries: WikiEntry[]
   images: WikiImage[]
+  /** Named versions travel; automatic ones stay on the device. */
+  versions?: ChapterVersion[]
 }
 
 const ROOT = 'books/'
@@ -61,7 +64,7 @@ export interface EntryHeader {
 }
 
 /** Turns one book into repository files. The same book always gives the same bytes. */
-export function bundleToFiles({ book, chapters, folders, entries, images }: BookBundle): FileSet {
+export function bundleToFiles({ book, chapters, folders, entries, images, versions = [] }: BookBundle): FileSet {
   const prefix = bookPrefix(book.id)
   const files: FileSet = new Map()
   const ordered = orderedChapters(book, chapters)
@@ -86,6 +89,8 @@ export function bundleToFiles({ book, chapters, folders, entries, images }: Book
   if (style) files.set(`${prefix}style.json`, style)
   const dates = datesFile(ordered)
   if (dates) files.set(`${prefix}dates.json`, dates)
+  const status = statusFile(ordered)
+  if (status) files.set(`${prefix}status.json`, status)
   const place = placeFile(book)
   if (place) files.set(`${prefix}place.json`, place)
   const order = orderFile(book)
@@ -95,6 +100,9 @@ export function bundleToFiles({ book, chapters, folders, entries, images }: Book
   const colors = colorsFile(folders)
   if (colors) files.set(`${prefix}wiki/colors.json`, colors)
   if (book.notes?.length) files.set(`${prefix}notes.json`, notesFile(book.notes))
+  for (const version of versions) {
+    if (!version.auto) files.set(`${prefix}versions/${version.chapterId}/${version.id}.json`, versionFile(version))
+  }
   if (book.wikiStars?.length) files.set(`${prefix}wiki/stars.json`, json(book.wikiStars))
   if (book.spelling) files.set(`${prefix}spelling.json`, json(book.spelling))
 
@@ -165,6 +173,19 @@ export function styleFile(book: Pick<Book, 'cover' | 'highlight'>): string | und
 export function datesFile(ordered: Chapter[]): string | undefined {
   const entries = ordered.filter((chapter) => chapter.date).map((chapter) => [chapter.id, chapter.date] as const)
   return entries.length > 0 ? json(Object.fromEntries(entries)) : undefined
+}
+
+/** status.json: chapter id to how far it is, in chapter order. Undefined when none has one. */
+export function statusFile(ordered: Chapter[]): string | undefined {
+  const entries = ordered.filter((chapter) => chapter.status).map((chapter) => [chapter.id, chapter.status] as const)
+  return entries.length > 0 ? json(Object.fromEntries(entries)) : undefined
+}
+
+/** The usable entries of a status.json; null when the file is not a JSON object. */
+export function parseStatus(data: FileData | undefined): Record<string, ChapterStatus> | null {
+  const value = parseJson<unknown>(data)
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  return Object.fromEntries(Object.entries(value).filter(([, status]) => isStatus(status))) as Record<string, ChapterStatus>
 }
 
 /** place.json: where text was last changed. */
@@ -376,6 +397,7 @@ export function filesToBundle(bookId: string, files: FileSet): BookBundle {
 
   const tagMap = parseJson<Record<string, unknown>>(files.get(`${prefix}tags.json`)) ?? {}
   const dateMap = parseDates(files.get(`${prefix}dates.json`)) ?? {}
+  const statusMap = parseStatus(files.get(`${prefix}status.json`)) ?? {}
   const chapters: Chapter[] = [...listed, ...unlisted.map((id) => ({ id, title: 'Unbenannt' }))].map((meta) => {
     const chapter: Chapter = {
       id: meta.id,
@@ -389,6 +411,8 @@ export function filesToBundle(bookId: string, files: FileSet): BookBundle {
     if (tags.length > 0) chapter.tags = tags
     const date = dateMap[meta.id]
     if (date) chapter.date = date
+    const status = statusMap[meta.id]
+    if (status) chapter.status = status
     return chapter
   })
 
@@ -470,10 +494,29 @@ export function filesToBundle(bookId: string, files: FileSet): BookBundle {
     }
   }
 
-  return { book, chapters, folders, entries, images }
+  const versions = own
+    .filter((path) => classifyPath(path)?.kind === 'version')
+    .flatMap((path) => {
+      const version = parseVersion(bookId, files.get(path))
+      return version ? [version] : []
+    })
+  return { book, chapters, folders, entries, images, ...(versions.length ? { versions } : {}) }
 }
 
-export type PathKind = 'book' | 'chapter' | 'outline' | 'folders' | 'entry' | 'image' | 'tags' | 'templates' | 'style' | 'dates' | 'place' | 'wikiOrder' | 'folderColors' | 'notes' | 'stars' | 'templateBlocks' | 'spelling' | 'collection'
+/** versions/<chapter>/<id>.json: a named version of a chapter. */
+export function versionFile({ id, chapterId, label, createdAt, content }: ChapterVersion): string {
+  return json({ id, chapterId, ...(label ? { label } : {}), createdAt, content })
+}
+
+export function parseVersion(bookId: string, data: FileData | undefined): ChapterVersion | null {
+  const value = parseJson<Record<string, unknown>>(data)
+  if (!value || typeof value.id !== 'string' || typeof value.chapterId !== 'string' || typeof value.content !== 'string') return null
+  const version: ChapterVersion = { id: value.id, bookId, chapterId: value.chapterId, content: value.content, createdAt: Number(value.createdAt) || 0, auto: false }
+  if (typeof value.label === 'string' && value.label.trim()) version.label = value.label.trim()
+  return version
+}
+
+export type PathKind = 'book' | 'chapter' | 'outline' | 'folders' | 'entry' | 'image' | 'tags' | 'templates' | 'style' | 'dates' | 'place' | 'wikiOrder' | 'folderColors' | 'notes' | 'stars' | 'templateBlocks' | 'spelling' | 'collection' | 'version' | 'status'
 
 /** What a repository path holds, or null for files the app does not manage. */
 export function classifyPath(path: string): { bookId: string; kind: PathKind; id: string } | null {
@@ -487,6 +530,7 @@ export function classifyPath(path: string): { bookId: string; kind: PathKind; id
   if (rest === 'tags.json') return { bookId, kind: 'tags', id: bookId }
   if (rest === 'style.json') return { bookId, kind: 'style', id: bookId }
   if (rest === 'dates.json') return { bookId, kind: 'dates', id: bookId }
+  if (rest === 'status.json') return { bookId, kind: 'status', id: bookId }
   if (rest === 'place.json') return { bookId, kind: 'place', id: bookId }
   if (rest === 'wiki/templates.json') return { bookId, kind: 'templates', id: bookId }
   if (rest === 'wiki/order.json') return { bookId, kind: 'wikiOrder', id: bookId }
@@ -495,6 +539,8 @@ export function classifyPath(path: string): { bookId: string; kind: PathKind; id
   if (rest === 'notes.json') return { bookId, kind: 'notes', id: bookId }
   if (rest === 'spelling.json') return { bookId, kind: 'spelling', id: bookId }
   if (rest === 'wiki/stars.json') return { bookId, kind: 'stars', id: bookId }
+  const version = /^versions\/[^/]+\/([^/]+)\.json$/.exec(rest)
+  if (version) return { bookId, kind: 'version', id: version[1] }
   const match = /^(chapters|outline|wiki\/_images|wiki)\/([^/]+)$/.exec(rest)
   if (!match) return null
   const [, folder, file] = match

@@ -1,5 +1,5 @@
 import { cleanDate, cleanPlace, COVERS, isColor } from '../lib/bookStyle'
-import type { Book, BookPlace, Chapter, FontId } from '../types'
+import type { Book, BookPlace, Chapter, ChapterStatus, FontId } from '../types'
 import { announceChange, cleanList, cleanTitle, ConflictError, db, newId } from './connection'
 
 export { ConflictError, resetDatabaseForTests } from './connection'
@@ -78,7 +78,7 @@ export async function savePlace(bookId: string, place: BookPlace): Promise<void>
   announceChange()
 }
 
-const BOOK_OWNED_STORES = ['chapters', 'wikiFolders', 'wikiEntries', 'wikiImages'] as const
+const BOOK_OWNED_STORES = ['chapters', 'wikiFolders', 'wikiEntries', 'wikiImages', 'versions'] as const
 
 export async function deleteBook(id: string): Promise<void> {
   const tx = (await db()).transaction(['books', ...BOOK_OWNED_STORES], 'readwrite')
@@ -199,6 +199,24 @@ export async function setChapterDate(id: string, date: string): Promise<Chapter>
   return next
 }
 
+/** Sets how far a chapter is; null clears it. */
+export async function setChapterStatus(id: string, status: ChapterStatus | null): Promise<Chapter> {
+  const tx = (await db()).transaction('chapters', 'readwrite')
+  const current = await tx.store.get(id)
+  if (!current) throw new Error(`Chapter not found: ${id}`)
+  if ((current.status ?? null) === status) {
+    await tx.done
+    return current
+  }
+  const next: Chapter = { ...current, updatedAt: Date.now() }
+  if (status) next.status = status
+  else delete next.status
+  await tx.store.put(next)
+  await tx.done
+  announceChange()
+  return next
+}
+
 /**
  * Adds or removes one tag on the stored chapter, inside one transaction, so two quick
  * changes (or a change from another tab) never undo each other.
@@ -256,10 +274,12 @@ export async function moveChapter(
 }
 
 export async function deleteChapter(id: string): Promise<void> {
-  const tx = (await db()).transaction(['books', 'chapters'], 'readwrite')
+  const tx = (await db()).transaction(['books', 'chapters', 'versions'], 'readwrite')
   const chapter = await tx.objectStore('chapters').get(id)
   if (chapter) {
     await tx.objectStore('chapters').delete(id)
+    const versions = tx.objectStore('versions')
+    for (const key of await versions.index('chapterId').getAllKeys(id)) await versions.delete(key)
     const book = await tx.objectStore('books').get(chapter.bookId)
     if (book) {
       await tx.objectStore('books').put({

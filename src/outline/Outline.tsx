@@ -1,3 +1,4 @@
+import { StatusPicker } from '../book/StatusPicker'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ZoomControl } from '../book/ZoomControl'
@@ -51,6 +52,7 @@ interface CardProps {
   entries: WikiEntry[]
   folders: WikiFolder[]
   onOpenEntry?: (entryId: string) => void
+  onStatusChanged: () => void
 }
 
 /** The free-text date left of a chapter on the timeline, saved while typing, and its dot on the rail. */
@@ -149,6 +151,7 @@ function OutlineCard({
   entries,
   folders,
   onOpenEntry,
+  onStatusChanged,
 }: CardProps) {
   const [over, setOver] = useState(false)
   // The note is read from storage, not from the chapter list, which may be outdated.
@@ -293,6 +296,7 @@ function OutlineCard({
           <Link to={`/book/${book.id}/chapters/${chapter.id}`} className="outline-title">
             {chapter.title}
           </Link>
+          <StatusPicker chapter={chapter} onChanged={onStatusChanged} />
           <span className="outline-words muted">{formatWordCount(countWords(chapter.content))}</span>
           <button
             className="ghost icon"
@@ -469,6 +473,7 @@ export function Outline({ book, chapters, onChanged, onError, onCreateChapter, e
                 onError={onError}
                 tagSuggestions={allTags}
                 onTagsChange={(change) => void setTags(chapter.id, change)}
+                onStatusChanged={() => void onChanged()}
                 onFilter={setFilter}
                 matcher={matcher}
                 entries={entries}

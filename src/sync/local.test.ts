@@ -479,3 +479,32 @@ test('the collection travels in its own file outside books/, merged when both si
   await apply({ remove: ['collection/collection.json'], snapshot: await readLocalFiles() })
   expect((await getCollection()).items).toEqual([])
 })
+
+test('versions: pulled, removed, and gone with their book', async () => {
+  const { listVersions, saveVersion } = await import('../storage/versions')
+  const { p, book, a } = await seed()
+  await saveVersion(a, 'hier', 'Von hier')
+  expect([...(await readLocalFiles()).keys()].some((path) => path.startsWith(`${p}versions/${a.id}/`))).toBe(true)
+  const remote = { id: 'r1', chapterId: a.id, content: 'dort', createdAt: 3, label: 'Von dort' }
+  await apply({ write: new Map([[`${p}versions/${a.id}/r1.json`, JSON.stringify(remote)]]), snapshot: await readLocalFiles() })
+  expect((await listVersions(a.id)).map((v) => v.label)).toEqual(['Von hier', 'Von dort'])
+  await apply({ remove: [`${p}versions/${a.id}/r1.json`], snapshot: await readLocalFiles() })
+  expect((await listVersions(a.id)).map((v) => v.label)).toEqual(['Von hier'])
+  await apply({ remove: [...(await readLocalFiles()).keys()].filter((path) => path.startsWith(p)), snapshot: await readLocalFiles() })
+  expect(await listVersions(a.id)).toEqual([])
+  expect(book.id).toBeTruthy()
+})
+
+test('status: taken over, kept when set here during the run, cleared when removed', async () => {
+  const { setChapterStatus } = await import('../storage/db')
+  const { p, a, b } = await seed()
+  await apply({ write: new Map([[`${p}status.json`, JSON.stringify({ [a.id]: 'draft', [b.id]: 'nonsense' })]]), snapshot: await readLocalFiles() })
+  expect((await getChapter(a.id))!.status).toBe('draft')
+  expect((await getChapter(b.id))!.status).toBeUndefined()
+  const planned = await readLocalFiles()
+  await setChapterStatus(a.id, 'done')
+  await apply({ write: new Map([[`${p}status.json`, JSON.stringify({ [a.id]: 'idea' })]]), snapshot: planned })
+  expect((await getChapter(a.id))!.status).toBe('done')
+  await apply({ remove: [`${p}status.json`], snapshot: await readLocalFiles() })
+  expect((await getChapter(a.id))!.status).toBeUndefined()
+})

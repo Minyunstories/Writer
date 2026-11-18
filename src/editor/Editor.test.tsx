@@ -1,6 +1,6 @@
 import { EditorState } from '@codemirror/state'
 import { EditorView, runScopeHandlers } from '@codemirror/view'
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, expect, test } from 'vitest'
 import {
@@ -224,4 +224,17 @@ test('while typing, the line being written is kept in the middle of the screen',
   expect(typed.effects.length).toBe(1)
   const moved = state.update({ selection: { anchor: 1 }, userEvent: 'select.pointer' })
   expect(moved.effects.length).toBe(0)
+})
+
+test('focus mode: the button and the shortcut switch it, Esc and the exit button leave it', async () => {
+  const user = userEvent.setup()
+  await setup('Text.')
+  await user.click(screen.getByRole('button', { name: 'Fokus' }))
+  expect(document.body).toHaveClass('focus-mode')
+  fireEvent.keyDown(window, { key: 'Escape' })
+  expect(document.body).not.toHaveClass('focus-mode')
+  fireEvent.keyDown(document.querySelector('.editor')!, { key: 'Enter', ctrlKey: true, shiftKey: true })
+  expect(document.body).toHaveClass('focus-mode')
+  await user.click(screen.getByRole('button', { name: 'Fokus beenden' }))
+  expect(document.body).not.toHaveClass('focus-mode')
 })

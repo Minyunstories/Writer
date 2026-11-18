@@ -14,6 +14,7 @@ import {
   templateBlocksFile as templateBlocksText,
   notesFile,
   parseNotes,
+  parseVersion,
   orderFile as orderText,
   parseColors,
   parseOrder,
@@ -21,6 +22,7 @@ import {
   styleFile as styleText,
   entryToFile,
   parseDates,
+  parseStatus,
   parseEntry,
   parseJson,
   parseStyle,
@@ -32,7 +34,7 @@ import {
 } from './files'
 import type { ShaMap } from './plan'
 
-const STORES = ['books', 'chapters', 'wikiFolders', 'wikiEntries', 'wikiImages', 'shared'] as const
+const STORES = ['books', 'chapters', 'wikiFolders', 'wikiEntries', 'wikiImages', 'shared', 'versions'] as const
 const FONTS: FontId[] = ['literata', 'inter', 'courier-prime']
 const COPY_SUFFIX = ' (Fassung von diesem Gerät)'
 const NOTE_SEPARATOR = '\n\n--- Fassung von diesem Gerät ---\n\n'
@@ -60,13 +62,14 @@ export interface RemoteChange {
 /** Everything stored on this device, as repository files. */
 export async function readLocalFiles(): Promise<FileSet> {
   const database = await db()
-  const [books, chapters, folders, entries, images, collection] = await Promise.all([
+  const [books, chapters, folders, entries, images, collection, versions] = await Promise.all([
     database.getAll('books'),
     database.getAll('chapters'),
     database.getAll('wikiFolders'),
     database.getAll('wikiEntries'),
     database.getAll('wikiImages'),
     database.get('shared', COLLECTION_ID),
+    database.getAll('versions'),
   ])
   const files: FileSet = new Map()
   if (collection && hasCollection(collection)) files.set(COLLECTION_PATH, collectionFile(collection))
@@ -78,13 +81,14 @@ export async function readLocalFiles(): Promise<FileSet> {
       folders: own(folders),
       entries: own(entries),
       images: own(images),
+      versions: own(versions),
     })
     for (const [path, data] of bundle) files.set(path, data)
   }
   return files
 }
 
-const KIND_ORDER = ['book', 'style', 'place', 'folders', 'templates', 'templateBlocks', 'chapter', 'outline', 'tags', 'dates', 'entry', 'wikiOrder', 'folderColors', 'notes', 'stars', 'spelling', 'collection', 'image']
+const KIND_ORDER = ['book', 'style', 'place', 'folders', 'templates', 'templateBlocks', 'chapter', 'outline', 'tags', 'dates', 'status', 'entry', 'wikiOrder', 'folderColors', 'notes', 'stars', 'spelling', 'collection', 'version', 'image']
 
 /**
  * Applies changes from the repository to this device, file by file, in one transaction.
@@ -100,6 +104,7 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
   const entries = tx.objectStore('wikiEntries')
   const images = tx.objectStore('wikiImages')
   const shared = tx.objectStore('shared')
+  const versions = tx.objectStore('versions')
   const pending: { bookId: string; kind: ConflictNote['kind']; name: string }[] = []
   const skipped: string[] = []
   const imageMeta = new Map<string, { entryId: string; type: string; width: number; height: number }>()
@@ -175,12 +180,23 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
     await chapters.put({ ...chapter, content: remote, updatedAt: now })
   }
 
+  /** Named versions only change their name; whichever arrives is taken. */
+  async function writeVersion(path: string, bookId: string, data: FileData | undefined) {
+    const version = parseVersion(bookId, data)
+    if (!version) {
+      skipped.push(path)
+      return
+    }
+    await versions.put(version)
+  }
+
   async function removeChapter(path: string, id: string) {
     const chapter = await chapters.get(id)
     if (!chapter) return
     // Changed since the run was planned: keep it; the next run uploads it again.
     if (snapshotText(path) !== chapter.content) return
     await chapters.delete(id)
+    for (const key of await versions.index('chapterId').getAllKeys(id)) await versions.delete(key)
     const book = await books.get(chapter.bookId)
     if (book) await books.put({ ...book, chapterOrder: book.chapterOrder.filter((item) => item !== id), updatedAt: now })
   }
@@ -502,6 +518,25 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
     if (joined) pending.push({ bookId, kind: 'dates', name: 'Daten' })
   }
 
+  /** Chapter status: the repository's, except where it was changed here since the run was planned. */
+  async function writeStatus(path: string, bookId: string, data: FileData | undefined) {
+    const remote = parseStatus(data)
+    if (!remote) {
+      skipped.push(path)
+      return
+    }
+    const planned = parseStatus(change.snapshot.get(path)) ?? {}
+    for (const chapter of await chapters.index('bookId').getAll(bookId)) {
+      if (chapter.status !== planned[chapter.id]) continue
+      const next = remote[chapter.id]
+      if (next === chapter.status) continue
+      const updated: Chapter = { ...chapter, updatedAt: now }
+      if (next) updated.status = next
+      else delete updated.status
+      await chapters.put(updated)
+    }
+  }
+
   async function writeFolders(path: string, bookId: string, data: FileData, conflict: boolean) {
     const list = parseJson<Omit<WikiFolder, 'bookId'>[]>(data)
     if (!Array.isArray(list)) {
@@ -620,6 +655,7 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
     for (const key of await folders.index('bookId').getAllKeys(bookId)) await folders.delete(key)
     for (const key of await entries.index('bookId').getAllKeys(bookId)) await entries.delete(key)
     for (const key of await images.index('bookId').getAllKeys(bookId)) await images.delete(key)
+    for (const key of await versions.index('bookId').getAllKeys(bookId)) await versions.delete(key)
     await books.delete(bookId)
   }
 
@@ -646,6 +682,7 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
       else if (info.kind === 'style') await writeStyle(path, info.bookId, data, conflict)
       else if (info.kind === 'place') await writePlace(path, info.bookId, data)
       else if (info.kind === 'dates') await writeDates(path, info.bookId, data, conflict)
+      else if (info.kind === 'status') await writeStatus(path, info.bookId, data)
       else if (info.kind === 'wikiOrder') await writeOrder(path, info.bookId, data, conflict)
       else if (info.kind === 'folderColors') await writeColors(path, info.bookId, data, conflict)
       else if (info.kind === 'notes') await writeNotes(path, info.bookId, data, conflict)
@@ -654,6 +691,7 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
       else if (info.kind === 'spelling') await writeSpelling(path, info.bookId, data, conflict)
       else if (info.kind === 'templates') await writeTemplates(path, info.bookId, data, conflict)
       else if (info.kind === 'collection') await writeCollection(path, data, conflict)
+      else if (info.kind === 'version') await writeVersion(path, info.bookId, data)
       else await writeImage(path, info.bookId, info.id, data)
     }
 
@@ -672,6 +710,7 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
       // Removed there: an empty file, so lists unchanged here are cleared and changed ones kept.
       else if (info.kind === 'tags') await writeTags(item.path, info.bookId, '{}', false)
       else if (info.kind === 'dates') await writeDates(item.path, info.bookId, '{}', false)
+      else if (info.kind === 'status') await writeStatus(item.path, info.bookId, '{}')
       else if (info.kind === 'style') await removeStyle(item.path, info.bookId)
       else if (info.kind === 'place') await removePlace(item.path, info.bookId)
       else if (info.kind === 'wikiOrder') await writeOrder(item.path, info.bookId, '{}', false)
@@ -682,6 +721,7 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
       else if (info.kind === 'spelling') await writeSpelling(item.path, info.bookId, '{}', false)
       else if (info.kind === 'templates') await writeTemplates(item.path, info.bookId, '{}', false)
       else if (info.kind === 'collection') await writeCollection(item.path, '{"items":[]}', false)
+      else if (info.kind === 'version') await versions.delete(info.id)
       else if (info.kind === 'folders') {
         for (const key of await folders.index('bookId').getAllKeys(info.bookId)) await folders.delete(key)
       }

@@ -22,6 +22,8 @@ import type { FindOptions } from '../search/find'
 import { replaceMatches } from '../search/find'
 import { SearchPanel } from '../search/SearchPanel'
 import { updateSpelling } from '../storage/spelling'
+import { autoVersion } from '../storage/versions'
+import { typographic } from '../editor/typography'
 import { addNote, deleteNote, moveNoteToChapter, moveNoteToEntry, setEntryStar, updateNote } from '../storage/notes'
 import { WikiHome } from '../wiki/WikiHome'
 import { WikiSidebar } from '../wiki/WikiSidebar'
@@ -329,8 +331,29 @@ export function BookView({ renderChapter }: Props) {
       for (const chapter of await listChapters(bookId)) {
         const result = replaceMatches(chapter.content, query, replacement, options)
         if (result.count === 0) continue
+        await autoVersion(chapter, chapter.content, { label: 'Vor „Alle ersetzen“', always: true })
         await updateChapter(chapter.id, { content: result.text }, { expectedContent: chapter.content })
         count += result.count
+      }
+    } catch {
+      setActionError(true)
+    }
+    await reload()
+    window.dispatchEvent(new Event(SYNCED_EVENT))
+    return count
+  }
+  /** Curly quotes and dashes in every chapter, each against its stored text. */
+  const typographyEverywhere = async () => {
+    window.dispatchEvent(new Event('pagehide'))
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    let count = 0
+    try {
+      for (const chapter of await listChapters(bookId)) {
+        const converted = typographic(chapter.content)
+        if (converted === chapter.content) continue
+        await autoVersion(chapter, chapter.content, { label: 'Vor der Typografie', always: true })
+        await updateChapter(chapter.id, { content: converted }, { expectedContent: chapter.content })
+        count++
       }
     } catch {
       setActionError(true)
@@ -716,6 +739,7 @@ export function BookView({ renderChapter }: Props) {
             chapters={chapters}
             onOpen={(chapterId, range) => openChapterAt(chapterId, range)}
             onReplaceAll={replaceEverywhere}
+            onTypography={typographyEverywhere}
             onClose={() => setSearchOpen(false)}
           />
         )}

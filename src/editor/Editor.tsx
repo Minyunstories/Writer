@@ -1,4 +1,8 @@
 import { showSynonyms, synonyms } from '../synonyms/synonymBox'
+import { autoVersion } from '../storage/versions'
+import { VersionsDialog } from '../versions/VersionsDialog'
+import { StatusPicker } from '../book/StatusPicker'
+import { currentParagraph, FOCUS_EVENT, isFocusMode, setFocusMode } from './focusMode'
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
 import { Annotation, EditorSelection, EditorState, StateEffect, StateField, type Extension } from '@codemirror/state'
 import { Decoration, EditorView, keymap, type DecorationSet } from '@codemirror/view'
@@ -110,6 +114,26 @@ export function Editor({ book, chapter, onChanged, extraExtensions, jumpTo, onJu
   const [font, setFont] = useState<FontId>(book.font)
   const [words, setWords] = useState(() => countWords(chapter.content))
   const [saveState, setSaveState] = useState<SaveState>('saved')
+  const [versionsOpen, setVersionsOpen] = useState(false)
+  const [focus, setFocus] = useState(isFocusMode)
+  useEffect(() => {
+    const onFocusChange = () => setFocus(isFocusMode())
+    // Esc leaves focus mode, unless something in the text (a box, a list) used it first.
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape' && !event.defaultPrevented && isFocusMode()) setFocusMode(false)
+    }
+    window.addEventListener(FOCUS_EVENT, onFocusChange)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener(FOCUS_EVENT, onFocusChange)
+      window.removeEventListener('keydown', onKey)
+      setFocusMode(false)
+    }
+  }, [])
+  const toggleFocus = () => {
+    setFocusMode(!isFocusMode())
+    viewRef.current?.focus()
+  }
   const [loadError, setLoadError] = useState(false)
   const [zoom, setZoom] = useZoom('editor')
 
@@ -163,6 +187,8 @@ export function Editor({ book, chapter, onChanged, extraExtensions, jumpTo, onJu
       if (cancelled || !hostRef.current) return
 
       setWords(countWords(content))
+      // A safety copy of the text as it was found, before today's changes.
+      void autoVersion(chapter, content).catch(() => {})
       const created = new EditorView({
         parent: hostRef.current,
         state: EditorState.create({
@@ -171,6 +197,7 @@ export function Editor({ book, chapter, onChanged, extraExtensions, jumpTo, onJu
             history(),
             writingMarkdown(),
             synonyms(),
+            currentParagraph,
             typewriter,
             keymap.of([...defaultKeymap, ...historyKeymap]),
             flashField,
@@ -332,6 +359,11 @@ export function Editor({ book, chapter, onChanged, extraExtensions, jumpTo, onJu
 
   const onKeyDown = (event: KeyboardEvent) => {
     if (!(event.ctrlKey || event.metaKey) || event.altKey) return
+    if (event.shiftKey && event.key === 'Enter') {
+      event.preventDefault()
+      toggleFocus()
+      return
+    }
     if (event.key === '+' || event.key === '=') setZoom(zoom + ZOOM_STEP)
     else if (event.key === '-') setZoom(zoom - ZOOM_STEP)
     else if (event.key === '0') setZoom(100)
@@ -344,6 +376,9 @@ export function Editor({ book, chapter, onChanged, extraExtensions, jumpTo, onJu
   return (
     <div className="editor" onKeyDown={onKeyDown}>
       <div className="editor-toolbar">
+        <span className="editor-toolbar-start">
+          <StatusPicker chapter={{ id: chapter.id, title: chapter.title, status: chapter.status }} onChanged={() => onChangedRef.current()} />
+        </span>
         <button
           type="button"
           className="editor-highlight"
@@ -375,6 +410,12 @@ export function Editor({ book, chapter, onChanged, extraExtensions, jumpTo, onJu
           Synonyme
         </button>
         <GrammarToggle />
+        <button className="editor-highlight" title="Gesicherte Fassungen dieses Kapitels" onClick={() => setVersionsOpen(true)}>
+          Fassungen
+        </button>
+        <button className="editor-highlight" title="Fokusmodus: nur der Text (Strg+Umschalt+Enter, Esc beendet)" onMouseDown={(event) => event.preventDefault()} onClick={toggleFocus}>
+          Fokus
+        </button>
         <span className="editor-toolbar-divider" aria-hidden="true" />
         <label className="editor-font">
           <span className="muted">Schrift</span>
@@ -389,6 +430,24 @@ export function Editor({ book, chapter, onChanged, extraExtensions, jumpTo, onJu
         <ZoomControl area="editor" />
       </div>
 
+      {focus && (
+        <button className="focus-exit ghost" onMouseDown={(event) => event.preventDefault()} onClick={toggleFocus}>
+          Fokus beenden
+        </button>
+      )}
+      {versionsOpen && (
+        <VersionsDialog
+          chapter={{ id: chapter.id, bookId: book.id, title: titleRef.current.trim() || chapter.title }}
+          current={() => viewRef.current?.state.doc.toString() ?? chapter.content}
+          onRestore={(content) => {
+            const view = viewRef.current
+            if (!view) return
+            view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: content }, userEvent: 'input' })
+            view.focus()
+          }}
+          onClose={() => setVersionsOpen(false)}
+        />
+      )}
       {saveState === 'conflict' && (
         <div className="editor-conflict" role="alertdialog" aria-label="Kapitel wurde an anderer Stelle geändert">
           <p>

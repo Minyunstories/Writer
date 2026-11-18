@@ -1,3 +1,4 @@
+import { typographic } from '../editor/typography'
 import { useMemo, useState } from 'react'
 import type { Chapter } from '../types'
 import { findMatches, type FindOptions } from './find'
@@ -8,19 +9,24 @@ interface Props {
   onOpen: (chapterId: string, range: { from: number; to: number }) => void
   /** Replaces in every chapter; resolves to the number of replaced places. */
   onReplaceAll: (query: string, replacement: string, options: FindOptions) => Promise<number>
+  /** Curly quotes and dashes in every chapter; resolves to the number of changed chapters. */
+  onTypography?: () => Promise<number>
   onClose: () => void
 }
 
 const CONTEXT = 40
 
 /** Search through every chapter of the book, and replace everywhere at once. */
-export function SearchPanel({ chapters, onOpen, onReplaceAll, onClose }: Props) {
+export function SearchPanel({ chapters, onOpen, onReplaceAll, onTypography, onClose }: Props) {
   const [query, setQuery] = useState('')
   const [replacement, setReplacement] = useState('')
   const [caseSensitive, setCaseSensitive] = useState(false)
   const [wholeWord, setWholeWord] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [replaced, setReplaced] = useState<number | null>(null)
+  const [typoConfirm, setTypoConfirm] = useState(false)
+  const [typoDone, setTypoDone] = useState<number | null>(null)
+  const typoCount = useMemo(() => (typoConfirm ? chapters.filter((chapter) => typographic(chapter.content) !== chapter.content).length : 0), [chapters, typoConfirm])
   const options = { caseSensitive, wholeWord }
 
   const groups = useMemo(
@@ -119,6 +125,44 @@ export function SearchPanel({ chapters, onOpen, onReplaceAll, onClose }: Props) 
               </li>
             ))}
           </ul>
+        )}
+
+        {onTypography && !query && (
+          <section className="search-typography">
+            <h3>Typografie</h3>
+            <p className="muted">Gerade Anführungszeichen werden zu “ ” und ‘ ’, ein Bindestrich zwischen Leerzeichen zu –, zwei Bindestriche zu —. Die Leerzeichen bleiben.</p>
+            {typoConfirm ? (
+              typoCount === 0 ? (
+                <p className="search-summary">Alles schon umgewandelt.</p>
+              ) : (
+                <div className="search-confirm">
+                  <span>{typoCount} Kapitel umwandeln? Vorher wird jeweils eine Fassung gesichert.</span>
+                  <button
+                    className="primary"
+                    onClick={async () => {
+                      setTypoConfirm(false)
+                      setTypoDone(await onTypography())
+                    }}
+                  >
+                    Ja, umwandeln
+                  </button>
+                  <button className="ghost" onClick={() => setTypoConfirm(false)}>
+                    Abbrechen
+                  </button>
+                </div>
+              )
+            ) : (
+              <button
+                onClick={() => {
+                  setTypoDone(null)
+                  setTypoConfirm(true)
+                }}
+              >
+                Anführungszeichen und Striche umwandeln
+              </button>
+            )}
+            {typoDone !== null && <p className="search-summary">{typoDone} Kapitel umgewandelt.</p>}
+          </section>
         )}
       </div>
     </aside>

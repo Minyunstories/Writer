@@ -224,3 +224,12 @@ test('books without stored colours still get a fixed cover and the copper highli
   expect(coverOf({ ...plain, cover: '#123456' })).toBe('#123456')
   expect(highlightOf(plain)).toBe('rgba(213, 141, 98, 0.30)')
 })
+
+test('a chapter status is set and cleared', async () => {
+  const { setChapterStatus } = await import('./db')
+  const book = await createBook('B')
+  const chapter = await createChapter(book.id, 'A')
+  expect((await setChapterStatus(chapter.id, 'draft')).status).toBe('draft')
+  expect((await getChapter(chapter.id))!.status).toBe('draft')
+  expect((await setChapterStatus(chapter.id, null)).status).toBeUndefined()
+})

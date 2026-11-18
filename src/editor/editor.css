@@ -168,3 +168,41 @@ button.editor-grammar.on::before {
   content: '✓ ';
   color: var(--primary);
 }
+
+.editor-toolbar-start {
+  margin-right: auto;
+}
+
+/* Focus mode: only the text. The paragraph being written stays clear, the rest steps back. */
+.focus-mode .book-header,
+.focus-mode .sidebar-wrap,
+.focus-mode .sidebar-handle,
+.focus-mode .sidebar-scrim,
+.focus-mode .book-panel,
+.focus-mode .editor-toolbar,
+.focus-mode .editor-status {
+  display: none !important;
+}
+
+.focus-mode .cm-line {
+  transition: opacity 0.25s ease;
+}
+
+.focus-mode .cm-line:not(.cm-mw-current) {
+  opacity: 0.35;
+}
+
+.focus-exit {
+  position: fixed;
+  top: 0.75rem;
+  right: 1rem;
+  z-index: 20;
+  font-size: 13px;
+  opacity: 0.25;
+  transition: opacity 0.2s ease;
+}
+
+.focus-exit:hover,
+.focus-exit:focus-visible {
+  opacity: 1;
+}

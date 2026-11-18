@@ -616,3 +616,74 @@ a.sidebar-manuscript.active {
     display: none !important;
   }
 }
+
+/* Chapter status: a coloured dot, the same in the list, the outline and the editor. */
+.status-dot {
+  display: inline-block;
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1px solid var(--text-muted);
+  background: transparent;
+}
+
+.status-idea .status-dot,
+.status-dot.status-idea {
+  border-color: #8c96a8;
+  background: #8c96a8;
+}
+
+.status-draft .status-dot,
+.status-dot.status-draft {
+  border-color: #d9a84e;
+  background: #d9a84e;
+}
+
+.status-revision .status-dot,
+.status-dot.status-revision {
+  border-color: #d58d62;
+  background: #d58d62;
+}
+
+.status-done .status-dot,
+.status-dot.status-done {
+  border-color: #7fae7a;
+  background: #7fae7a;
+}
+
+.status-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0 0.2rem 0 0.6rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+
+.status-picker:hover {
+  border-color: var(--border);
+}
+
+.status-picker select {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 13px;
+  padding: 0.3rem 0.2rem;
+  cursor: pointer;
+}
+
+.status-picker.status-none select {
+  color: var(--text-muted);
+}
+
+.status-picker:not(.status-none) select {
+  color: var(--text);
+}
+
+.chapter-list .status-dot {
+  margin-right: 0.45rem;
+  vertical-align: 0.1em;
+}

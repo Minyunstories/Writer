@@ -268,3 +268,24 @@ test('the collection file is managed by the app but belongs to no book', () => {
   expect(classifyPath('collection/collection.json')).toEqual({ bookId: '', kind: 'collection', id: 'collection' })
   expect(classifyPath('collection/other.json')).toBeNull()
 })
+
+test('named versions travel in files of their own; automatic ones stay on the device', () => {
+  const versions = [
+    { id: 'v1', bookId: 'b1', chapterId: 'c1', content: 'früher', createdAt: 5, label: 'Erste', auto: false },
+    { id: 'v2', bookId: 'b1', chapterId: 'c1', content: 'auto', createdAt: 6, auto: true },
+  ]
+  const files = bundleToFiles({ ...bundle, versions })
+  expect([...files.keys()].filter((path) => path.includes('versions/'))).toEqual(['books/b1/versions/c1/v1.json'])
+  expect(classifyPath('books/b1/versions/c1/v1.json')).toEqual({ bookId: 'b1', kind: 'version', id: 'v1' })
+  expect(filesToBundle('b1', files).versions).toEqual([versions[0]])
+})
+
+test('chapter status travels in status.json', () => {
+  const withStatus = { ...bundle, chapters: bundle.chapters.map((chapter, index) => (index === 0 ? { ...chapter, status: 'revision' as const } : chapter)) }
+  const files = bundleToFiles(withStatus)
+  const id = withStatus.chapters[0].id
+  expect(JSON.parse(files.get('books/b1/status.json') as string)).toEqual({ [id]: 'revision' })
+  expect(classifyPath('books/b1/status.json')).toEqual({ bookId: 'b1', kind: 'status', id: 'b1' })
+  expect(filesToBundle('b1', files).chapters.find((chapter) => chapter.id === id)!.status).toBe('revision')
+  expect(bundleToFiles(bundle).has('books/b1/status.json')).toBe(false)
+})

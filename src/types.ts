@@ -65,8 +65,12 @@ export interface Chapter {
   tags?: string[]
   /** Free-text date on the outline timeline, e.g. "März 1204". Missing when empty. */
   date?: string
+  /** How far the chapter is. Missing when not set. */
+  status?: ChapterStatus
   updatedAt: number
 }
+
+export type ChapterStatus = 'idea' | 'draft' | 'revision' | 'done'
 
 export type ZoomArea = 'editor' | 'wiki' | 'outline' | 'panel' | 'manuscript'
 
@@ -148,4 +152,17 @@ export interface Collection {
   /** Ids of deleted items, so a sync does not bring them back. */
   deleted?: string[]
   guide?: CollectionGuide
+}
+
+/** A saved state of a chapter's text. */
+export interface ChapterVersion {
+  id: string
+  bookId: string
+  chapterId: string
+  content: string
+  createdAt: number
+  /** The writer's name for it. Named versions are kept and synchronised. */
+  label?: string
+  /** Made by the app (when the chapter was opened, before replacing). Kept on this device only. */
+  auto: boolean
 }
