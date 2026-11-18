@@ -134,7 +134,7 @@ export function RelationGraph({ book, entries, folders, onOpenEntry, onChanged }
     const xs = nodeIds.map((id) => layout[id].x)
     const ys = nodeIds.map((id) => layout[id].y)
     const [minX, maxX, minY, maxY] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)]
-    const scale = Math.min(1, width / (maxX - minX + 220), height / (maxY - minY + 180))
+    const scale = Math.min(1.6, width / (maxX - minX + 220), height / (maxY - minY + 180))
     setView({ scale, x: width / 2 - ((minX + maxX) / 2) * scale, y: height / 2 - ((minY + maxY) / 2) * scale })
   }
   const fitRef = useRef(fit)

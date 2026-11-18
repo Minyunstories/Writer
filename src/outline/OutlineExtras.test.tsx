@@ -66,7 +66,7 @@ test('a tag is added with Enter and removed with its ×', async () => {
   const { a, user } = await setup()
   await user.type(within(card('Anfang')).getByLabelText('Tag hinzufügen'), 'PoV: Pascal{Enter}')
   await waitFor(async () => expect((await getChapter(a.id))!.tags).toEqual(['PoV: Pascal']))
-  expect(within(card('Anfang')).getByRole('button', { name: 'Nach Tag „PoV: Pascal" filtern' })).toBeInTheDocument()
+  expect(await within(card('Anfang')).findByRole('button', { name: 'Nach Tag „PoV: Pascal" filtern' })).toBeInTheDocument()
   await user.click(within(card('Anfang')).getByRole('button', { name: 'Tag „PoV: Pascal" entfernen' }))
   await waitFor(async () => expect((await getChapter(a.id))!.tags).toBeUndefined())
 })

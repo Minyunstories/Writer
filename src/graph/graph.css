@@ -1,6 +1,24 @@
 .relation-graph {
   display: grid;
-  gap: 0.8rem;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  gap: 0.6rem;
+  height: 100%;
+  min-height: 0;
+}
+
+/* The network fills the whole page below the tabs. */
+.book-scroll.graph-mode {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.book-scroll.graph-mode .wiki-graph-page {
+  flex: 1;
+  min-height: 0;
+  max-width: none;
+  margin: 0;
+  padding: 0.6rem 0.8rem 0.6rem;
 }
 
 .relation-graph-tools {
@@ -46,7 +64,8 @@
 
 .relation-graph-canvas {
   width: 100%;
-  height: min(70vh, 640px);
+  height: 100%;
+  min-height: 320px;
   border: 1px solid var(--border);
   border-radius: 14px;
   background: var(--bg);

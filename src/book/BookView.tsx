@@ -832,7 +832,7 @@ export function BookView({ renderChapter }: Props) {
             </div>
           )}
           {section === 'wiki' && !activeEntry && entries.length > 0 && (
-            <div className="book-scroll">
+            <div className={wikiView === 'graph' ? 'book-scroll graph-mode' : 'book-scroll'}>
               <div className="wiki-view-tabs" role="tablist" aria-label="Wiki-Ansicht">
                 <button role="tab" aria-selected={wikiView === 'home' || (wikiView === 'address' && !isModuleOn(book, 'address'))} onClick={() => switchWikiView('home')}>
                   Übersicht
