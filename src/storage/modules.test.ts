@@ -26,7 +26,12 @@ test('switching on and off', async () => {
 
 test('modules the app does not know stay switched on', async () => {
   const book = await createBook('B')
-  expect(activeModules({ modules: { address: true, vocabulary: true } })).toEqual(['vocabulary'])
+  expect(activeModules({ modules: { tarot: true, vocabulary: true } })).toEqual(['vocabulary'])
   await setModule(book.id, 'vocabulary', true)
   expect((await getBook(book.id))!.modules).toEqual({ vocabulary: true })
+})
+
+test('activeModules lists both modules in tab order', async () => {
+  expect(activeModules({ modules: { address: true, vocabulary: true } })).toEqual(['vocabulary', 'address'])
+  expect(activeModules({ modules: { address: true } })).toEqual(['address'])
 })

@@ -332,6 +332,18 @@ test('vocabulary travels in vocabulary.json, also while the module is off', () =
   expect(bundleToFiles({ ...bundle, book: { ...book, vocabulary: { learners: [], words: [] } } }).has('books/b1/vocabulary.json')).toBe(false)
 })
 
+test('address travels in address.json, also while the module is off', () => {
+  const address = {
+    ranks: [{ id: 'r1', name: 'Duchess', public: 'Your Grace', updatedAt: 1 }],
+    people: [{ entryId: 'e1', rankId: 'r1', changes: [], updatedAt: 1 }],
+    forms: [],
+  }
+  const files = bundleToFiles({ ...bundle, book: { ...book, address } })
+  expect(classifyPath('books/b1/address.json')).toEqual({ bookId: 'b1', kind: 'address', id: 'b1' })
+  expect(filesToBundle('b1', files).book.address).toEqual(address)
+  expect(bundleToFiles({ ...bundle, book: { ...book, address: { ranks: [], people: [], forms: [] } } }).has('books/b1/address.json')).toBe(false)
+})
+
 test('places in the relationship network travel in wiki/graph.json', () => {
   const graph = { e1: { x: 10, y: -20 } }
   const files = bundleToFiles({ ...bundle, book: { ...book, graph } })

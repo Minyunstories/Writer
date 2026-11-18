@@ -16,6 +16,9 @@ import { ModuleDrawer } from '../modules/ModuleDrawer'
 import { useDrawerHeight, useStored } from '../modules/drawerState'
 import { activeModules, isModuleOn, MODULES, type ModuleId } from '../modules/modules'
 import { VocabularyPanel } from '../vocabulary/VocabularyPanel'
+import { PersonSection } from '../address/PersonSection'
+import { RanksPage } from '../address/RanksPage'
+import { AddressPanel } from '../address/AddressPanel'
 import { activeLearners, spellingNames } from '../vocabulary/knowledge'
 import { captureWord } from '../storage/vocabulary'
 import { WikiEntryEditor } from '../wiki/WikiEntryEditor'
@@ -122,14 +125,15 @@ export function BookView({ renderChapter }: Props) {
   const [sidebarWidth, setSidebarWidth] = useSidebarWidth()
   const [panelWidth, setPanelWidth] = usePanelWidth()
   const [notesOpen, setNotesOpen] = useState(false)
-  const [wikiView, setWikiView] = useState<'home' | 'graph'>(() => {
+  const [wikiView, setWikiView] = useState<'home' | 'graph' | 'address'>(() => {
     try {
-      return localStorage.getItem('mw:wiki-view') === 'graph' ? 'graph' : 'home'
+      const stored = localStorage.getItem('mw:wiki-view')
+      return stored === 'graph' || stored === 'address' ? stored : 'home'
     } catch {
       return 'home'
     }
   })
-  const switchWikiView = (next: 'home' | 'graph') => {
+  const switchWikiView = (next: 'home' | 'graph' | 'address') => {
     setWikiView(next)
     try {
       localStorage.setItem('mw:wiki-view', next)
@@ -152,6 +156,7 @@ export function BookView({ renderChapter }: Props) {
   const [drawerFlag, setDrawerFlag] = useStored<string>(`mw:drawer-open:${bookId}`, '')
   const [drawerHeight, setDrawerHeight] = useDrawerHeight()
   const [viewer, setViewer] = useStored<string>(`mw:vocab-viewer:${bookId}`, '')
+  const [speaker, setSpeaker] = useStored<string>(`mw:address-speaker:${bookId}`, '')
   const [drawerTab, setDrawerTab] = useState<ModuleId>('vocabulary')
   /** A word to open in the vocabulary, e.g. one just taken from the text; null opens an empty row. */
   const [vocabEditing, setVocabEditing] = useState<{ wordId: string | null; key: number }>()
@@ -814,6 +819,7 @@ export function BookView({ renderChapter }: Props) {
                 relations={
                   <RelationsSection book={book} entryId={activeEntry.id} entries={entries} onOpenEntry={(entryId) => navigate(`/book/${book.id}/wiki/${entryId}`)} onChanged={() => void reload()} />
                 }
+                address={<PersonSection book={book} entry={activeEntry} entries={entries} folders={folders} chapters={chapters} chapterId={null} onChanged={() => void reload()} />}
                 onOpenChapter={openChapterAt}
                 focusName={activeEntry.id === freshEntryId}
                 onChanged={reloadWiki}
@@ -828,14 +834,21 @@ export function BookView({ renderChapter }: Props) {
           {section === 'wiki' && !activeEntry && entries.length > 0 && (
             <div className="book-scroll">
               <div className="wiki-view-tabs" role="tablist" aria-label="Wiki-Ansicht">
-                <button role="tab" aria-selected={wikiView === 'home'} onClick={() => switchWikiView('home')}>
+                <button role="tab" aria-selected={wikiView === 'home' || (wikiView === 'address' && !isModuleOn(book, 'address'))} onClick={() => switchWikiView('home')}>
                   Übersicht
                 </button>
                 <button role="tab" aria-selected={wikiView === 'graph'} onClick={() => switchWikiView('graph')}>
                   Beziehungsnetz
                 </button>
+                {isModuleOn(book, 'address') && (
+                  <button role="tab" aria-selected={wikiView === 'address'} onClick={() => switchWikiView('address')}>
+                    Anreden
+                  </button>
+                )}
               </div>
-              {wikiView === 'graph' ? (
+              {wikiView === 'address' && isModuleOn(book, 'address') ? (
+                <RanksPage book={book} folders={folders} onChanged={() => void reload()} />
+              ) : wikiView === 'graph' ? (
                 <div className="wiki-graph-page">
                   <RelationGraph book={book} entries={entries} folders={folders} onOpenEntry={openPanel} onChanged={() => void reload()} />
                 </div>
@@ -908,6 +921,19 @@ export function BookView({ renderChapter }: Props) {
                   viewer={viewer}
                   onViewer={setViewer}
                   editing={vocabEditing}
+                  onChanged={() => void reload()}
+                />
+              )}
+              {drawerTabShown === 'address' && (
+                <AddressPanel
+                  book={book}
+                  entries={entries}
+                  folders={folders}
+                  chapters={chapters}
+                  chapterId={activeChapter.id}
+                  mentioned={mentioned}
+                  speaker={speaker}
+                  onSpeaker={setSpeaker}
                   onChanged={() => void reload()}
                 />
               )}
@@ -1020,6 +1046,7 @@ export function BookView({ renderChapter }: Props) {
                 zoomArea="panel"
                 onOpenEntry={pushPanel}
                 relations={<RelationsSection book={book} entryId={panelEntry.id} entries={entries} onOpenEntry={pushPanel} onChanged={() => void reload()} />}
+                address={<PersonSection book={book} entry={panelEntry} entries={entries} folders={folders} chapters={chapters} chapterId={activeChapter?.id ?? null} onChanged={() => void reload()} />}
                 onOpenChapter={openChapterAt}
                 onChanged={reloadWiki}
                 onSaveFailed={() => setActionError(true)}

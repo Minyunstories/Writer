@@ -53,6 +53,8 @@ interface Props {
   onStar?: (starred: boolean) => void
   /** The entry's relationships, shown below the properties. */
   relations?: ReactNode
+  /** The address module's section (rank, names, who addresses whom how), below the relationships. */
+  address?: ReactNode
 }
 
 const TIMELINE_KEY = 'mw:wiki-timeline'
@@ -173,6 +175,7 @@ export function WikiEntryEditor({
   starred = false,
   onStar,
   relations,
+  address,
 }: Props) {
   const [entry, setEntry] = useState<WikiEntry | null | undefined>(undefined)
   const nameRef = useRef<HTMLInputElement>(null)
@@ -549,6 +552,8 @@ export function WikiEntryEditor({
       />
 
       {relations}
+
+      {address}
 
       <div className="wiki-field">
         <span className="wiki-label">Notizen</span>

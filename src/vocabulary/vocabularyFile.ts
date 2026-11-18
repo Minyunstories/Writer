@@ -1,24 +1,6 @@
+import { extraOf, isObject, readJson, str, withExtra } from '../lib/fileFields'
 import type { FileData } from '../sync/hash'
 import type { BookVocabulary, VocabKnown, VocabLearner, VocabWord } from '../types'
-
-const decoder = new TextDecoder()
-type Raw = Record<string, unknown>
-
-const isObject = (value: unknown): value is Raw => !!value && typeof value === 'object' && !Array.isArray(value)
-const str = (value: unknown): value is string => typeof value === 'string' && value.trim() !== ''
-
-/** The fields of an object this version does not know, or undefined when there are none. */
-function extraOf(raw: Raw, known: string[]): Record<string, unknown> | undefined {
-  const rest = Object.entries(raw).filter(([key]) => !known.includes(key))
-  return rest.length ? Object.fromEntries(rest) : undefined
-}
-
-/** Known fields first, then unknown ones that do not clash with them. */
-function withExtra(fields: Raw, extra: Record<string, unknown> | undefined): Raw {
-  if (!extra) return fields
-  const rest = Object.entries(extra).filter(([key]) => !(key in fields))
-  return { ...fields, ...Object.fromEntries(rest) }
-}
 
 const LEARNER_KEYS = ['entry', 'removed', 'updatedAt']
 const WORD_KEYS = ['id', 'word', 'translation', 'note', 'known', 'createdAt', 'updatedAt']
@@ -94,13 +76,7 @@ function parseLearner(raw: unknown): VocabLearner[] {
 
 /** The usable content of a vocabulary.json; null when it is not an object. Tolerant of half-broken files. */
 export function parseVocabulary(data: FileData | undefined): BookVocabulary | null {
-  if (data === undefined) return null
-  let value: unknown
-  try {
-    value = JSON.parse(typeof data === 'string' ? data : decoder.decode(data))
-  } catch {
-    return null
-  }
+  const value = readJson(data)
   if (!isObject(value)) return null
   const vocabulary: BookVocabulary = {
     learners: Array.isArray(value.learners) ? value.learners.flatMap(parseLearner) : [],

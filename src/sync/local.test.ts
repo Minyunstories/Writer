@@ -597,6 +597,37 @@ test('vocabulary: taken over, kept when changed here during the run, merged on c
   expect((await getBook(book.id))!.vocabulary).toBeUndefined()
 })
 
+test('address: taken over, kept when changed here during the run, merged on conflict, removed', async () => {
+  const { addressFile } = await import('../address/addressFile')
+  const { db } = await import('../storage/connection')
+  const { p, book } = await seed()
+  const rank = (id: string, name: string, updatedAt: number) => ({ id, name, public: name, updatedAt })
+  const remote = { ranks: [rank('r1', 'Duchess', 1)], people: [], forms: [] }
+  await apply({ write: new Map([[`${p}address.json`, addressFile(remote)!]]), snapshot: await readLocalFiles() })
+  expect((await getBook(book.id))!.address).toEqual(remote)
+
+  const planned = await readLocalFiles()
+  const putAddress = async (address: object) => {
+    const stored = (await getBook(book.id))!
+    await (await db()).put('books', { ...stored, address } as typeof stored)
+  }
+  await putAddress({ ranks: [rank('r1', 'Duchess', 1), rank('r2', 'King', 2)], people: [], forms: [] })
+  await apply({ write: new Map([[`${p}address.json`, addressFile({ ranks: [], people: [], forms: [], deleted: ['x'] })!]]), snapshot: planned })
+  expect((await getBook(book.id))!.address!.ranks.map((r) => r.id)).toEqual(['r1', 'r2'])
+
+  await putAddress({ ranks: [rank('r1', 'Duchess here', 5), rank('r2', 'King', 2)], people: [], forms: [] })
+  const theirs = { ranks: [rank('r1', 'Duchess there', 3), rank('r3', 'Knight', 3)], people: [], forms: [], deleted: ['r2'] }
+  await applyFull({ conflicts: [{ path: `${p}address.json`, remote: addressFile(theirs)! }], snapshot: await readLocalFiles() })
+  const merged = (await getBook(book.id))!.address!
+  expect(merged.ranks.map((r) => [r.id, r.name])).toEqual([
+    ['r1', 'Duchess here'],
+    ['r3', 'Knight'],
+  ])
+
+  await apply({ remove: [`${p}address.json`], snapshot: await readLocalFiles() })
+  expect((await getBook(book.id))!.address).toBeUndefined()
+})
+
 test('graph places: taken over, kept when moved here during the run, joined on conflict', async () => {
   const { placeInGraph } = await import('../storage/relations')
   const { p, book } = await seed()

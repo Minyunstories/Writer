@@ -1,6 +1,7 @@
 import { collectionFile, hasCollection, mergeCollections, parseCollection } from '../collection/collectionFile'
 import { modulesFile, parseModules } from '../modules/modulesFile'
 import { mergeVocabulary, parseVocabulary, vocabularyFile } from '../vocabulary/vocabularyFile'
+import { addressFile, mergeAddress, parseAddress } from '../address/addressFile'
 import { COLLECTION_ID } from '../storage/collection'
 import type { IDBPTransaction } from 'idb'
 import { cleanPlace } from '../lib/bookStyle'
@@ -98,7 +99,7 @@ export async function readLocalFiles(): Promise<FileSet> {
   return files
 }
 
-const KIND_ORDER = ['book', 'style', 'modules', 'place', 'folders', 'templates', 'templateBlocks', 'chapter', 'outline', 'tags', 'dates', 'status', 'groups', 'comments', 'entry', 'wikiOrder', 'folderColors', 'notes', 'relations', 'vocabulary', 'graph', 'stars', 'spelling', 'collection', 'version', 'image']
+const KIND_ORDER = ['book', 'style', 'modules', 'place', 'folders', 'templates', 'templateBlocks', 'chapter', 'outline', 'tags', 'dates', 'status', 'groups', 'comments', 'entry', 'wikiOrder', 'folderColors', 'notes', 'relations', 'vocabulary', 'address', 'graph', 'stars', 'spelling', 'collection', 'version', 'image']
 
 /**
  * Applies changes from the repository to this device, file by file, in one transaction.
@@ -443,6 +444,24 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
     const updated: Book = { ...book }
     if (vocabularyFile(next)) updated.vocabulary = next
     else delete updated.vocabulary
+    await books.put(updated)
+  }
+
+  /** Forms of address: the repository's, unless changed here since the run was planned; on conflict merged. */
+  async function writeAddress(path: string, bookId: string, data: FileData | undefined, conflict: boolean) {
+    const remote = parseAddress(data)
+    if (!remote) {
+      skipped.push(path)
+      return
+    }
+    const book = await books.get(bookId)
+    if (!book) return
+    const localText = (book.address && addressFile(book.address)) ?? ''
+    if (!conflict && (snapshotText(path) ?? '') !== localText) return
+    const next = conflict && book.address ? mergeAddress(book.address, remote) : remote
+    const updated: Book = { ...book }
+    if (addressFile(next)) updated.address = next
+    else delete updated.address
     await books.put(updated)
   }
 
@@ -828,6 +847,7 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
       else if (info.kind === 'comments') await writeComments(path, info.bookId, data, conflict)
       else if (info.kind === 'relations') await writeRelations(path, info.bookId, data, conflict)
       else if (info.kind === 'vocabulary') await writeVocabulary(path, info.bookId, data, conflict)
+      else if (info.kind === 'address') await writeAddress(path, info.bookId, data, conflict)
       else if (info.kind === 'graph') await writeGraph(path, info.bookId, data, conflict)
       else if (info.kind === 'wikiOrder') await writeOrder(path, info.bookId, data, conflict)
       else if (info.kind === 'folderColors') await writeColors(path, info.bookId, data, conflict)
@@ -861,6 +881,7 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
       else if (info.kind === 'comments') await writeComments(item.path, info.bookId, '{}', false)
       else if (info.kind === 'relations') await writeRelations(item.path, info.bookId, '{"types":[],"relations":[]}', false)
       else if (info.kind === 'vocabulary') await writeVocabulary(item.path, info.bookId, '{"learners":[],"words":[]}', false)
+      else if (info.kind === 'address') await writeAddress(item.path, info.bookId, '{"ranks":[],"people":[],"forms":[]}', false)
       else if (info.kind === 'graph') await writeGraph(item.path, info.bookId, '{}', false)
       else if (info.kind === 'style') await removeStyle(item.path, info.bookId)
       else if (info.kind === 'modules') await writeModules(item.path, info.bookId, '{}', false)

@@ -31,6 +31,8 @@ export interface Book {
   modules?: BookModules
   /** The vocabulary book (vocabulary module). Missing: empty. */
   vocabulary?: BookVocabulary
+  /** Forms of address (address module). Missing: empty. */
+  address?: BookAddress
 }
 
 /** Module switches of a book, by module id. Ids from a newer app version are kept as they are. */
@@ -264,4 +266,74 @@ export interface ChapterVersion {
 export interface ChapterGroup {
   id: string
   name: string
+}
+
+/** A rule: how a figure of this rank is addressed. Placeholders {Vorname} and {Nachname}. */
+export interface AddressRank {
+  id: string
+  name: string
+  public: string
+  /** Empty: as in public. */
+  private?: string
+  note?: string
+  updatedAt: number
+  extra?: Extra
+}
+
+/** From this chapter on a figure has another rank or name. Empty fields stay as before. */
+export interface AddressPersonChange {
+  id: string
+  chapterId: string
+  rankId?: string
+  first?: string
+  last?: string
+  extra?: Extra
+}
+
+/** A figure's rank and names. Empty names: taken from the wiki entry's name. */
+export interface AddressPerson {
+  entryId: string
+  rankId?: string
+  first?: string
+  last?: string
+  changes: AddressPersonChange[]
+  updatedAt: number
+  extra?: Extra
+}
+
+/** From this chapter on (or, without chapter, "noch offen") the address changes. Empty fields stay as before. */
+export interface AddressChange {
+  id: string
+  chapterId?: string
+  label?: string
+  public?: string
+  private?: string
+  note?: string
+  extra?: Extra
+}
+
+/** How one figure addresses another when it differs from the rule. Empty fields come from the rule. */
+export interface AddressForm {
+  id: string
+  from: string
+  to: string
+  public?: string
+  private?: string
+  note?: string
+  changes: AddressChange[]
+  createdAt: number
+  updatedAt: number
+  extra?: Extra
+}
+
+/** The address module of a book. Kept while the module is off. */
+export interface BookAddress {
+  /** The wiki folder that holds the figures: a folder id, or "*" for all entries. Missing: found by name. */
+  folder?: string
+  ranks: AddressRank[]
+  people: AddressPerson[]
+  forms: AddressForm[]
+  /** Ids of deleted ranks and forms, so a sync does not bring them back. */
+  deleted?: string[]
+  extra?: Extra
 }
