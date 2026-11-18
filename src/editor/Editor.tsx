@@ -1,3 +1,4 @@
+import { showSynonyms, synonyms } from '../synonyms/synonymBox'
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
 import { Annotation, EditorSelection, EditorState, StateEffect, StateField, type Extension } from '@codemirror/state'
 import { Decoration, EditorView, keymap, type DecorationSet } from '@codemirror/view'
@@ -169,6 +170,7 @@ export function Editor({ book, chapter, onChanged, extraExtensions, jumpTo, onJu
           extensions: [
             history(),
             writingMarkdown(),
+            synonyms(),
             typewriter,
             keymap.of([...defaultKeymap, ...historyKeymap]),
             flashField,
@@ -357,6 +359,20 @@ export function Editor({ book, chapter, onChanged, extraExtensions, jumpTo, onJu
         >
           <span className="editor-highlight-swatch" aria-hidden="true" />
           Markieren
+        </button>
+        <button
+          type="button"
+          className="editor-highlight"
+          title="Synonyme für das Wort am Cursor (Strg+Umschalt+S)"
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => {
+            const view = viewRef.current
+            if (!view) return
+            showSynonyms(view)
+            view.focus()
+          }}
+        >
+          Synonyme
         </button>
         <GrammarToggle />
         <span className="editor-toolbar-divider" aria-hidden="true" />

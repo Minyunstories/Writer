@@ -23,3 +23,17 @@ test('all chapters as one document; a click on a paragraph opens it there', asyn
   await userEvent.setup().click(screen.getByText(/Zweiter/))
   expect(onOpen).toHaveBeenCalledWith('a', 25)
 })
+
+test('separators are centred; the text size can be changed and is kept', async () => {
+  const user = userEvent.setup()
+  const { unmount } = render(<Manuscript title="T" chapters={[chapter('a', 'A', 'Eins.\n***\nZwei.')]} onOpen={() => {}} />)
+  expect(document.querySelector('.manuscript-separator')?.textContent).toBe('***')
+  const article = screen.getByRole('article')
+  const before = parseFloat(article.style.fontSize)
+  await user.click(screen.getByRole('button', { name: 'Vergrößern' }))
+  expect(parseFloat(article.style.fontSize)).toBeGreaterThan(before)
+  const after = article.style.fontSize
+  unmount()
+  render(<Manuscript title="T" chapters={[]} onOpen={() => {}} />)
+  expect(screen.getByRole('article').style.fontSize).toBe(after)
+})

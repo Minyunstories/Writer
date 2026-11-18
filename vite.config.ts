@@ -41,6 +41,12 @@ export default defineConfig({
             handler: 'CacheFirst',
             options: { cacheName: 'grammar', expiration: { maxEntries: 10 } },
           },
+          {
+            // Synonyms (WordNet): loaded the first time they are asked for, then kept offline.
+            urlPattern: ({ url }) => url.pathname.endsWith('/thesaurus.json'),
+            handler: 'CacheFirst',
+            options: { cacheName: 'synonyms', expiration: { maxEntries: 2 } },
+          },
         ],
         cleanupOutdatedCaches: true,
       },

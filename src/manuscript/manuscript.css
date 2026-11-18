@@ -3,7 +3,6 @@
   margin: 0 auto;
   padding: clamp(1.5rem, 6vh, 4rem) clamp(1.1rem, 5vw, 3rem) 6rem;
   font-family: var(--font-text);
-  font-size: 1.12rem;
   line-height: 1.8;
 }
 
@@ -122,5 +121,28 @@ button.manuscript-chapter-title:hover:not(:disabled) {
 @media print {
   @page {
     margin: 2.2cm 2.5cm;
+  }
+}
+
+.manuscript-separator {
+  margin: 1.2em 0;
+  text-align: center;
+  letter-spacing: 0.4em;
+  color: var(--text-muted);
+}
+
+.manuscript-head .zoom-control {
+  margin-left: auto;
+  font-family: var(--font-ui);
+  font-size: 13px;
+}
+
+@media print {
+  .manuscript-head .zoom-control {
+    display: none;
+  }
+
+  .manuscript-separator {
+    color: #000;
   }
 }

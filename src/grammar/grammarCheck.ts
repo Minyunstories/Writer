@@ -13,12 +13,15 @@ export interface GrammarItem {
   word?: string
   /** For ignoring this spot later. */
   hash?: string
+  /** The Harper rule behind it, so this kind of finding can be switched off. */
+  rule?: string
 }
 
 export interface GrammarOptions {
   check: (text: string) => Promise<GrammarItem[]>
   onAddWord: (word: string) => void
   onIgnore: (hash: string) => void
+  onDisableRule?: (rule: string) => void
   /** Read on every run, so switching it needs only a recheck. */
   enabled: () => boolean
   /** Quiet time after typing before the text is checked. */
@@ -117,6 +120,15 @@ function tooltipFor(options: GrammarOptions) {
             },
             { 'data-action': 'ignore' },
           )
+        if (item.rule && options.onDisableRule)
+          button(
+            'Diese Art von Hinweis nicht mehr zeigen',
+            () => {
+              options.onDisableRule!(item.rule!)
+              close()
+            },
+            { 'data-action': 'rule', class: 'quiet' },
+          )
         dom.append(actions)
         return { dom }
       },
@@ -202,6 +214,11 @@ const grammarTheme = EditorView.baseTheme({
     padding: '0.3rem 0.6rem',
     borderRadius: '999px',
     fontSize: '13px',
+  },
+  '.cm-mw-grammar-actions button.quiet': {
+    border: 'none',
+    color: 'var(--text-muted)',
+    fontSize: '12px',
   },
   '.cm-mw-grammar-actions button.primary-choice': {
     borderColor: 'var(--accent)',

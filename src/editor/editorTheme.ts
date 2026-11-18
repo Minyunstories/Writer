@@ -50,6 +50,12 @@ export const editorTheme = EditorView.theme(
       boxDecorationBreak: 'clone',
       WebkitBoxDecorationBreak: 'clone',
     },
+    // Scene breaks (***) sit in the middle of the column.
+    '.cm-mw-separator': {
+      textAlign: 'center',
+      color: 'var(--text-muted)',
+      letterSpacing: '0.4em',
+    },
     '.cm-mw-mark': { color: 'var(--text-muted)', opacity: '0.45', fontWeight: '400', fontStyle: 'normal' },
   },
   { dark: true },

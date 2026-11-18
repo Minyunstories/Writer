@@ -1,11 +1,14 @@
+import { collectionFile, hasCollection, mergeCollections, parseCollection } from '../collection/collectionFile'
+import { COLLECTION_ID } from '../storage/collection'
 import type { IDBPTransaction } from 'idb'
 import { cleanPlace } from '../lib/bookStyle'
 import { cleanSpelling } from '../storage/spelling'
 import { cleanList, db, newId, type Schema } from '../storage/connection'
-import type { Book, Chapter, FontId, WikiEntry, WikiFolder, WikiImage } from '../types'
+import type { Book, Chapter, Collection, FontId, WikiEntry, WikiFolder, WikiImage } from '../types'
 import {
   bundleToFiles,
   classifyPath,
+  COLLECTION_PATH,
   colorsFile as colorsText,
   parseTemplateBlocks,
   templateBlocksFile as templateBlocksText,
@@ -29,7 +32,7 @@ import {
 } from './files'
 import type { ShaMap } from './plan'
 
-const STORES = ['books', 'chapters', 'wikiFolders', 'wikiEntries', 'wikiImages'] as const
+const STORES = ['books', 'chapters', 'wikiFolders', 'wikiEntries', 'wikiImages', 'shared'] as const
 const FONTS: FontId[] = ['literata', 'inter', 'courier-prime']
 const COPY_SUFFIX = ' (Fassung von diesem Gerät)'
 const NOTE_SEPARATOR = '\n\n--- Fassung von diesem Gerät ---\n\n'
@@ -57,14 +60,16 @@ export interface RemoteChange {
 /** Everything stored on this device, as repository files. */
 export async function readLocalFiles(): Promise<FileSet> {
   const database = await db()
-  const [books, chapters, folders, entries, images] = await Promise.all([
+  const [books, chapters, folders, entries, images, collection] = await Promise.all([
     database.getAll('books'),
     database.getAll('chapters'),
     database.getAll('wikiFolders'),
     database.getAll('wikiEntries'),
     database.getAll('wikiImages'),
+    database.get('shared', COLLECTION_ID),
   ])
   const files: FileSet = new Map()
+  if (collection && hasCollection(collection)) files.set(COLLECTION_PATH, collectionFile(collection))
   for (const book of books) {
     const own = <T extends { bookId: string }>(list: T[]) => list.filter((item) => item.bookId === book.id)
     const bundle = bundleToFiles({
@@ -79,7 +84,7 @@ export async function readLocalFiles(): Promise<FileSet> {
   return files
 }
 
-const KIND_ORDER = ['book', 'style', 'place', 'folders', 'templates', 'templateBlocks', 'chapter', 'outline', 'tags', 'dates', 'entry', 'wikiOrder', 'folderColors', 'notes', 'stars', 'spelling', 'image']
+const KIND_ORDER = ['book', 'style', 'place', 'folders', 'templates', 'templateBlocks', 'chapter', 'outline', 'tags', 'dates', 'entry', 'wikiOrder', 'folderColors', 'notes', 'stars', 'spelling', 'collection', 'image']
 
 /**
  * Applies changes from the repository to this device, file by file, in one transaction.
@@ -94,6 +99,7 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
   const folders = tx.objectStore('wikiFolders')
   const entries = tx.objectStore('wikiEntries')
   const images = tx.objectStore('wikiImages')
+  const shared = tx.objectStore('shared')
   const pending: { bookId: string; kind: ConflictNote['kind']; name: string }[] = []
   const skipped: string[] = []
   const imageMeta = new Map<string, { entryId: string; type: string; width: number; height: number }>()
@@ -344,6 +350,24 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
     await books.put(next)
   }
 
+  /**
+   * The collection shared by all books: the repository's, unless changed here after the run was
+   * planned. When both sides changed it, items are merged and deletions from either side kept.
+   */
+  async function writeCollection(path: string, data: FileData | undefined, conflict: boolean) {
+    const remote = parseCollection(data)
+    if (!remote) {
+      skipped.push(path)
+      return
+    }
+    const stored = await shared.get(COLLECTION_ID)
+    const local: Collection = stored ? { items: stored.items, deleted: stored.deleted, guide: stored.guide } : { items: [] }
+    const localText = hasCollection(local) ? collectionFile(local) : ''
+    if (!conflict && (snapshotText(path) ?? '') !== localText) return
+    const next = conflict ? mergeCollections(local, remote) : remote
+    await shared.put({ ...next, id: COLLECTION_ID })
+  }
+
   /** Spelling settings: the repository's, unless changed here; if both changed, word lists are joined. */
   async function writeSpelling(path: string, bookId: string, data: FileData | undefined, conflict: boolean) {
     const parsed = parseJson<unknown>(data)
@@ -361,6 +385,7 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
           dialect: remote.dialect ?? book.spelling?.dialect,
           words: [...(remote.words ?? []), ...(book.spelling?.words ?? [])],
           ignored: [...(remote.ignored ?? []), ...(book.spelling?.ignored ?? [])],
+          rules: [...(remote.rules ?? []), ...(book.spelling?.rules ?? [])],
         })
       : cleanSpelling(remote)
     const next: Book = { ...book }
@@ -628,6 +653,7 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
       else if (info.kind === 'stars') await writeStars(path, info.bookId, data, conflict)
       else if (info.kind === 'spelling') await writeSpelling(path, info.bookId, data, conflict)
       else if (info.kind === 'templates') await writeTemplates(path, info.bookId, data, conflict)
+      else if (info.kind === 'collection') await writeCollection(path, data, conflict)
       else await writeImage(path, info.bookId, info.id, data)
     }
 
@@ -655,6 +681,7 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
       else if (info.kind === 'stars') await writeStars(item.path, info.bookId, '[]', false)
       else if (info.kind === 'spelling') await writeSpelling(item.path, info.bookId, '{}', false)
       else if (info.kind === 'templates') await writeTemplates(item.path, info.bookId, '{}', false)
+      else if (info.kind === 'collection') await writeCollection(item.path, '{"items":[]}', false)
       else if (info.kind === 'folders') {
         for (const key of await folders.index('bookId').getAllKeys(info.bookId)) await folders.delete(key)
       }

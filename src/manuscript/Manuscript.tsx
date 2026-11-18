@@ -1,5 +1,8 @@
 import type { ReactNode } from 'react'
 import type { Chapter } from '../types'
+import { ZoomControl } from '../book/ZoomControl'
+import { SEPARATOR } from '../editor/livePreview'
+import { useZoom } from '../lib/zoom'
 import './manuscript.css'
 
 interface Props {
@@ -23,10 +26,12 @@ function inline(text: string): ReactNode[] {
 
 /** The whole book as one long document to read through; a click jumps into the chapter to edit. */
 export function Manuscript({ title, chapters, onOpen }: Props) {
+  const [zoom] = useZoom('manuscript')
   return (
-    <article className="manuscript">
+    <article className="manuscript" style={{ fontSize: `${(1.12 * zoom) / 100}rem` }}>
       <header className="manuscript-head">
         <h1>{title}</h1>
+        <ZoomControl area="manuscript" />
         <button className="ghost manuscript-print" onClick={() => window.print()}>
           Drucken / als PDF
         </button>
@@ -37,6 +42,12 @@ export function Manuscript({ title, chapters, onOpen }: Props) {
           const start = offset
           offset += line.length + 1
           if (!line.trim()) return []
+          if (SEPARATOR.test(line))
+            return [
+              <div key={start} className="manuscript-separator" aria-hidden="true">
+                ***
+              </div>,
+            ]
           const heading = /^(#{1,6})\s+(.*)$/.exec(line)
           const open = () => onOpen(chapter.id, start)
           if (heading)

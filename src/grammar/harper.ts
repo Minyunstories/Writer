@@ -37,10 +37,29 @@ export function knownWords(spelling: BookSpelling | undefined, names: string[]):
   return [...words].sort()
 }
 
+/** Rules off unless the writer wants them: swearing is part of how characters talk. */
+let defaultsOff: Promise<string[]> | null = null
+function rulesOffByDefault(linter: WorkerLinter): Promise<string[]> {
+  if (!defaultsOff)
+    defaultsOff = linter
+      .getLintDescriptions()
+      .then((descriptions) =>
+        Object.entries(descriptions)
+          .filter(([, text]) => /offensive language|profan|curse|swear/i.test(text))
+          .map(([rule]) => rule),
+      )
+      .catch(() => [])
+  return defaultsOff
+}
+
 async function configure(spelling: BookSpelling | undefined, words: string[]) {
   const { harper, linter } = await load()
-  const key = JSON.stringify([spelling?.dialect ?? 'american', words, spelling?.ignored ?? []])
+  const key = JSON.stringify([spelling?.dialect ?? 'american', words, spelling?.ignored ?? [], spelling?.rules ?? []])
   if (key === configured) return linter
+  const off = new Set([...(await rulesOffByDefault(linter)), ...(spelling?.rules ?? [])])
+  const config = await linter.getDefaultLintConfig()
+  for (const rule of off) if (rule in config) config[rule] = false
+  await linter.setLintConfig(config)
   await linter.setDialect(harper.Dialect[DIALECT_NAMES[spelling?.dialect ?? 'american']])
   await linter.clearWords()
   if (words.length > 0) await linter.importWords(words)
@@ -72,9 +91,10 @@ function positionMap(text: string): (index: number) => number {
 /** Checks a Markdown text and returns its findings in document positions. */
 export async function checkText(text: string, spelling: BookSpelling | undefined, words: string[]): Promise<GrammarItem[]> {
   const linter = await configure(spelling, words)
-  const lints = await linter.lint(text, { language: 'markdown' })
+  const organized = await linter.organizedLints(text, { language: 'markdown' })
   const at = positionMap(text)
   const items: GrammarItem[] = []
+  for (const [rule, lints] of Object.entries(organized))
   for (const lint of lints) {
     const span = lint.span()
     const from = at(span.start)
@@ -102,7 +122,8 @@ export async function checkText(text: string, spelling: BookSpelling | undefined
       suggestions,
       ...(kind === 'Spelling' ? { word: problem } : {}),
       ...(hash ? { hash } : {}),
+      rule,
     })
   }
-  return items
+  return items.sort((a, b) => a.from - b.from)
 }

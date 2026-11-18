@@ -1,4 +1,4 @@
-import { autocompletion, type Completion, type CompletionContext, type CompletionResult } from '@codemirror/autocomplete'
+import { autocompletion, type Completion, type CompletionSource, type CompletionContext, type CompletionResult } from '@codemirror/autocomplete'
 import type { Extension } from '@codemirror/state'
 import { EditorView } from '@codemirror/view'
 import type { WikiEntry, WikiFolder } from '../types'
@@ -99,10 +99,10 @@ export function closeWikiBrackets(view: EditorView, from: number, to: number, te
 }
 
 /** "[[" while writing: link an entry or create a new one. */
-export function wikiCompletion(options: WikiCompletionOptions): Extension {
+export function wikiCompletion(options: WikiCompletionOptions, moreSources: CompletionSource[] = []): Extension {
   return [
     // Nothing is picked until the writer picks it, so Enter after an unclosed "[[" keeps writing.
-    autocompletion({ override: [wikiCompletionSource(options)], icons: false, activateOnTyping: true, selectOnOpen: false }),
+    autocompletion({ override: [wikiCompletionSource(options), ...moreSources], icons: false, activateOnTyping: true, selectOnOpen: false }),
     EditorView.inputHandler.of((view, from, to, text) => closeWikiBrackets(view, from, to, text, options)),
   ]
 }

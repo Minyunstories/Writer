@@ -1,0 +1,200 @@
+.collection-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.collection-search {
+  flex: 1 1 10rem;
+  min-width: 0;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+
+.collection-import {
+  position: relative;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-muted);
+  padding: 0.35rem 0.5rem;
+}
+
+.collection-import:hover {
+  color: var(--text);
+}
+
+.collection-import input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.collection-report {
+  margin: 0;
+}
+
+.collection-guide {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.collection-guide-toggle {
+  width: 100%;
+  text-align: left;
+  padding: 0.55rem 0.8rem;
+  font-weight: 600;
+}
+
+.collection-guide-body {
+  padding: 0 0.9rem 0.8rem;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.collection-guide-body ol,
+.collection-guide-body ul {
+  margin: 0;
+  padding-left: 1.2rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.collection-guide-heading {
+  margin: 0.8rem 0 0.35rem;
+  font-weight: 600;
+}
+
+.collection-category h3 {
+  margin: 0 0 0.25rem;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+}
+
+.collection-category-note {
+  margin: 0 0 0.5rem;
+  font-size: 12px;
+}
+
+.collection-group + .collection-group {
+  margin-top: 0.5rem;
+}
+
+.collection-group-label {
+  margin: 0 0 0.3rem;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.collection-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.3rem;
+}
+
+.collection-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: start;
+  gap: 0.15rem 0.3rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.collection-item-text {
+  text-align: left;
+  border: none;
+  background: none;
+  padding: 0.1rem 0;
+  font-family: var(--font-text);
+  line-height: 1.5;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.collection-item-text:hover {
+  color: var(--accent);
+}
+
+.collection-item-actions {
+  display: inline-flex;
+  opacity: 0.6;
+}
+
+.collection-item:hover .collection-item-actions,
+.collection-item:focus-within .collection-item-actions {
+  opacity: 1;
+}
+
+.collection-item-actions button {
+  padding: 0.1rem 0.4rem;
+}
+
+.collection-item-note,
+.collection-item .note-origin {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 12px;
+  justify-self: start;
+}
+
+.panel-tabs {
+  display: inline-flex;
+  gap: 0.2rem;
+  padding: 0.2rem;
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+
+.panel-tabs button {
+  border: none;
+  border-radius: 999px;
+  padding: 0.3rem 0.8rem;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.panel-tabs button[aria-selected='true'] {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.collection-dialog {
+  display: grid;
+  gap: 0.35rem;
+  min-width: min(30rem, 92vw);
+}
+
+.collection-dialog label {
+  margin-top: 0.4rem;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.collection-dialog textarea,
+.collection-dialog select {
+  width: 100%;
+  font: inherit;
+}
+
+.collection-dialog textarea {
+  font-family: var(--font-text);
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  resize: vertical;
+}

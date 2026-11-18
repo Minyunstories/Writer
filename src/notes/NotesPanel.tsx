@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import type { BookNote, Chapter, WikiEntry } from '../types'
 import './notes.css'
 
@@ -13,10 +13,12 @@ interface Props {
   onToEntry: (id: string, entryId: string) => void
   onOpenOrigin: (note: BookNote) => void
   onClose: () => void
+  /** Tabs to switch between notepad and collection. */
+  tabs?: ReactNode
 }
 
 /** The notepad: quick ideas that wait here until they find a better place. */
-export function NotesPanel({ notes, chapters, entries, onAdd, onDone, onDelete, onToChapter, onToEntry, onOpenOrigin, onClose }: Props) {
+export function NotesPanel({ notes, chapters, entries, onAdd, onDone, onDelete, onToChapter, onToEntry, onOpenOrigin, onClose, tabs }: Props) {
   const [draft, setDraft] = useState('')
   const [showDone, setShowDone] = useState(false)
   const open = notes.filter((note) => !note.done)
@@ -32,7 +34,7 @@ export function NotesPanel({ notes, chapters, entries, onAdd, onDone, onDelete, 
   return (
     <aside className="book-panel notes-panel" aria-label="Notizblock">
       <header className="book-panel-header">
-        <span className="notes-title">Notizblock</span>
+        {tabs ?? <span className="notes-title">Notizblock</span>}
         <button className="ghost" onClick={onClose}>
           Schließen
         </button>

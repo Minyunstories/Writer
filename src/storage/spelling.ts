@@ -15,6 +15,8 @@ export function cleanSpelling(value: unknown): BookSpelling | undefined {
   if (words.length > 0) spelling.words = words
   const ignored = strings(raw.ignored)
   if (ignored.length > 0) spelling.ignored = ignored
+  const rules = strings(raw.rules)
+  if (rules.length > 0) spelling.rules = rules
   return Object.keys(spelling).length > 0 ? spelling : undefined
 }
 

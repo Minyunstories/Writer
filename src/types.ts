@@ -31,6 +31,8 @@ export interface BookSpelling {
   words?: string[]
   /** Spots the writer chose to ignore, as Harper's context hashes. */
   ignored?: string[]
+  /** Harper rules switched off for this book. */
+  rules?: string[]
 }
 
 export interface BookNote {
@@ -66,7 +68,7 @@ export interface Chapter {
   updatedAt: number
 }
 
-export type ZoomArea = 'editor' | 'wiki' | 'outline' | 'panel'
+export type ZoomArea = 'editor' | 'wiki' | 'outline' | 'panel' | 'manuscript'
 
 export interface WikiFolder {
   id: string
@@ -116,4 +118,34 @@ export interface WikiImage {
   data: ArrayBuffer
   width: number
   height: number
+}
+
+/** One phrase, word or beat in the collection shared by all books. */
+export interface CollectionItem {
+  id: string
+  text: string
+  category: string
+  group?: string
+  tags?: string[]
+  note?: string
+  /** Where it was taken from the writing. */
+  source?: { bookId: string; bookTitle: string; chapterId: string; offset: number }
+  createdAt: number
+  updatedAt: number
+}
+
+export interface CollectionGuide {
+  title: string
+  rules: string[]
+  selfcheck: string[]
+  /** Short explanation per category. */
+  notes?: Record<string, string>
+}
+
+/** The collection: shared by all books, synchronised in a file of its own. */
+export interface Collection {
+  items: CollectionItem[]
+  /** Ids of deleted items, so a sync does not bring them back. */
+  deleted?: string[]
+  guide?: CollectionGuide
 }

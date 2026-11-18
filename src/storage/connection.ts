@@ -1,8 +1,8 @@
 import { deleteDB, openDB, type DBSchema, type IDBPDatabase } from 'idb'
-import type { Book, Chapter, WikiEntry, WikiFolder, WikiImage } from '../types'
+import type { Book, Chapter, Collection, WikiEntry, WikiFolder, WikiImage } from '../types'
 
 let DB_NAME = 'minyunwriter'
-const DB_VERSION = 3
+const DB_VERSION = 4
 const FALLBACK_TITLE = 'Unbenannt'
 
 export interface Schema extends DBSchema {
@@ -13,6 +13,8 @@ export interface Schema extends DBSchema {
   wikiImages: { key: string; value: WikiImage; indexes: { bookId: string; entryId: string } }
   /** What was last synchronised: path to Git blob hash. A single record with id 'state'. */
   syncState: { key: string; value: { id: string; repository?: string; base: Record<string, string> } }
+  /** Data shared by all books, one record per kind; for now only the collection (id 'collection'). */
+  shared: { key: string; value: Collection & { id: string } }
 }
 
 /** Thrown when a chapter's stored text is not the text the caller last saw. */
@@ -43,6 +45,9 @@ export function db(): Promise<IDBPDatabase<Schema>> {
         }
         if (oldVersion < 3) {
           database.createObjectStore('syncState', { keyPath: 'id' })
+        }
+        if (oldVersion < 4) {
+          database.createObjectStore('shared', { keyPath: 'id' })
         }
       },
       // A newer version of the app wants to upgrade: step aside.

@@ -83,3 +83,15 @@ test('a lone, spaced or unclosed == is not a highlight', () => {
     expect(highlightClasses(doc).some((d) => d.cls === 'cm-mw-highlight')).toBe(false)
   }
 })
+
+test('a line of *** is a scene separator, centred', () => {
+  const doc = 'Ende.\n***\nNeu.\n * * * \nText *** im Satz'
+  const state = EditorState.create({ doc, extensions: [markdown()] })
+  const lines: number[] = []
+  const cursor = buildDecorations(state, [{ from: 0, to: doc.length }]).iter()
+  while (cursor.value) {
+    if (String(cursor.value.spec.class) === 'cm-mw-separator') lines.push(state.doc.lineAt(cursor.from).number)
+    cursor.next()
+  }
+  expect(lines).toEqual([2, 4])
+})

@@ -258,3 +258,13 @@ test('spelling settings live in their own file', () => {
   files.set('books/b1/spelling.json', JSON.stringify({ dialect: 'klingon', words: ['ok', 4] }))
   expect(filesToBundle('b1', files).book.spelling).toEqual({ words: ['ok'] })
 })
+
+test('switched-off check rules travel with the spelling settings', () => {
+  const files = bundleToFiles({ ...bundle, book: { ...book, spelling: { rules: ['NoCurses'] } } })
+  expect(filesToBundle('b1', files).book.spelling).toEqual({ rules: ['NoCurses'] })
+})
+
+test('the collection file is managed by the app but belongs to no book', () => {
+  expect(classifyPath('collection/collection.json')).toEqual({ bookId: '', kind: 'collection', id: 'collection' })
+  expect(classifyPath('collection/other.json')).toBeNull()
+})

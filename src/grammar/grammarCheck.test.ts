@@ -91,3 +91,16 @@ test('results for an older text are dropped', async () => {
   await wait()
   expect(view.dom.querySelector('.cm-mw-grammar')).toBeNull()
 })
+
+test('a kind of finding can be switched off for good', async () => {
+  const onDisableRule = vi.fn()
+  const items = (text: string): GrammarItem[] =>
+    text.includes('damn') ? [{ from: 5, to: 9, message: 'Offensive.', kind: 'Style', suggestions: [], rule: 'NoCurses' }] : []
+  const { view } = setup('Well damn it.', items, { onDisableRule })
+  await wait()
+  view.dispatch({ selection: { anchor: 6 } })
+  await wait()
+  ;(document.querySelector('.cm-mw-grammar-box button[data-action="rule"]') as HTMLButtonElement).click()
+  expect(onDisableRule).toHaveBeenCalledWith('NoCurses')
+  expect(view.dom.querySelector('.cm-mw-grammar')).toBeNull()
+})

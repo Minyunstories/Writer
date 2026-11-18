@@ -29,6 +29,14 @@ import { SidebarHandle, useSidebarWidth } from './SidebarHandle'
 import { Sidebar, type Section } from './Sidebar'
 import { FEATHER } from '../dashboard/Dashboard'
 import { highlightOf } from '../lib/bookStyle'
+import { AddToCollectionDialog } from '../collection/AddToCollectionDialog'
+import { collectionCompletionSource } from '../collection/collectionComplete'
+import { parseCatalogue } from '../collection/collectionFile'
+import { CollectionPanel } from '../collection/CollectionPanel'
+import { useCollection } from '../collection/useCollection'
+import { addToCollection, deleteCollectionItem, importIntoCollection } from '../storage/collection'
+import { EditorView, keymap, ViewPlugin } from '@codemirror/view'
+import { Prec } from '@codemirror/state'
 import './book.css'
 
 export interface ChapterRenderProps {
@@ -96,6 +104,14 @@ export function BookView({ renderChapter }: Props) {
   const [freshEntryId, setFreshEntryId] = useState<string | null>(null)
   const [sidebarWidth, setSidebarWidth] = useSidebarWidth()
   const [notesOpen, setNotesOpen] = useState(false)
+  const [notesTab, setNotesTab] = useState<'notes' | 'collection'>('notes')
+  const collection = useCollection()
+  const collectionRef = useRef(collection)
+  collectionRef.current = collection
+  /** Text on its way into the collection, with where it came from. */
+  const [collecting, setCollecting] = useState<{ text: string; source?: { chapterId: string; offset: number } } | null>(null)
+  /** The chapter editor, for putting collection items in at the cursor. */
+  const editorViewRef = useRef<EditorView | null>(null)
   const [searchOpen, setSearchOpen] = useState(false)
 
   /** Reloads folders and entries only; cheap enough to run after every wiki edit. */
@@ -180,9 +196,38 @@ export function BookView({ renderChapter }: Props) {
   )
   const bookRef = useRef(book)
   bookRef.current = book
+  const collectRef = useRef<(view: EditorView) => void>(() => {})
+  collectRef.current = (view) => {
+    const selection = view.state.selection.main
+    const chapterId = activeChapterRef.current?.id
+    setCollecting({
+      text: view.state.sliceDoc(selection.from, selection.to).trim(),
+      source: chapterId && !selection.empty ? { chapterId, offset: selection.from } : undefined,
+    })
+  }
   const extensions = useMemo(
     () => [
       links.extension,
+      ViewPlugin.define((view) => {
+        editorViewRef.current = view
+        return {
+          destroy: () => {
+            if (editorViewRef.current === view) editorViewRef.current = null
+          },
+        }
+      }),
+      Prec.high(
+        keymap.of([
+          {
+            key: 'Mod-Shift-k',
+            preventDefault: true,
+            run: (view) => {
+              collectRef.current(view)
+              return true
+            },
+          },
+        ]),
+      ),
       grammarCheck({
         enabled: isGrammarOn,
         recheckEvent: GRAMMAR_EVENT,
@@ -195,12 +240,17 @@ export function BookView({ renderChapter }: Props) {
           void attempt(async () => {
             await updateSpelling(bookId, (current) => ({ ...current, words: [...(current.words ?? []), word] }))
           }).then(recheckAll),
+        onDisableRule: (rule) =>
+          void attempt(async () => {
+            await updateSpelling(bookId, (current) => ({ ...current, rules: [...(current.rules ?? []), rule] }))
+          }).then(recheckAll),
         onIgnore: (hash) =>
           void attempt(async () => {
             await updateSpelling(bookId, (current) => ({ ...current, ignored: [...(current.ignored ?? []), hash] }))
           }).then(recheckAll),
       }),
-      wikiCompletion({
+      wikiCompletion(
+        {
         entries: () => entriesRef.current,
         topFolders: () => foldersRef.current.filter((folder) => !folder.parentId),
         create: async (name, folderId) => {
@@ -211,7 +261,9 @@ export function BookView({ renderChapter }: Props) {
           }
           await reloadWiki()
         },
-      }),
+        },
+        [collectionCompletionSource(() => collectionRef.current.items)],
+      ),
     ],
     // One set per book; the lists are read through refs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -227,6 +279,8 @@ export function BookView({ renderChapter }: Props) {
   }, [spellingKey])
 
   const activeChapter = section === 'chapters' ? chapters.find((c) => c.id === itemId) : undefined
+  const activeChapterRef = useRef(activeChapter)
+  activeChapterRef.current = activeChapter
 
   // Keep the URL pointing at an existing chapter. Opening the book itself continues where text
   // was last changed; the chapter list and links open what they point at.
@@ -396,6 +450,17 @@ export function BookView({ renderChapter }: Props) {
   const panelEntry = section !== 'wiki' ? entries.find((entry) => entry.id === panelEntryId) : undefined
 
   /** Opens a chapter and marks a place in it. */
+  const panelTabs = (
+    <span className="panel-tabs" role="tablist" aria-label="Seitenleiste">
+      <button role="tab" aria-selected={notesTab === 'notes'} onClick={() => setNotesTab('notes')}>
+        Notizen
+      </button>
+      <button role="tab" aria-selected={notesTab === 'collection'} onClick={() => setNotesTab('collection')}>
+        Sammlung
+      </button>
+    </span>
+  )
+
   const openChapterAt = (chapterId: string, range: { from: number; to: number }) => {
     if (!book) return
     setJump({ chapterId, ...range, key: Date.now() })
@@ -654,8 +719,43 @@ export function BookView({ renderChapter }: Props) {
             onClose={() => setSearchOpen(false)}
           />
         )}
-        {notesOpen && book && (
+        {notesOpen && book && notesTab === 'collection' && (
+          <CollectionPanel
+            collection={collection}
+            tabs={panelTabs}
+            onInsert={(text) => {
+              const view = editorViewRef.current
+              if (!view) return
+              view.dispatch(view.state.replaceSelection(text), { scrollIntoView: true, userEvent: 'input' })
+              view.focus()
+            }}
+            onAddSelection={() => {
+              const view = editorViewRef.current
+              if (view) collectRef.current(view)
+              else setCollecting({ text: '' })
+            }}
+            onDelete={(id) => void attempt(() => deleteCollectionItem(id))}
+            onImport={async (source) => {
+              const catalogue = parseCatalogue(source)
+              if (!catalogue) return null
+              try {
+                return await importIntoCollection(catalogue)
+              } catch {
+                setActionError(true)
+                return null
+              }
+            }}
+            onOpenSource={(source) => {
+              if (source.bookId === book.id && chapters.some((chapter) => chapter.id === source.chapterId))
+                openChapterAt(source.chapterId, { from: source.offset, to: source.offset })
+              else navigate(`/book/${source.bookId}/chapters/${source.chapterId}`)
+            }}
+            onClose={() => setNotesOpen(false)}
+          />
+        )}
+        {notesOpen && book && notesTab === 'notes' && (
           <NotesPanel
+            tabs={panelTabs}
             notes={book.notes ?? []}
             chapters={chapters}
             entries={entries}
@@ -723,6 +823,21 @@ export function BookView({ renderChapter }: Props) {
         )}
       </div>
 
+      {collecting && book && (
+        <AddToCollectionDialog
+          initialText={collecting.text}
+          collection={collection}
+          onCancel={() => setCollecting(null)}
+          onSave={(item) => {
+            const origin = collecting.source
+            setCollecting(null)
+            void attempt(async () => {
+              await addToCollection({ ...item, ...(origin ? { source: { bookId: book.id, bookTitle: book.title, ...origin } } : {}) })
+            })
+            editorViewRef.current?.focus()
+          }}
+        />
+      )}
       {dialog?.kind === 'rename' && (
         <PromptDialog
           heading="Kapitel umbenennen"

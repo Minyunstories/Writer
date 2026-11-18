@@ -8,6 +8,10 @@ const italic = Decoration.mark({ class: 'cm-mw-italic' })
 const marker = Decoration.mark({ class: 'cm-mw-mark' })
 const highlight = Decoration.mark({ class: 'cm-mw-highlight' })
 const blankLine = Decoration.line({ class: 'cm-mw-blank' })
+const separatorLine = Decoration.line({ class: 'cm-mw-separator' })
+
+/** A line of only *** (or * * *): a scene break. */
+export const SEPARATOR = /^\s*(?:\*\s*){3,}$/
 
 const HEADING = /^(?:ATXHeading|SetextHeading)(\d)$/
 
@@ -25,6 +29,7 @@ export function buildDecorations(
     for (let pos = from; pos <= to; ) {
       const line = state.doc.lineAt(pos)
       if (line.length === 0) found.push(blankLine.range(line.from))
+      else if (SEPARATOR.test(line.text)) found.push(separatorLine.range(line.from))
       pos = line.to + 1
     }
     tree.iterate({

@@ -453,3 +453,29 @@ test('spelling: both devices added words, both lists are kept', async () => {
   await apply({ remove: [`${p}spelling.json`], snapshot: await readLocalFiles() })
   expect((await getBook(book.id))!.spelling).toBeUndefined()
 })
+
+test('the collection travels in its own file outside books/, merged when both sides changed it', async () => {
+  const { addToCollection, deleteCollectionItem, getCollection } = await import('../storage/collection')
+  expect((await readLocalFiles()).has('collection/collection.json')).toBe(false)
+  const mine = (await addToCollection({ text: 'She looked away.', category: 'Blicke' }))!
+  const gone = (await addToCollection({ text: 'Old one.', category: 'Blicke' }))!
+  await deleteCollectionItem(gone.id)
+  const files = await readLocalFiles()
+  expect(JSON.parse(files.get('collection/collection.json') as string).items.map((i: { text: string }) => i.text)).toEqual(['She looked away.'])
+
+  const remote = { items: [{ ...gone }, { id: 'r1', text: 'He grinned.', category: 'Lächeln', createdAt: 1, updatedAt: 1 }] }
+  await applyFull({ conflicts: [{ path: 'collection/collection.json', remote: JSON.stringify(remote) }], snapshot: files })
+  expect((await getCollection()).items.map((i) => i.text).sort()).toEqual(['He grinned.', 'She looked away.'])
+
+  // A plain pull replaces, unless the collection changed here during the run.
+  const planned = await readLocalFiles()
+  await addToCollection({ text: 'Typed during the run.', category: 'Blicke' })
+  await apply({ write: new Map([['collection/collection.json', JSON.stringify({ items: [] })]]), snapshot: planned })
+  expect((await getCollection()).items).toHaveLength(3)
+  await apply({ write: new Map([['collection/collection.json', JSON.stringify({ items: [remote.items[1]] })]]), snapshot: await readLocalFiles() })
+  expect((await getCollection()).items.map((i) => i.id)).toEqual(['r1'])
+  expect(mine.id).toBeTruthy()
+
+  await apply({ remove: ['collection/collection.json'], snapshot: await readLocalFiles() })
+  expect((await getCollection()).items).toEqual([])
+})

@@ -15,6 +15,8 @@ export interface BookBundle {
 }
 
 const ROOT = 'books/'
+/** The collection shared by all books: outside books/, so older app versions leave it alone. */
+export const COLLECTION_PATH = 'collection/collection.json'
 const FONTS: FontId[] = ['literata', 'inter', 'courier-prime']
 const EXTENSIONS: Record<string, string> = { 'image/webp': 'webp', 'image/jpeg': 'jpg', 'image/png': 'png', 'image/gif': 'gif' }
 const HEADER_START = '---\n'
@@ -471,10 +473,11 @@ export function filesToBundle(bookId: string, files: FileSet): BookBundle {
   return { book, chapters, folders, entries, images }
 }
 
-export type PathKind = 'book' | 'chapter' | 'outline' | 'folders' | 'entry' | 'image' | 'tags' | 'templates' | 'style' | 'dates' | 'place' | 'wikiOrder' | 'folderColors' | 'notes' | 'stars' | 'templateBlocks' | 'spelling'
+export type PathKind = 'book' | 'chapter' | 'outline' | 'folders' | 'entry' | 'image' | 'tags' | 'templates' | 'style' | 'dates' | 'place' | 'wikiOrder' | 'folderColors' | 'notes' | 'stars' | 'templateBlocks' | 'spelling' | 'collection'
 
 /** What a repository path holds, or null for files the app does not manage. */
 export function classifyPath(path: string): { bookId: string; kind: PathKind; id: string } | null {
+  if (path === COLLECTION_PATH) return { bookId: '', kind: 'collection', id: 'collection' }
   const bookId = bookIdOf(path)
   if (!bookId) return null
   const rest = path.slice(bookPrefix(bookId).length)
