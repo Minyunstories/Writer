@@ -104,6 +104,8 @@ export function bundleToFiles({ book, chapters, folders, entries, images, versio
   if (book.notes?.length) files.set(`${prefix}notes.json`, notesFile(book.notes))
   const relations = book.relations && relationsFile(book.relations)
   if (relations) files.set(`${prefix}wiki/relations.json`, relations)
+  const graph = book.graph && graphFile(book.graph)
+  if (graph) files.set(`${prefix}wiki/graph.json`, graph)
   for (const version of versions) {
     if (!version.auto) files.set(`${prefix}versions/${version.chapterId}/${version.id}.json`, versionFile(version))
   }
@@ -276,6 +278,23 @@ export function mergeRelations(mine: BookRelations, theirs: BookRelations): Book
   const merged: BookRelations = { types: [...types.values()], relations: [...relations.values()].sort((a, b) => a.createdAt - b.createdAt) }
   if (deleted.length) merged.deleted = deleted
   return merged
+}
+
+/** wiki/graph.json: where entries were placed in the relationship network, sorted by id. */
+export function graphFile(graph: Record<string, { x: number; y: number }>): string | undefined {
+  const entries = Object.entries(graph).sort(([a], [b]) => a.localeCompare(b))
+  return entries.length > 0 ? json(Object.fromEntries(entries.map(([id, { x, y }]) => [id, { x, y }]))) : undefined
+}
+
+export function parseGraph(data: FileData | undefined): Record<string, { x: number; y: number }> | null {
+  const value = parseJson<unknown>(data)
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const result: Record<string, { x: number; y: number }> = {}
+  for (const [id, point] of Object.entries(value)) {
+    const p = point as { x?: unknown; y?: unknown }
+    if (p && Number.isFinite(p.x) && Number.isFinite(p.y)) result[id] = { x: Math.round(p.x as number), y: Math.round(p.y as number) }
+  }
+  return result
 }
 
 /** place.json: where text was last changed. */
@@ -528,6 +547,8 @@ export function filesToBundle(bookId: string, files: FileSet): BookBundle {
   if (notes?.length) book.notes = notes
   const relations = parseRelations(files.get(`${prefix}wiki/relations.json`))
   if (relations) book.relations = relations
+  const graph = parseGraph(files.get(`${prefix}wiki/graph.json`))
+  if (graph && Object.keys(graph).length) book.graph = graph
   const stars = stringList(parseJson<unknown>(files.get(`${prefix}wiki/stars.json`)))
   if (stars.length > 0) book.wikiStars = stars
   const wikiOrder = parseOrder(files.get(`${prefix}wiki/order.json`))
@@ -611,7 +632,7 @@ export function parseVersion(bookId: string, data: FileData | undefined): Chapte
   return version
 }
 
-export type PathKind = 'book' | 'chapter' | 'outline' | 'folders' | 'entry' | 'image' | 'tags' | 'templates' | 'style' | 'dates' | 'place' | 'wikiOrder' | 'folderColors' | 'notes' | 'stars' | 'templateBlocks' | 'spelling' | 'collection' | 'version' | 'status' | 'comments' | 'relations'
+export type PathKind = 'book' | 'chapter' | 'outline' | 'folders' | 'entry' | 'image' | 'tags' | 'templates' | 'style' | 'dates' | 'place' | 'wikiOrder' | 'folderColors' | 'notes' | 'stars' | 'templateBlocks' | 'spelling' | 'collection' | 'version' | 'status' | 'comments' | 'relations' | 'graph'
 
 /** What a repository path holds, or null for files the app does not manage. */
 export function classifyPath(path: string): { bookId: string; kind: PathKind; id: string } | null {
@@ -631,6 +652,7 @@ export function classifyPath(path: string): { bookId: string; kind: PathKind; id
   if (rest === 'wiki/templates.json') return { bookId, kind: 'templates', id: bookId }
   if (rest === 'wiki/order.json') return { bookId, kind: 'wikiOrder', id: bookId }
   if (rest === 'wiki/relations.json') return { bookId, kind: 'relations', id: bookId }
+  if (rest === 'wiki/graph.json') return { bookId, kind: 'graph', id: bookId }
   if (rest === 'wiki/colors.json') return { bookId, kind: 'folderColors', id: bookId }
   if (rest === 'wiki/template-blocks.json') return { bookId, kind: 'templateBlocks', id: bookId }
   if (rest === 'notes.json') return { bookId, kind: 'notes', id: bookId }

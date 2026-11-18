@@ -546,3 +546,18 @@ test('relationships: taken over, kept when changed here during the run, merged o
   await apply({ remove: [`${p}wiki/relations.json`], snapshot: await readLocalFiles() })
   expect((await getBook(book.id))!.relations).toBeUndefined()
 })
+
+test('graph places: taken over, kept when moved here during the run, joined on conflict', async () => {
+  const { placeInGraph } = await import('../storage/relations')
+  const { p, book } = await seed()
+  await apply({ write: new Map([[`${p}wiki/graph.json`, JSON.stringify({ a: { x: 1, y: 1 } })]]), snapshot: await readLocalFiles() })
+  expect((await getBook(book.id))!.graph).toEqual({ a: { x: 1, y: 1 } })
+  const planned = await readLocalFiles()
+  await placeInGraph(book.id, { b: { x: 2, y: 2 } })
+  await apply({ write: new Map([[`${p}wiki/graph.json`, JSON.stringify({})]]), snapshot: planned })
+  expect(Object.keys((await getBook(book.id))!.graph!)).toEqual(['a', 'b'])
+  await applyFull({ conflicts: [{ path: `${p}wiki/graph.json`, remote: JSON.stringify({ a: { x: 9, y: 9 }, c: { x: 3, y: 3 } }) }], snapshot: await readLocalFiles() })
+  expect((await getBook(book.id))!.graph).toEqual({ a: { x: 1, y: 1 }, b: { x: 2, y: 2 }, c: { x: 3, y: 3 } })
+  await apply({ remove: [`${p}wiki/graph.json`], snapshot: await readLocalFiles() })
+  expect((await getBook(book.id))!.graph).toBeUndefined()
+})

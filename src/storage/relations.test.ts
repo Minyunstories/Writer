@@ -37,3 +37,13 @@ test('types and relationships are changed and deleted; deleting a type removes i
   stored = (await getBook(book.id))!
   expect(stored.relations).toEqual({ types: [], relations: [], deleted: expect.arrayContaining([type.id, relation.id]) })
 })
+
+test('places in the relationship network are stored and cleared', async () => {
+  const { placeInGraph, clearGraph } = await import('./relations')
+  const book = await createBook('B')
+  await placeInGraph(book.id, { mira: { x: 10.4, y: -20.6 } })
+  await placeInGraph(book.id, { lea: { x: 1, y: 2 } })
+  expect((await getBook(book.id))!.graph).toEqual({ mira: { x: 10, y: -21 }, lea: { x: 1, y: 2 } })
+  await clearGraph(book.id)
+  expect((await getBook(book.id))!.graph).toBeUndefined()
+})

@@ -310,3 +310,10 @@ test('relationships travel in wiki/relations.json', () => {
   expect(filesToBundle('b1', files).book.relations).toEqual(relations)
   expect(bundleToFiles({ ...bundle, book: { ...book, relations: { types: [], relations: [] } } }).has('books/b1/wiki/relations.json')).toBe(false)
 })
+
+test('places in the relationship network travel in wiki/graph.json', () => {
+  const graph = { e1: { x: 10, y: -20 } }
+  const files = bundleToFiles({ ...bundle, book: { ...book, graph } })
+  expect(classifyPath('books/b1/wiki/graph.json')).toEqual({ bookId: 'b1', kind: 'graph', id: 'b1' })
+  expect(filesToBundle('b1', files).book.graph).toEqual(graph)
+})

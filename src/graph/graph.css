@@ -1,0 +1,140 @@
+.relation-graph {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.relation-graph-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.relation-graph-tools label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 13px;
+}
+
+.relation-graph-kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  flex: 1;
+}
+
+.relation-graph-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 12px;
+}
+
+.relation-graph-kind[aria-pressed='false'] {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
+
+.relation-graph-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.relation-graph-canvas {
+  width: 100%;
+  height: min(70vh, 640px);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg);
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+}
+
+.relation-graph-canvas:active {
+  cursor: grabbing;
+}
+
+.relation-graph-node {
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+  outline: none;
+}
+
+.relation-graph-ring {
+  fill: var(--surface-2);
+  stroke: var(--border);
+  stroke-width: 1.5;
+}
+
+.relation-graph-node:hover .relation-graph-ring,
+.relation-graph-node:focus-visible .relation-graph-ring {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+}
+
+.relation-graph-disc {
+  fill: var(--surface);
+}
+
+.relation-graph-initials {
+  fill: var(--text);
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.relation-graph-name {
+  fill: var(--text);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  paint-order: stroke;
+  stroke: var(--bg);
+  stroke-width: 4px;
+  pointer-events: none;
+}
+
+.relation-graph-label {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  paint-order: stroke;
+  stroke: var(--bg);
+  stroke-width: 4px;
+  pointer-events: none;
+}
+
+.relation-graph-edge {
+  transition: opacity 0.2s ease;
+}
+
+.relation-graph .faded {
+  opacity: 0.15;
+}
+
+.relation-graph-lonely {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 13px;
+}
+
+.relation-graph-lonely ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+}
+
+.relation-graph-hint,
+.relation-graph-empty {
+  margin: 0;
+  font-size: 12px;
+}

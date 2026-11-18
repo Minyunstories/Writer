@@ -23,6 +23,8 @@ export interface Book {
   spelling?: BookSpelling
   /** Relationships between wiki entries, and the kinds the writer defined. */
   relations?: BookRelations
+  /** Where the writer placed entries in the relationship network. */
+  graph?: Record<string, { x: number; y: number }>
 }
 
 /** A kind of relationship, named from each side: "Lehrer von" / "Schüler von". No backward name: the same both ways. */

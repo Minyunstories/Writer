@@ -27,6 +27,7 @@ import { typographic } from '../editor/typography'
 import { addNote, deleteNote, moveNoteToChapter, moveNoteToEntry, setEntryStar, updateNote } from '../storage/notes'
 import { WikiHome } from '../wiki/WikiHome'
 import { RelationsSection } from '../wiki/RelationsSection'
+import { RelationGraph } from '../graph/RelationGraph'
 import { WikiSidebar } from '../wiki/WikiSidebar'
 import { SidebarHandle, useSidebarWidth } from './SidebarHandle'
 import { Sidebar, type Section } from './Sidebar'
@@ -109,6 +110,21 @@ export function BookView({ renderChapter }: Props) {
   const [freshEntryId, setFreshEntryId] = useState<string | null>(null)
   const [sidebarWidth, setSidebarWidth] = useSidebarWidth()
   const [notesOpen, setNotesOpen] = useState(false)
+  const [wikiView, setWikiView] = useState<'home' | 'graph'>(() => {
+    try {
+      return localStorage.getItem('mw:wiki-view') === 'graph' ? 'graph' : 'home'
+    } catch {
+      return 'home'
+    }
+  })
+  const switchWikiView = (next: 'home' | 'graph') => {
+    setWikiView(next)
+    try {
+      localStorage.setItem('mw:wiki-view', next)
+    } catch {
+      // Only a convenience.
+    }
+  }
   const [notesTab, setNotesTab] = useState<'notes' | 'collection' | 'comments'>('notes')
   const collection = useCollection()
   const collectionRef = useRef(collection)
@@ -486,7 +502,9 @@ export function BookView({ renderChapter }: Props) {
   }
 
   const activeEntry = section === 'wiki' ? entries.find((entry) => entry.id === itemId) : undefined
-  const panelEntry = section !== 'wiki' ? entries.find((entry) => entry.id === panelEntryId) : undefined
+  // In the wiki the entry is the page itself; only the network shows entries beside it.
+  const besideNetwork = section === 'wiki' && !itemId && wikiView === 'graph'
+  const panelEntry = section !== 'wiki' || besideNetwork ? entries.find((entry) => entry.id === panelEntryId) : undefined
 
   /** Opens a chapter and marks a place in it. */
   const panelTabs = (
@@ -717,14 +735,28 @@ export function BookView({ renderChapter }: Props) {
           )}
           {section === 'wiki' && !activeEntry && entries.length > 0 && (
             <div className="book-scroll">
-              <WikiHome
-                bookId={book.id}
-                folders={folders}
-                entries={entries}
-                order={book.wikiOrder}
-                stars={book.wikiStars}
-                onCreateEntry={(folderId) => void handleCreateEntry(folderId)}
-              />
+              <div className="wiki-view-tabs" role="tablist" aria-label="Wiki-Ansicht">
+                <button role="tab" aria-selected={wikiView === 'home'} onClick={() => switchWikiView('home')}>
+                  Übersicht
+                </button>
+                <button role="tab" aria-selected={wikiView === 'graph'} onClick={() => switchWikiView('graph')}>
+                  Beziehungsnetz
+                </button>
+              </div>
+              {wikiView === 'graph' ? (
+                <div className="wiki-graph-page">
+                  <RelationGraph book={book} entries={entries} folders={folders} onOpenEntry={openPanel} onChanged={() => void reload()} />
+                </div>
+              ) : (
+                <WikiHome
+                  bookId={book.id}
+                  folders={folders}
+                  entries={entries}
+                  order={book.wikiOrder}
+                  stars={book.wikiStars}
+                  onCreateEntry={(folderId) => void handleCreateEntry(folderId)}
+                />
+              )}
             </div>
           )}
           {section === 'wiki' && !activeEntry && entries.length === 0 && (

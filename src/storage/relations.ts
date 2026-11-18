@@ -93,3 +93,28 @@ export function relationsOf(book: Pick<Book, 'relations'>, entryId: string): See
     return [seen]
   })
 }
+
+/** Remembers where entries were placed in the relationship network. */
+export async function placeInGraph(bookId: string, places: Record<string, { x: number; y: number }>): Promise<void> {
+  const tx = (await db()).transaction('books', 'readwrite')
+  const book = await tx.store.get(bookId)
+  if (book) {
+    const rounded = Object.fromEntries(Object.entries(places).map(([id, point]) => [id, { x: Math.round(point.x), y: Math.round(point.y) }]))
+    await tx.store.put({ ...book, graph: { ...book.graph, ...rounded } })
+  }
+  await tx.done
+  if (book) announceChange()
+}
+
+/** Forgets every placement: the network arranges itself again. */
+export async function clearGraph(bookId: string): Promise<void> {
+  const tx = (await db()).transaction('books', 'readwrite')
+  const book = await tx.store.get(bookId)
+  if (book?.graph) {
+    const next = { ...book }
+    delete next.graph
+    await tx.store.put(next)
+  }
+  await tx.done
+  if (book) announceChange()
+}
