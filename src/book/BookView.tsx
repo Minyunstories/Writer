@@ -31,7 +31,7 @@ import { RelationGraph } from '../graph/RelationGraph'
 import { ChapterDialog, type GroupChoice } from './ChapterDialog'
 import { createGroup, deleteGroup, renameGroup, setChapterGroup } from '../storage/groups'
 import { WikiSidebar } from '../wiki/WikiSidebar'
-import { SidebarHandle, useSidebarWidth } from './SidebarHandle'
+import { PanelHandle, SidebarHandle, usePanelWidth, useSidebarWidth } from './SidebarHandle'
 import { Sidebar, type Section } from './Sidebar'
 import { FEATHER } from '../dashboard/Dashboard'
 import { highlightOf } from '../lib/bookStyle'
@@ -113,6 +113,7 @@ export function BookView({ renderChapter }: Props) {
   /** The entry just created here: its name gets the cursor. */
   const [freshEntryId, setFreshEntryId] = useState<string | null>(null)
   const [sidebarWidth, setSidebarWidth] = useSidebarWidth()
+  const [panelWidth, setPanelWidth] = usePanelWidth()
   const [notesOpen, setNotesOpen] = useState(false)
   const [wikiView, setWikiView] = useState<'home' | 'graph'>(() => {
     try {
@@ -616,7 +617,7 @@ export function BookView({ renderChapter }: Props) {
         </p>
       )}
 
-      <div className="book-body">
+      <div className="book-body" style={{ '--panel-width': `${panelWidth}px` } as CSSProperties}>
         <div className="sidebar-wrap" style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties}>
           <Sidebar
             book={book}
@@ -807,6 +808,7 @@ export function BookView({ renderChapter }: Props) {
           )}
         </main>
 
+        {(searchOpen || notesOpen || panelEntry) && book && <PanelHandle width={panelWidth} onWidth={setPanelWidth} />}
         {searchOpen && book && (
           <SearchPanel
             chapters={chapters}

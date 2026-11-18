@@ -75,6 +75,34 @@ button.icon.danger:hover {
   position: relative;
 }
 
+/* The grip between the text and the panel on the right. */
+.panel-handle {
+  flex: none;
+  width: 8px;
+  margin: 0 -4px;
+  z-index: 6;
+  cursor: col-resize;
+  touch-action: none;
+  position: relative;
+}
+
+.panel-handle::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 2px;
+  background: transparent;
+  transition: background 0.15s ease;
+}
+
+.panel-handle:hover::after,
+.panel-handle:focus-visible::after,
+.resizing .panel-handle::after {
+  background: var(--accent);
+}
+
 .sidebar-wrap {
   width: var(--sidebar-width, 260px);
   flex: none;
@@ -233,7 +261,7 @@ body.resizing {
 }
 
 .book-panel {
-  width: 380px;
+  width: var(--panel-width, 380px);
   flex: none;
   border-left: 1px solid var(--border);
   background: var(--surface);
@@ -526,6 +554,10 @@ button.wiki-tree-arrange.on {
 }
 
 @media (max-width: 720px) {
+  .panel-handle {
+    display: none;
+  }
+
   .sidebar-handle {
     display: none;
   }
