@@ -547,6 +547,56 @@ test('relationships: taken over, kept when changed here during the run, merged o
   expect((await getBook(book.id))!.relations).toBeUndefined()
 })
 
+test('modules: taken over, kept when switched here during the run, GitHub wins a conflict, removed', async () => {
+  const { setModule } = await import('../storage/modules')
+  const { p, book } = await seed()
+  await apply({ write: new Map([[`${p}modules.json`, '{"vocabulary":true,"address":true}']]), snapshot: await readLocalFiles() })
+  expect((await getBook(book.id))!.modules).toEqual({ vocabulary: true, address: true })
+
+  const planned = await readLocalFiles()
+  await setModule(book.id, 'vocabulary', false)
+  await apply({ write: new Map([[`${p}modules.json`, '{"vocabulary":true}']]), snapshot: planned })
+  expect((await getBook(book.id))!.modules).toEqual({ address: true })
+
+  await applyFull({ conflicts: [{ path: `${p}modules.json`, remote: '{"vocabulary":true}' }], snapshot: await readLocalFiles() })
+  expect((await getBook(book.id))!.modules).toEqual({ vocabulary: true })
+
+  await apply({ remove: [`${p}modules.json`], snapshot: await readLocalFiles() })
+  expect((await getBook(book.id))!.modules).toBeUndefined()
+})
+
+test('vocabulary: taken over, kept when changed here during the run, merged on conflict, removed', async () => {
+  const { vocabularyFile } = await import('../vocabulary/vocabularyFile')
+  const { p, book } = await seed()
+  const word = (id: string, translation: string, updatedAt: number) => ({ id, word: id, translation, known: [], createdAt: 1, updatedAt })
+  const remote = { learners: [{ entryId: 'mira', updatedAt: 1 }], words: [word('w1', 'water', 1)] }
+  await apply({ write: new Map([[`${p}vocabulary.json`, vocabularyFile(remote)!]]), snapshot: await readLocalFiles() })
+  expect((await getBook(book.id))!.vocabulary).toEqual(remote)
+
+  const planned = await readLocalFiles()
+  const { db } = await import('../storage/connection')
+  const putVocabulary = async (vocabulary: object) => {
+    const stored = (await getBook(book.id))!
+    await (await db()).put('books', { ...stored, vocabulary } as typeof stored)
+  }
+  await putVocabulary({ learners: [], words: [word('w1', 'water', 1), word('w2', 'stone', 2)] })
+  await apply({ write: new Map([[`${p}vocabulary.json`, JSON.stringify({ learners: [], words: [] })]]), snapshot: planned })
+  expect((await getBook(book.id))!.vocabulary!.words.map((w) => w.id)).toEqual(['w1', 'w2'])
+
+  await putVocabulary({ learners: [], words: [word('w1', 'water here', 5), word('w2', 'stone', 2)] })
+  const theirs = { learners: [], words: [word('w1', 'water there', 3), word('w3', 'bread', 3)], deleted: ['w2'] }
+  await applyFull({ conflicts: [{ path: `${p}vocabulary.json`, remote: vocabularyFile(theirs)! }], snapshot: await readLocalFiles() })
+  const merged = (await getBook(book.id))!.vocabulary!
+  expect(merged.words.map((w) => [w.id, w.translation])).toEqual([
+    ['w1', 'water here'],
+    ['w3', 'bread'],
+  ])
+  expect(merged.deleted).toEqual(['w2'])
+
+  await apply({ remove: [`${p}vocabulary.json`], snapshot: await readLocalFiles() })
+  expect((await getBook(book.id))!.vocabulary).toBeUndefined()
+})
+
 test('graph places: taken over, kept when moved here during the run, joined on conflict', async () => {
   const { placeInGraph } = await import('../storage/relations')
   const { p, book } = await seed()

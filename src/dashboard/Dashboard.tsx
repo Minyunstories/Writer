@@ -8,6 +8,7 @@ import { SyncStatus } from '../sync/SyncStatus'
 import type { Book } from '../types'
 import { ConfirmDialog, PromptDialog } from '../ui/Dialogs'
 import { updateSpelling } from '../storage/spelling'
+import { setModule } from '../storage/modules'
 import { BookMenu } from './BookMenu'
 import './Dashboard.css'
 
@@ -150,6 +151,11 @@ export function Dashboard() {
                 onHighlight={(highlight) => void restyle(book.id, { highlight })}
                 onDialect={(dialect) =>
                   void updateSpelling(book.id, (current) => ({ ...current, dialect }))
+                    .catch(() => setError('Das hat nicht geklappt. Bitte versuche es noch einmal.'))
+                    .then(refresh)
+                }
+                onModule={(id, on) =>
+                  void setModule(book.id, id, on)
                     .catch(() => setError('Das hat nicht geklappt. Bitte versuche es noch einmal.'))
                     .then(refresh)
                 }

@@ -311,6 +311,27 @@ test('relationships travel in wiki/relations.json', () => {
   expect(bundleToFiles({ ...bundle, book: { ...book, relations: { types: [], relations: [] } } }).has('books/b1/wiki/relations.json')).toBe(false)
 })
 
+test('module switches travel in modules.json', () => {
+  const files = bundleToFiles({ ...bundle, book: { ...book, modules: { vocabulary: true, address: true } } })
+  expect(classifyPath('books/b1/modules.json')).toEqual({ bookId: 'b1', kind: 'modules', id: 'b1' })
+  expect(files.get('books/b1/modules.json')).toBe('{\n  "address": true,\n  "vocabulary": true\n}\n')
+  expect(filesToBundle('b1', files).book.modules).toEqual({ address: true, vocabulary: true })
+  expect(bundleToFiles(bundle).has('books/b1/modules.json')).toBe(false)
+  expect(filesToBundle('b1', bundleToFiles(bundle)).book.modules).toBeUndefined()
+})
+
+test('vocabulary travels in vocabulary.json, also while the module is off', () => {
+  const vocabulary = {
+    learners: [{ entryId: 'e1', updatedAt: 2 }],
+    words: [{ id: 'w1', word: 'vaeri', translation: 'water', known: [{ entryId: 'e1', chapterId: 'c1' }], createdAt: 1, updatedAt: 2 }],
+  }
+  const files = bundleToFiles({ ...bundle, book: { ...book, vocabulary } })
+  expect(classifyPath('books/b1/vocabulary.json')).toEqual({ bookId: 'b1', kind: 'vocabulary', id: 'b1' })
+  expect(files.has('books/b1/vocabulary.json')).toBe(true)
+  expect(filesToBundle('b1', files).book.vocabulary).toEqual(vocabulary)
+  expect(bundleToFiles({ ...bundle, book: { ...book, vocabulary: { learners: [], words: [] } } }).has('books/b1/vocabulary.json')).toBe(false)
+})
+
 test('places in the relationship network travel in wiki/graph.json', () => {
   const graph = { e1: { x: 10, y: -20 } }
   const files = bundleToFiles({ ...bundle, book: { ...book, graph } })

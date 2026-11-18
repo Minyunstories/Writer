@@ -1,0 +1,225 @@
+.vocab {
+  display: grid;
+  gap: 0.6rem;
+  font-size: 14px;
+}
+
+.vocab-bar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  padding: 0.2rem 0 0.4rem;
+  background: var(--surface);
+}
+
+.vocab-bar-space {
+  flex: 1;
+}
+
+.vocab-search {
+  flex: 1 1 10rem;
+  max-width: 18rem;
+  min-width: 8rem;
+}
+
+.vocab-viewer {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.vocab-search,
+.vocab select,
+.vocab-field input {
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  line-height: 1.4;
+}
+
+.vocab-picker {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.vocab-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+}
+
+.vocab-list > li + li {
+  border-top: 1px solid var(--border);
+}
+
+.vocab-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 0.1rem 1rem;
+  width: 100%;
+  padding: 0.45rem 0.25rem;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.vocab-row:hover {
+  background: var(--surface-2);
+}
+
+.vocab-word {
+  font-weight: 600;
+}
+
+.vocab-meta {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.8rem;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.vocab-hint {
+  font-style: italic;
+}
+
+/* Not known yet from this figure's point of view: muted, never transparent. */
+.vocab-row.is-faded .vocab-word,
+.vocab-row.is-faded .vocab-translation {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.vocab-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 0.5rem 0.75rem;
+  /* Below the sticky search bar when scrolled into view. */
+  scroll-margin-top: 3.6rem;
+  padding: 0.7rem;
+  margin: 0.25rem 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.vocab-form > :not(.vocab-field) {
+  grid-column: 1 / -1;
+}
+
+.vocab-form > .vocab-field:nth-of-type(3) {
+  grid-column: 1 / -1;
+}
+
+.vocab-field {
+  display: grid;
+  gap: 0.2rem;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.vocab-field input {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.vocab-who {
+  display: grid;
+  gap: 0.35rem;
+  /* A fieldset is as wide as its widest content by default: long chapter titles would widen the drawer. */
+  min-inline-size: 0;
+  grid-template-columns: minmax(0, 1fr);
+  margin: 0;
+  padding: 0.4rem 0 0;
+  border: none;
+}
+
+.vocab-who legend {
+  padding: 0;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.vocab-knower {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.vocab-knower-name {
+  flex: none;
+  min-width: 6rem;
+  max-width: 40%;
+  overflow-wrap: anywhere;
+}
+
+.vocab-knower select,
+.vocab-who > select {
+  flex: 1;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.vocab-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.vocab-delete {
+  margin-left: auto;
+}
+
+.vocab-duplicate {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  font-size: 13px;
+  color: var(--accent);
+}
+
+.vocab-error {
+  margin: 0;
+  font-size: 13px;
+  color: var(--danger);
+}
+
+.vocab-empty {
+  margin: 0.4rem 0;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+@media (max-width: 720px) {
+  .vocab-row,
+  .vocab-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* The bar wraps to three lines on a phone. */
+  .vocab-form {
+    scroll-margin-top: 8.5rem;
+  }
+
+  .vocab-search {
+    max-width: none;
+  }
+}

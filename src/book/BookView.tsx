@@ -11,6 +11,13 @@ import type { JumpTarget } from '../editor/Editor'
 import { wikiCompletion } from '../editor/wikiComplete'
 import { ConfirmDialog, PromptDialog } from '../ui/Dialogs'
 import { buildMatcher } from '../wiki/linker'
+import { entriesIn } from '../wiki/mentions'
+import { ModuleDrawer } from '../modules/ModuleDrawer'
+import { useDrawerHeight, useStored } from '../modules/drawerState'
+import { activeModules, isModuleOn, MODULES, type ModuleId } from '../modules/modules'
+import { VocabularyPanel } from '../vocabulary/VocabularyPanel'
+import { activeLearners, spellingNames } from '../vocabulary/knowledge'
+import { captureWord } from '../storage/vocabulary'
 import { WikiEntryEditor } from '../wiki/WikiEntryEditor'
 import { createWikiLinks } from '../wiki/wikiLinks'
 import { grammarCheck } from '../grammar/grammarCheck'
@@ -141,6 +148,19 @@ export function BookView({ renderChapter }: Props) {
   /** Scenes of the open chapter, from the text as it is being written. */
   const [scenes, setScenes] = useState<Scene[]>([])
   const [searchOpen, setSearchOpen] = useState(false)
+  /** The module drawer: open or not, its height and the vocabulary's point of view, remembered on this device. */
+  const [drawerFlag, setDrawerFlag] = useStored<string>(`mw:drawer-open:${bookId}`, '')
+  const [drawerHeight, setDrawerHeight] = useDrawerHeight()
+  const [viewer, setViewer] = useStored<string>(`mw:vocab-viewer:${bookId}`, '')
+  const [drawerTab, setDrawerTab] = useState<ModuleId>('vocabulary')
+  /** A word to open in the vocabulary, e.g. one just taken from the text; null opens an empty row. */
+  const [vocabEditing, setVocabEditing] = useState<{ wordId: string | null; key: number }>()
+  const viewerRef = useRef(viewer)
+  viewerRef.current = viewer
+  /** On a phone the drawer and the right panel are both sheets from the bottom: one at a time. */
+  const closeDrawerOnPhone = useCallback(() => {
+    if (isNarrow()) setDrawerFlag('')
+  }, [setDrawerFlag])
 
   /** Reloads folders and entries only; cheap enough to run after every wiki edit. */
   const reloadWiki = useCallback(async () => {
@@ -199,11 +219,12 @@ export function BookView({ renderChapter }: Props) {
     (entryId: string) => {
       setNotesOpen(false)
       setSearchOpen(false)
+      closeDrawerOnPhone()
       setPanelStack([entryId])
       // Chapters may have changed since they were loaded; "Erwähnt in" should be current.
       void reload()
     },
-    [reload],
+    [reload, closeDrawerOnPhone],
   )
   const pushPanel = (entryId: string) => setPanelStack((stack) => (stack[stack.length - 1] === entryId ? stack : [...stack, entryId]))
 
@@ -232,6 +253,34 @@ export function BookView({ renderChapter }: Props) {
       text: view.state.sliceDoc(selection.from, selection.to).trim(),
       source: chapterId && !selection.empty ? { chapterId, offset: selection.from } : undefined,
     })
+  }
+  /** Strg+Umschalt+L: the marked text into the vocabulary book. False (nothing happens) while the module is off. */
+  const takeWordRef = useRef<(view: EditorView) => boolean>(() => false)
+  takeWordRef.current = (view) => {
+    const current = bookRef.current
+    const chapterId = activeChapterRef.current?.id
+    if (!current || !chapterId || !isModuleOn(current, 'vocabulary')) return false
+    const selection = view.state.selection.main
+    const text = view.state.sliceDoc(selection.from, selection.to)
+    const learning = activeLearners(current.vocabulary, entriesRef.current).some((entry) => entry.id === viewerRef.current)
+    void (async () => {
+      let taken: Awaited<ReturnType<typeof captureWord>> = null
+      try {
+        taken = await captureWord(current.id, text, learning ? { entryId: viewerRef.current, chapterId } : undefined)
+      } catch {
+        setActionError(true)
+      }
+      if (isNarrow()) {
+        setPanelStack([])
+        setNotesOpen(false)
+        setSearchOpen(false)
+      }
+      setDrawerTab('vocabulary')
+      setDrawerFlag('1')
+      setVocabEditing({ wordId: taken?.word.id ?? null, key: Date.now() })
+      await reload()
+    })()
+    return true
   }
   const extensions = useMemo(
     () => [
@@ -265,6 +314,7 @@ export function BookView({ renderChapter }: Props) {
               return true
             },
           },
+          { key: 'Mod-Shift-l', run: (view) => takeWordRef.current(view) },
         ]),
       ),
       grammarCheck({
@@ -272,7 +322,8 @@ export function BookView({ renderChapter }: Props) {
         recheckEvent: GRAMMAR_EVENT,
         check: (text) => {
           const spelling = bookRef.current?.spelling
-          const names = entriesRef.current.flatMap((entry) => [entry.name, ...entry.aliases])
+          const current = bookRef.current
+          const names = current ? spellingNames(current, entriesRef.current) : entriesRef.current.flatMap((entry) => [entry.name, ...entry.aliases])
           return checkText(text, spelling, knownWords(spelling, names))
         },
         onAddWord: (word) =>
@@ -312,7 +363,8 @@ export function BookView({ renderChapter }: Props) {
     links.setMatcher(buildMatcher(entries))
   }, [links, entries])
   // New wiki names or another English variant: check again.
-  const spellingKey = JSON.stringify([book?.spelling?.dialect, entries.map((entry) => [entry.name, entry.aliases])])
+  // The vocabulary counts too while its module is on, so taking or editing a word checks again.
+  const spellingKey = JSON.stringify([book?.spelling?.dialect, book ? spellingNames(book, entries) : entries.map((entry) => [entry.name, entry.aliases])])
   useEffect(() => {
     recheckAll()
   }, [spellingKey])
@@ -336,12 +388,36 @@ export function BookView({ renderChapter }: Props) {
     }
   }, [book, section, rawSection, activeChapter, chapters, itemId, navigate])
 
+  const modules = book ? activeModules(book) : []
+  const drawerAvailable = section === 'chapters' && !!activeChapter && modules.length > 0
+  const drawerShown = drawerAvailable && drawerFlag === '1'
+  const drawerTabShown = modules.includes(drawerTab) ? drawerTab : modules[0]
+  const toggleDrawer = () => {
+    if (drawerFlag === '1') {
+      setDrawerFlag('')
+      return
+    }
+    if (isNarrow()) {
+      setPanelStack([])
+      setNotesOpen(false)
+      setSearchOpen(false)
+    }
+    setDrawerFlag('1')
+  }
+  // A request to open a word is for this opening of the drawer only.
+  useEffect(() => {
+    if (!drawerShown) setVocabEditing(undefined)
+  }, [drawerShown])
+  const matcher = useMemo(() => buildMatcher(entries), [entries])
+  const mentioned = useMemo(() => (activeChapter ? entriesIn(activeChapter, matcher) : []), [activeChapter, matcher])
+
   const openNotes = (book?.notes ?? []).filter((note) => !note.done).length
   const toggleNotes = () =>
     setNotesOpen((open) => {
       if (!open) {
         setPanelStack([])
         setSearchOpen(false)
+        closeDrawerOnPhone()
       }
       return !open
     })
@@ -350,6 +426,7 @@ export function BookView({ renderChapter }: Props) {
       if (!open) {
         setPanelStack([])
         setNotesOpen(false)
+        closeDrawerOnPhone()
         // Unsaved typing first, so the search sees the current text.
         window.dispatchEvent(new Event('pagehide'))
         void reload()
@@ -595,6 +672,11 @@ export function BookView({ renderChapter }: Props) {
         >
           ⌕
         </button>
+        {drawerAvailable && (
+          <button className="notes-button module-button" aria-pressed={drawerShown} title={modules.length === 1 && modules[0] === 'vocabulary' ? 'Vokabelheft (Strg+Umschalt+L übernimmt markierten Text)' : 'Module'} onClick={toggleDrawer}>
+            {modules.length === 1 ? MODULES.find((module) => module.id === modules[0])?.tab : 'Module'}
+          </button>
+        )}
         <button
           className="notes-button"
           aria-pressed={notesOpen}
@@ -805,6 +887,31 @@ export function BookView({ renderChapter }: Props) {
                 onOpenEntry={openPanel}
               />
             </div>
+          )}
+          {drawerShown && activeChapter && (
+            <ModuleDrawer
+              modules={modules}
+              tab={drawerTabShown}
+              onTab={setDrawerTab}
+              chapterTitle={activeChapter.title}
+              height={drawerHeight}
+              onHeight={setDrawerHeight}
+              onClose={() => setDrawerFlag('')}
+            >
+              {drawerTabShown === 'vocabulary' && (
+                <VocabularyPanel
+                  book={book}
+                  entries={entries}
+                  chapters={chapters}
+                  chapterId={activeChapter.id}
+                  mentioned={mentioned}
+                  viewer={viewer}
+                  onViewer={setViewer}
+                  editing={vocabEditing}
+                  onChanged={() => void reload()}
+                />
+              )}
+            </ModuleDrawer>
           )}
         </main>
 

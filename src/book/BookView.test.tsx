@@ -800,3 +800,175 @@ test('the panel on the right can be made wider, and keeps its width', async () =
   fireEvent.keyDown(window, { key: 'N', ctrlKey: true, shiftKey: true })
   expect(Number((await screen.findByRole('separator', { name: 'Breite der rechten Leiste' })).getAttribute('aria-valuenow'))).toBe(start + 32)
 })
+
+test('module off, even with words stored: no drawer button', async () => {
+  const { addWord } = await import('../storage/vocabulary')
+  const book = await createBook('Sturmlied')
+  const chapter = await createChapter(book.id, 'Anfang')
+  await addWord(book.id, { word: 'vaeri', translation: 'water' })
+  renderAt(`/book/${book.id}/chapters/${chapter.id}`)
+  expect(await screen.findByRole('heading', { name: 'Sturmlied' })).toBeInTheDocument()
+  await screen.findByText('Notizen')
+  expect(screen.queryByRole('button', { name: 'Vokabeln' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('region', { name: 'Module' })).not.toBeInTheDocument()
+})
+
+test('vocabulary on: the button opens the drawer for the open chapter and remembers it', async () => {
+  const { setModule } = await import('../storage/modules')
+  const user = userEvent.setup()
+  const book = await createBook('Sturmlied')
+  const chapter = await createChapter(book.id, 'Anfang')
+  await setModule(book.id, 'vocabulary', true)
+  const first = renderAt(`/book/${book.id}/chapters/${chapter.id}`)
+  const button = await screen.findByRole('button', { name: 'Vokabeln' })
+  expect(button).toHaveAttribute('aria-pressed', 'false')
+  await user.click(button)
+  const drawer = screen.getByRole('region', { name: 'Module' })
+  expect(within(drawer).getByRole('heading', { name: 'Kapitel: Anfang' })).toBeInTheDocument()
+  expect(button).toHaveAttribute('aria-pressed', 'true')
+  first.unmount()
+
+  renderAt(`/book/${book.id}/chapters/${chapter.id}`)
+  expect(await screen.findByRole('region', { name: 'Module' })).toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: 'Vokabeln' }))
+  expect(screen.queryByRole('region', { name: 'Module' })).not.toBeInTheDocument()
+})
+
+test('the drawer is only in the chapter view', async () => {
+  const { setModule } = await import('../storage/modules')
+  const book = await createBook('Sturmlied')
+  await createChapter(book.id, 'Anfang')
+  await setModule(book.id, 'vocabulary', true)
+  localStorage.setItem(`mw:drawer-open:${book.id}`, '1')
+  renderAt(`/book/${book.id}/wiki`)
+  expect(await screen.findByRole('heading', { name: 'Sturmlied' })).toBeInTheDocument()
+  await screen.findByText('Notizen')
+  expect(screen.queryByRole('button', { name: 'Vokabeln' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('region', { name: 'Module' })).not.toBeInTheDocument()
+})
+
+test('on a phone the drawer and the wiki panel take turns', async () => {
+  const { setModule } = await import('../storage/modules')
+  const original = window.matchMedia
+  window.matchMedia = ((query: string) => ({ matches: query.includes('max-width'), media: query, addEventListener() {}, removeEventListener() {} })) as unknown as typeof window.matchMedia
+  try {
+    const user = userEvent.setup()
+    const book = await createBook('Sturmlied')
+    const chapter = await createChapter(book.id, 'Anfang', 'Pascal stood.')
+    await createEntry(book.id, 'Pascal')
+    await setModule(book.id, 'vocabulary', true)
+    renderAt(`/book/${book.id}/chapters/${chapter.id}`, true)
+    await user.click(await screen.findByRole('button', { name: 'Vokabeln' }))
+    expect(screen.getByRole('region', { name: 'Module' })).toBeInTheDocument()
+    const link = await waitFor(() => {
+      const found = document.querySelector<HTMLElement>('.editor .cm-mw-link')
+      if (!found) throw new Error('no link yet')
+      return found
+    })
+    await user.click(link)
+    expect(await screen.findByRole('complementary', { name: 'Wiki-Eintrag' })).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Module' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Vokabeln' }))
+    expect(screen.getByRole('region', { name: 'Module' })).toBeInTheDocument()
+    expect(screen.queryByRole('complementary', { name: 'Wiki-Eintrag' })).not.toBeInTheDocument()
+  } finally {
+    window.matchMedia = original
+  }
+})
+
+async function chapterWithVocabulary(text: string, moduleOn = true) {
+  const { setModule } = await import('../storage/modules')
+  const book = await createBook('Sturmlied')
+  const chapter = await createChapter(book.id, 'Anfang', text)
+  if (moduleOn) await setModule(book.id, 'vocabulary', true)
+  renderAt(`/book/${book.id}/chapters/${chapter.id}`, true)
+  const view = await waitFor(() => {
+    const found = EditorView.findFromDOM(document.querySelector<HTMLElement>('.editor .cm-editor')!)
+    if (!found || !found.state.doc.toString()) throw new Error('not mounted')
+    return found
+  })
+  return { book, chapter, view }
+}
+
+async function pressTakeWord(view: EditorView) {
+  const { runScopeHandlers } = await import('@codemirror/view')
+  return runScopeHandlers(view, new KeyboardEvent('keydown', { key: 'L', code: 'KeyL', keyCode: 76, ctrlKey: true, shiftKey: true }), 'editor')
+}
+
+test('Strg+Umschalt+L takes the marked word and opens it', async () => {
+  const { book, view } = await chapterWithVocabulary('She said vaeri, softly.')
+  view.dispatch({ selection: { anchor: 9, head: 15 } })
+  expect(await pressTakeWord(view)).toBe(true)
+  await waitFor(async () => expect((await db.getBook(book.id))!.vocabulary?.words.map((w) => w.word)).toEqual(['vaeri']))
+  const drawer = await screen.findByRole('region', { name: 'Module' })
+  await waitFor(() => expect(within(drawer).getByRole('textbox', { name: 'Übersetzung' })).toHaveFocus())
+  view.dispatch({ selection: { anchor: 9, head: 14 } })
+  await pressTakeWord(view)
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  await waitFor(async () => expect((await db.getBook(book.id))!.vocabulary!.words).toHaveLength(1))
+})
+
+test('with a viewer set, the word is known from the open chapter', async () => {
+  const { setModule } = await import('../storage/modules')
+  const { setLearner } = await import('../storage/vocabulary')
+  const book = await createBook('Sturmlied')
+  const chapter = await createChapter(book.id, 'Anfang', 'She said vaeri.')
+  const mira = await createEntry(book.id, 'Mira')
+  await setModule(book.id, 'vocabulary', true)
+  await setLearner(book.id, mira.id, true)
+  localStorage.setItem(`mw:vocab-viewer:${book.id}`, mira.id)
+  renderAt(`/book/${book.id}/chapters/${chapter.id}`, true)
+  const view = await waitFor(() => {
+    const found = EditorView.findFromDOM(document.querySelector<HTMLElement>('.editor .cm-editor')!)
+    if (!found || !found.state.doc.toString()) throw new Error('not mounted')
+    return found
+  })
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Vokabeln' })).toBeInTheDocument())
+  view.dispatch({ selection: { anchor: 9, head: 14 } })
+  await pressTakeWord(view)
+  await waitFor(async () => expect((await db.getBook(book.id))!.vocabulary?.words[0]?.known).toEqual([{ entryId: mira.id, chapterId: chapter.id }]))
+})
+
+test('without a selection the shortcut opens an empty new row and stores nothing', async () => {
+  const { book, view } = await chapterWithVocabulary('She said vaeri.')
+  view.dispatch({ selection: { anchor: 3 } })
+  expect(await pressTakeWord(view)).toBe(true)
+  const drawer = await screen.findByRole('region', { name: 'Module' })
+  await waitFor(() => expect(within(drawer).getByRole('textbox', { name: 'Wort' })).toHaveFocus())
+  expect(within(drawer).getByRole('textbox', { name: 'Wort' })).toHaveValue('')
+  expect((await db.getBook(book.id))!.vocabulary).toBeUndefined()
+})
+
+test('module off: the shortcut does nothing', async () => {
+  const { book, view } = await chapterWithVocabulary('She said vaeri.', false)
+  view.dispatch({ selection: { anchor: 9, head: 14 } })
+  expect(await pressTakeWord(view)).toBe(false)
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  expect(screen.queryByRole('region', { name: 'Module' })).not.toBeInTheDocument()
+  expect((await db.getBook(book.id))!.vocabulary).toBeUndefined()
+})
+
+test('a word taken earlier does not open again when the drawer is opened again', async () => {
+  const user = userEvent.setup()
+  const { view } = await chapterWithVocabulary('She said vaeri, softly.')
+  view.dispatch({ selection: { anchor: 9, head: 14 } })
+  await pressTakeWord(view)
+  const drawer = await screen.findByRole('region', { name: 'Module' })
+  await waitFor(() => expect(within(drawer).getByRole('textbox', { name: 'Übersetzung' })).toHaveFocus())
+  await user.click(within(drawer).getByRole('button', { name: 'Schließen' }))
+  await user.click(screen.getByRole('button', { name: 'Vokabeln' }))
+  const again = await screen.findByRole('region', { name: 'Module' })
+  await within(again).findByRole('list', { name: 'Wörter' })
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  expect(within(again).queryByRole('textbox', { name: 'Übersetzung' })).not.toBeInTheDocument()
+})
+
+test('the module button sits right before Notizen', async () => {
+  const { setModule } = await import('../storage/modules')
+  const book = await createBook('Sturmlied')
+  const chapter = await createChapter(book.id, 'Anfang')
+  await setModule(book.id, 'vocabulary', true)
+  renderAt(`/book/${book.id}/chapters/${chapter.id}`)
+  const button = await screen.findByRole('button', { name: 'Vokabeln' })
+  expect(button.nextElementSibling).toBe(screen.getByRole('button', { name: /^Notizblock/ }))
+})

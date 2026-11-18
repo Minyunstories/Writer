@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { COVERS, coverOf, HIGHLIGHTS, highlightOf } from '../lib/bookStyle'
+import { isModuleOn, MODULES, type ModuleId } from '../modules/modules'
 import type { Book, EnglishDialect } from '../types'
 
 interface Props {
@@ -7,13 +8,14 @@ interface Props {
   onCover: (color: string) => void
   onHighlight: (color: string) => void
   onDialect: (dialect: EnglishDialect) => void
+  onModule: (id: ModuleId, on: boolean) => void
   onRename: () => void
   onDelete: () => void
   onClose: () => void
 }
 
 /** The "⋯" menu of a book on the shelf: colours, rename, delete. */
-export function BookMenu({ book, onCover, onHighlight, onDialect, onRename, onDelete, onClose }: Props) {
+export function BookMenu({ book, onCover, onHighlight, onDialect, onModule, onRename, onDelete, onClose }: Props) {
   const ref = useRef<HTMLDivElement>(null)
   const label = `Buchmenü für ${book.title}`
   const cover = coverOf(book)
@@ -82,6 +84,15 @@ export function BookMenu({ book, onCover, onHighlight, onDialect, onRename, onDe
         <option value="canadian">Kanadisch</option>
         <option value="australian">Australisch</option>
       </select>
+      <span className="book-menu-label">Module</span>
+      <div className="book-menu-modules">
+        {MODULES.map((module) => (
+          <label key={module.id} className="book-menu-module">
+            <input type="checkbox" checked={isModuleOn(book, module.id)} onChange={(event) => onModule(module.id, event.target.checked)} />
+            {module.name}
+          </label>
+        ))}
+      </div>
       <div className="book-menu-rule" />
       <button type="button" className="book-menu-action" onClick={onRename}>
         Umbenennen

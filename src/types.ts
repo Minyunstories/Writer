@@ -27,6 +27,53 @@ export interface Book {
   chapterGroups?: ChapterGroup[]
   /** Where the writer placed entries in the relationship network. */
   graph?: Record<string, { x: number; y: number }>
+  /** Modules switched on for this book. Missing: none. */
+  modules?: BookModules
+  /** The vocabulary book (vocabulary module). Missing: empty. */
+  vocabulary?: BookVocabulary
+}
+
+/** Module switches of a book, by module id. Ids from a newer app version are kept as they are. */
+export type BookModules = Record<string, boolean>
+
+/** Fields a newer app version wrote that this one does not know; written back unchanged. */
+type Extra = Record<string, unknown>
+
+/** A learner knows the word from this chapter on. */
+export interface VocabKnown {
+  entryId: string
+  chapterId: string
+  extra?: Extra
+}
+
+export interface VocabWord {
+  id: string
+  word: string
+  translation: string
+  note?: string
+  /** Who knows the word, from which chapter on. One chapter per learner. */
+  known: VocabKnown[]
+  createdAt: number
+  updatedAt: number
+  extra?: Extra
+}
+
+/** A figure who is learning the language. Everyone else knows it. */
+export interface VocabLearner {
+  entryId: string
+  /** Taken off the list; kept so a sync does not bring the learner back. */
+  removed?: boolean
+  updatedAt: number
+  extra?: Extra
+}
+
+/** The vocabulary book of the vocabulary module. Kept while the module is off. */
+export interface BookVocabulary {
+  learners: VocabLearner[]
+  words: VocabWord[]
+  /** Ids of deleted words, so a sync does not bring them back. */
+  deleted?: string[]
+  extra?: Extra
 }
 
 /** A kind of relationship, named from each side: "Lehrer von" / "Schüler von". No backward name: the same both ways. */
