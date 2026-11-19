@@ -1305,3 +1305,14 @@ test('merging into the open chapter keeps its comments where they were', async (
     ['Schnee', 'Snow'],
   ])
 }, 10000)
+
+test('word repeats are marked in the chapter when switched on; wiki names never', async () => {
+  localStorage.setItem('mw:repeats', 'on')
+  const book = await createBook('Sturmlied')
+  const chapter = await createChapter(book.id, 'Anfang')
+  await updateChapter(chapter.id, { content: 'Mira opened the door. Mira closed the door.' })
+  await createEntry(book.id, 'Mira')
+  renderAt(`/book/${book.id}/chapters/${chapter.id}`, true)
+  await waitFor(() => expect(document.querySelector('.cm-mw-link')).not.toBeNull())
+  await waitFor(() => expect([...document.querySelectorAll('.editor .cm-mw-repeat')].map((mark) => mark.textContent)).toEqual(['door', 'door']))
+})

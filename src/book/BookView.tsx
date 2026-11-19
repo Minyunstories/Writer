@@ -36,7 +36,8 @@ import { WikiEntryEditor } from '../wiki/WikiEntryEditor'
 import { createWikiLinks } from '../wiki/wikiLinks'
 import { previewCard, previewData } from '../wiki/wikiPreview'
 import { grammarCheck } from '../grammar/grammarCheck'
-import { GRAMMAR_EVENT, isGrammarOn, recheckAll } from '../grammar/grammarSetting'
+import { GRAMMAR_EVENT, isGrammarOn, isRepeatsOn, recheckAll } from '../grammar/grammarSetting'
+import { repeatMarks } from '../repeats/repeatMarks'
 import { checkText, knownWords } from '../grammar/harper'
 import { Manuscript } from '../manuscript/Manuscript'
 import { NotesPanel } from '../notes/NotesPanel'
@@ -409,6 +410,11 @@ export function BookView({ renderChapter }: Props) {
           { key: 'Mod-Shift-l', run: (view) => takeWordRef.current(view) },
         ]),
       ),
+      repeatMarks({
+        enabled: isRepeatsOn,
+        recheckEvent: GRAMMAR_EVENT,
+        names: () => entriesRef.current.flatMap((entry) => [entry.name, ...entry.aliases]),
+      }),
       grammarCheck({
         enabled: isGrammarOn,
         recheckEvent: GRAMMAR_EVENT,

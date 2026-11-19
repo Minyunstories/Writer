@@ -17,7 +17,7 @@ import { SYNCED_EVENT } from '../storage/connection'
 import { createChapter, getChapter, savePlace, updateBook } from '../storage/db'
 import type { Book, Chapter, FontId } from '../types'
 import { editorTheme } from './editorTheme'
-import { isGrammarOn, setGrammarOn } from '../grammar/grammarSetting'
+import { CheckMenu } from '../grammar/CheckMenu'
 import { toggleHighlight, typewriter, writingMarkdown } from './markdownSetup'
 import { ChapterSaver, type SaveState } from './saver'
 import { minimalChanges } from './minimalChanges'
@@ -171,6 +171,8 @@ export function Editor({ book, chapter, onChanged, extraExtensions, jumpTo, onJu
   }
 
   const flush = useCallback(() => void saverRef.current?.flush(), [])
+  // After a menu in the toolbar closes with Esc, writing goes on where it was.
+  const returnToText = useCallback(() => viewRef.current?.focus(), [])
 
   /**
    * Puts stored text into the editor without treating it as typing. Only the spots that differ are
@@ -470,7 +472,7 @@ export function Editor({ book, chapter, onChanged, extraExtensions, jumpTo, onJu
           <Icon name="synonyms" />
           <span className="tool-label">Synonyme</span>
         </button>
-        <GrammarToggle />
+        <CheckMenu onReturn={returnToText} />
  <button
           className="editor-highlight"
           title="Kommentar zum markierten Text (Strg+Alt+M)"
@@ -575,26 +577,5 @@ export function Editor({ book, chapter, onChanged, extraExtensions, jumpTo, onJu
 
       <StatusBar words={words} saveState={saveState} />
     </div>
-  )
-}
-
-/** Switches the English spelling and grammar check on or off on this device. */
-function GrammarToggle() {
-  const [on, setOn] = useState(isGrammarOn)
-  return (
-    <button
-      type="button"
-      className={`editor-grammar${on ? ' on' : ''}`}
-      aria-pressed={on}
-      title="Rechtschreib- und Grammatikprüfung (Englisch, läuft nur auf diesem Gerät)"
-      onMouseDown={(event) => event.preventDefault()}
-      onClick={() => {
-        setGrammarOn(!on)
-        setOn(!on)
-      }}
-    >
-      <Icon name="check" />
-      <span className="tool-label">Prüfung</span>
-    </button>
   )
 }
