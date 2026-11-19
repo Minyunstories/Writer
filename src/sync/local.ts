@@ -40,13 +40,14 @@ import {
   parseStyle,
   stringList,
   text,
+  parseTrash,
   type BookFile,
   type FileData,
   type FileSet,
 } from './files'
 import type { ShaMap } from './plan'
 
-const STORES = ['books', 'chapters', 'wikiFolders', 'wikiEntries', 'wikiImages', 'shared', 'versions'] as const
+const STORES = ['books', 'chapters', 'wikiFolders', 'wikiEntries', 'wikiImages', 'shared', 'versions', 'trash'] as const
 const FONTS: FontId[] = ['literata', 'inter', 'courier-prime']
 const COPY_SUFFIX = ' (Fassung von diesem Gerät)'
 const NOTE_SEPARATOR = '\n\n--- Fassung von diesem Gerät ---\n\n'
@@ -74,7 +75,7 @@ export interface RemoteChange {
 /** Everything stored on this device, as repository files. */
 export async function readLocalFiles(): Promise<FileSet> {
   const database = await db()
-  const [books, chapters, folders, entries, images, collection, versions] = await Promise.all([
+  const [books, chapters, folders, entries, images, collection, versions, trash] = await Promise.all([
     database.getAll('books'),
     database.getAll('chapters'),
     database.getAll('wikiFolders'),
@@ -82,6 +83,7 @@ export async function readLocalFiles(): Promise<FileSet> {
     database.getAll('wikiImages'),
     database.get('shared', COLLECTION_ID),
     database.getAll('versions'),
+    database.getAll('trash'),
   ])
   const files: FileSet = new Map()
   if (collection && hasCollection(collection)) files.set(COLLECTION_PATH, collectionFile(collection))
@@ -94,13 +96,14 @@ export async function readLocalFiles(): Promise<FileSet> {
       entries: own(entries),
       images: own(images),
       versions: own(versions),
+      trash: own(trash),
     })
     for (const [path, data] of bundle) files.set(path, data)
   }
   return files
 }
 
-const KIND_ORDER = ['book', 'style', 'modules', 'shelf', 'place', 'folders', 'templates', 'templateBlocks', 'chapter', 'outline', 'tags', 'dates', 'status', 'groups', 'comments', 'entry', 'wikiOrder', 'folderColors', 'notes', 'relations', 'vocabulary', 'address', 'graph', 'stars', 'spelling', 'collection', 'version', 'image']
+const KIND_ORDER = ['book', 'style', 'modules', 'shelf', 'place', 'folders', 'templates', 'templateBlocks', 'chapter', 'outline', 'tags', 'dates', 'status', 'groups', 'comments', 'entry', 'wikiOrder', 'folderColors', 'notes', 'relations', 'vocabulary', 'address', 'graph', 'stars', 'spelling', 'collection', 'version', 'trash', 'image']
 
 /**
  * Applies changes from the repository to this device, file by file, in one transaction.
@@ -108,7 +111,7 @@ const KIND_ORDER = ['book', 'style', 'modules', 'shelf', 'place', 'folders', 'te
  * the run saw when it was planned, both versions are kept. Returns one note per conflict
  * and the paths that could not be applied. If anything fails, nothing is changed.
  */
-export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: ConflictNote[]; skipped: string[] }> {
+export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: ConflictNote[]; skipped: string[]; obsolete: string[] }> {
   const tx = (await db()).transaction([...STORES], 'readwrite') as unknown as Tx
   const books = tx.objectStore('books')
   const chapters = tx.objectStore('chapters')
@@ -117,8 +120,11 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
   const images = tx.objectStore('wikiImages')
   const shared = tx.objectStore('shared')
   const versions = tx.objectStore('versions')
+  const trash = tx.objectStore('trash')
   const pending: { bookId: string; kind: ConflictNote['kind']; name: string }[] = []
   const skipped: string[] = []
+  /** Files the repository no longer needs: trash of a book that is not here (an older app deleted it). */
+  const obsolete: string[] = []
   const imageMeta = new Map<string, { entryId: string; type: string; width: number; height: number }>()
   const snapshotText = (path: string) => (change.snapshot.has(path) ? text(change.snapshot.get(path)) : undefined)
   const now = Date.now()
@@ -200,6 +206,21 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
       return
     }
     await versions.put(version)
+  }
+
+  /** A trash file never changes once written: take it as it is. */
+  async function writeTrash(path: string, bookId: string, id: string, data: FileData) {
+    // Books come first in a run, so a book that is still missing here does not exist any more.
+    if (!(await books.get(bookId))) {
+      obsolete.push(path)
+      return
+    }
+    const item = parseTrash(bookId, id, data)
+    if (!item) {
+      skipped.push(path)
+      return
+    }
+    await trash.put(item)
   }
 
   async function removeChapter(path: string, id: string) {
@@ -834,6 +855,7 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
     for (const key of await entries.index('bookId').getAllKeys(bookId)) await entries.delete(key)
     for (const key of await images.index('bookId').getAllKeys(bookId)) await images.delete(key)
     for (const key of await versions.index('bookId').getAllKeys(bookId)) await versions.delete(key)
+    for (const key of await trash.index('bookId').getAllKeys(bookId)) await trash.delete(key)
     await books.delete(bookId)
   }
 
@@ -878,6 +900,7 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
       else if (info.kind === 'templates') await writeTemplates(path, info.bookId, data, conflict)
       else if (info.kind === 'collection') await writeCollection(path, data, conflict)
       else if (info.kind === 'version') await writeVersion(path, info.bookId, data)
+      else if (info.kind === 'trash') await writeTrash(path, info.bookId, info.id, data)
       else await writeImage(path, info.bookId, info.id, data)
     }
 
@@ -916,6 +939,7 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
       else if (info.kind === 'templates') await writeTemplates(item.path, info.bookId, '{}', false)
       else if (info.kind === 'collection') await writeCollection(item.path, '{"items":[]}', false)
       else if (info.kind === 'version') await versions.delete(info.id)
+      else if (info.kind === 'trash') await trash.delete(info.id)
       else if (info.kind === 'folders') {
         for (const key of await folders.index('bookId').getAllKeys(info.bookId)) await folders.delete(key)
       }
@@ -935,7 +959,7 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
     await tx.done.catch(() => {})
     throw error
   }
-  return { notes, skipped }
+  return { notes, skipped, obsolete }
 }
 
 const STATE_ID = 'state'

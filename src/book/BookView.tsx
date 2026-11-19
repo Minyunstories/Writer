@@ -1,8 +1,8 @@
 import type { Extension } from '@codemirror/state'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { SYNCED_EVENT } from '../storage/connection'
-import { createChapter, deleteChapter, getBook, listChapters, updateChapter } from '../storage/db'
+import { CHANGED_EVENT, SYNCED_EVENT } from '../storage/connection'
+import { createChapter, getBook, listChapters, updateChapter } from '../storage/db'
 import { createEntry, createFolder, deleteFolder, listEntries, listFolders, moveWikiItem, renameFolder, setFolderColor, stepWikiItem } from '../storage/wiki'
 import type { Book, Chapter, ChapterGroup, WikiEntry, WikiFolder } from '../types'
 import { Outline } from '../outline/Outline'
@@ -11,6 +11,8 @@ import type { JumpTarget } from '../editor/Editor'
 import { wikiCompletion } from '../editor/wikiComplete'
 import { ConfirmDialog, PromptDialog } from '../ui/Dialogs'
 import { useWakeLock } from '../lib/wakeLock'
+import { listTrash, purgeTrash, trashChapter } from '../storage/trash'
+import { TrashDialog } from '../trash/TrashDialog'
 import { ShortcutsDialog } from '../help/ShortcutsDialog'
 import { isHelpKey } from '../help/shortcuts'
 import { Icon } from '../ui/Icon'
@@ -210,6 +212,28 @@ export function BookView({ renderChapter }: Props) {
     window.addEventListener(SYNCED_EVENT, onSynced)
     return () => window.removeEventListener(SYNCED_EVENT, onSynced)
   }, [reload])
+
+  // The trash: what has been there for 30 days goes when the book is opened; the button shows
+  // how much is left, kept fresh after every change here and every sync run.
+  const [trashCount, setTrashCount] = useState(0)
+  const [trashOpen, setTrashOpen] = useState(false)
+  useEffect(() => {
+    let current = true
+    const count = () =>
+      listTrash(bookId)
+        .then((items) => current && setTrashCount(items.length))
+        .catch(() => {})
+    void purgeTrash(bookId)
+      .catch(() => 0)
+      .then(count)
+    window.addEventListener(CHANGED_EVENT, count)
+    window.addEventListener(SYNCED_EVENT, count)
+    return () => {
+      current = false
+      window.removeEventListener(CHANGED_EVENT, count)
+      window.removeEventListener(SYNCED_EVENT, count)
+    }
+  }, [bookId])
 
   const firstSection = useRef(true)
   useEffect(() => {
@@ -572,7 +596,7 @@ export function BookView({ renderChapter }: Props) {
       if (!book) return
       const index = chapters.findIndex((c) => c.id === chapter.id)
       const remaining = chapters.filter((c) => c.id !== chapter.id)
-      await deleteChapter(chapter.id)
+      await trashChapter(chapter.id)
       if (chapter.id === itemId) {
         const next = remaining[Math.min(index, remaining.length - 1)]
         navigate(next ? `/book/${book.id}/chapters/${next.id}` : `/book/${book.id}/chapters`, { replace: true })
@@ -746,6 +770,19 @@ export function BookView({ renderChapter }: Props) {
             onDeleteChapter={(chapter) => setDialog({ kind: 'delete', chapter })}
             onRenameGroup={(group) => setDialog({ kind: 'renameGroup', group })}
             onDeleteGroup={(group) => setDialog({ kind: 'deleteGroup', group })}
+            footer={
+              trashCount > 0 && (
+                <button
+                  className="sidebar-trash"
+                  onClick={() => {
+                    setTrashOpen(true)
+                    closeSidebarOnPhone()
+                  }}
+                >
+                  Papierkorb · {trashCount}
+                </button>
+              )
+            }
             scenes={scenes}
             onOpenScene={(index) => {
               const view = editorViewRef.current
@@ -1104,6 +1141,18 @@ export function BookView({ renderChapter }: Props) {
         />
       )}
       {helpOpen && <ShortcutsDialog onClose={() => setHelpOpen(false)} />}
+      {trashOpen && book && (
+        <TrashDialog
+          bookId={book.id}
+          onClose={() => setTrashOpen(false)}
+          onRestored={(result) => {
+            setTrashOpen(false)
+            void reload().then(() =>
+              navigate(result.kind === 'chapter' ? `/book/${book.id}/chapters/${result.targetId}` : `/book/${book.id}/wiki/${result.targetId}`),
+            )
+          }}
+        />
+      )}
       {dialog?.kind === 'rename' && (
         <ChapterDialog
           chapter={dialog.chapter}
@@ -1139,8 +1188,9 @@ export function BookView({ renderChapter }: Props) {
       )}
       {dialog?.kind === 'delete' && (
         <ConfirmDialog
-          message={`Kapitel „${dialog.chapter.title}" wirklich löschen?`}
-          confirmLabel="Endgültig löschen"
+          message={`Kapitel „${dialog.chapter.title}" in den Papierkorb legen?`}
+          detail="Dort kannst du es 30 Tage lang wiederherstellen."
+          confirmLabel="In den Papierkorb"
           onCancel={() => setDialog(null)}
           onConfirm={() => handleDelete(dialog.chapter)}
         />

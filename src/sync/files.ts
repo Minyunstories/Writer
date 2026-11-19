@@ -5,7 +5,7 @@ import { modulesFile, parseModules } from '../modules/modulesFile'
 import { parseShelf, shelfFile } from '../shelf/shelfFile'
 import { parseVocabulary, vocabularyFile } from '../vocabulary/vocabularyFile'
 import { addressFile, parseAddress } from '../address/addressFile'
-import type { Book, BookNote, BookRelations, Relation, RelationType, Chapter, ChapterComment, ChapterGroup, ChapterStatus, ChapterVersion, FontId, WikiEntry, WikiFolder, WikiImage, WikiProperty } from '../types'
+import type { Book, BookNote, BookRelations, Relation, RelationType, Chapter, ChapterComment, ChapterGroup, ChapterStatus, ChapterVersion, FontId, TrashItem, WikiEntry, WikiFolder, WikiImage, WikiProperty } from '../types'
 import type { FileData } from './hash'
 
 export type { FileData } from './hash'
@@ -19,6 +19,8 @@ export interface BookBundle {
   images: WikiImage[]
   /** Named versions travel; automatic ones stay on the device. */
   versions?: ChapterVersion[]
+  /** Deleted chapters and entries, each as the exact text of its file. */
+  trash?: TrashItem[]
 }
 
 const ROOT = 'books/'
@@ -68,7 +70,7 @@ export interface EntryHeader {
 }
 
 /** Turns one book into repository files. The same book always gives the same bytes. */
-export function bundleToFiles({ book, chapters, folders, entries, images, versions = [] }: BookBundle): FileSet {
+export function bundleToFiles({ book, chapters, folders, entries, images, versions = [], trash = [] }: BookBundle): FileSet {
   const prefix = bookPrefix(book.id)
   const files: FileSet = new Map()
   const ordered = orderedChapters(book, chapters)
@@ -124,6 +126,8 @@ export function bundleToFiles({ book, chapters, folders, entries, images, versio
   for (const version of versions) {
     if (!version.auto) files.set(`${prefix}versions/${version.chapterId}/${version.id}.json`, versionFile(version))
   }
+  // Written once when deleted and passed on unchanged, so every device has the same bytes.
+  for (const item of trash) files.set(`${prefix}trash/${item.id}.json`, item.file)
   if (book.wikiStars?.length) files.set(`${prefix}wiki/stars.json`, json(book.wikiStars))
   if (book.spelling) files.set(`${prefix}spelling.json`, json(book.spelling))
 
@@ -666,7 +670,28 @@ export function filesToBundle(bookId: string, files: FileSet): BookBundle {
       const version = parseVersion(bookId, files.get(path))
       return version ? [version] : []
     })
-  return { book, chapters, folders, entries, images, ...(versions.length ? { versions } : {}) }
+  const trash = own.flatMap((path) => {
+    const info = classifyPath(path)
+    const item = info?.kind === 'trash' ? parseTrash(bookId, info.id, files.get(path)) : null
+    return item ? [item] : []
+  })
+  return { book, chapters, folders, entries, images, ...(versions.length ? { versions } : {}), ...(trash.length ? { trash } : {}) }
+}
+
+/** trash/<id>.json: something deleted, kept as its exact text. Null unless it names itself and its kind. */
+export function parseTrash(bookId: string, id: string, data: FileData | undefined): TrashItem | null {
+  if (data === undefined) return null
+  const file = text(data)
+  const value = parseJson<Record<string, unknown>>(file)
+  if (!value || value.id !== id || typeof value.kind !== 'string') return null
+  return {
+    id,
+    bookId,
+    kind: value.kind,
+    title: typeof value.title === 'string' ? value.title : '',
+    deletedAt: Number(value.deletedAt) || 0,
+    file,
+  }
 }
 
 /** versions/<chapter>/<id>.json: a named version of a chapter. */
@@ -682,7 +707,7 @@ export function parseVersion(bookId: string, data: FileData | undefined): Chapte
   return version
 }
 
-export type PathKind = 'book' | 'chapter' | 'outline' | 'folders' | 'entry' | 'image' | 'tags' | 'templates' | 'style' | 'dates' | 'place' | 'wikiOrder' | 'folderColors' | 'notes' | 'stars' | 'templateBlocks' | 'spelling' | 'collection' | 'version' | 'status' | 'comments' | 'relations' | 'graph' | 'groups' | 'modules' | 'shelf' | 'vocabulary' | 'address'
+export type PathKind = 'book' | 'chapter' | 'outline' | 'folders' | 'entry' | 'image' | 'tags' | 'templates' | 'style' | 'dates' | 'place' | 'wikiOrder' | 'folderColors' | 'notes' | 'stars' | 'templateBlocks' | 'spelling' | 'collection' | 'version' | 'status' | 'comments' | 'relations' | 'graph' | 'groups' | 'modules' | 'shelf' | 'vocabulary' | 'address' | 'trash'
 
 /** What a repository path holds, or null for files the app does not manage. */
 export function classifyPath(path: string): { bookId: string; kind: PathKind; id: string } | null {
@@ -713,6 +738,8 @@ export function classifyPath(path: string): { bookId: string; kind: PathKind; id
   if (rest === 'notes.json') return { bookId, kind: 'notes', id: bookId }
   if (rest === 'spelling.json') return { bookId, kind: 'spelling', id: bookId }
   if (rest === 'wiki/stars.json') return { bookId, kind: 'stars', id: bookId }
+  const trash = /^trash\/([^/]+)\.json$/.exec(rest)
+  if (trash) return { bookId, kind: 'trash', id: trash[1] }
   const version = /^versions\/[^/]+\/([^/]+)\.json$/.exec(rest)
   if (version) return { bookId, kind: 'version', id: version[1] }
   const match = /^(chapters|outline|wiki\/_images|wiki)\/([^/]+)$/.exec(rest)

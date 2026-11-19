@@ -375,3 +375,24 @@ test('chapter groups travel in groups.json', () => {
   expect(back.book.chapterGroups).toEqual([{ id: 'g1', name: 'Der Winterball' }])
   expect(back.chapters.find((chapter) => chapter.id === id)!.group).toBe('g1')
 })
+
+test('classifyPath knows trash files', () => {
+  expect(classifyPath('books/b1/trash/t1.json')).toEqual({ bookId: 'b1', kind: 'trash', id: 't1' })
+  expect(classifyPath('books/b1/trash/t1.txt')).toBeNull()
+  expect(classifyPath('books/b1/trash/x/t1.json')).toBeNull()
+})
+
+test('trash items travel as their exact text', () => {
+  const file = '{\n  "id": "t1",\n  "kind": "chapter",\n  "title": "Zwei",\n  "deletedAt": 1700000000000,\n  "future": [1, 2]\n}\n'
+  const bundle: BookBundle = {
+    book: { id: 'b1', title: 'Sturmlied', font: 'literata', chapterOrder: [], createdAt: 1, updatedAt: 1 },
+    chapters: [],
+    folders: [],
+    entries: [],
+    images: [],
+    trash: [{ id: 't1', bookId: 'b1', kind: 'chapter', title: 'Zwei', deletedAt: 1700000000000, file }],
+  }
+  const files = bundleToFiles(bundle)
+  expect(files.get('books/b1/trash/t1.json')).toBe(file)
+  expect(filesToBundle('b1', files).trash).toEqual(bundle.trash)
+})

@@ -6,7 +6,6 @@ import { ConflictError } from '../storage/connection'
 import {
   addImage,
   createEntry,
-  deleteEntry,
   getEntry,
   getImage,
   removeImage,
@@ -16,6 +15,7 @@ import {
   type EntryPatch,
   type TemplateLayout,
 } from '../storage/wiki'
+import { trashEntry } from '../storage/trash'
 import type { Chapter, WikiEntry, WikiFolder, ZoomArea } from '../types'
 import { ConfirmDialog } from '../ui/Dialogs'
 import { prepareImage } from './image'
@@ -436,7 +436,7 @@ export function WikiEntryEditor({
     deleted.current = true
     window.clearTimeout(timer.current)
     try {
-      await deleteEntry(entryId)
+      await trashEntry(entryId)
       onDeleted()
     } catch {
       deleted.current = false
@@ -675,8 +675,9 @@ export function WikiEntryEditor({
 
       {confirmDelete && (
         <ConfirmDialog
-          message={`Eintrag „${entry.name}" wirklich löschen?`}
-          confirmLabel="Endgültig löschen"
+          message={`Eintrag „${entry.name}" in den Papierkorb legen?`}
+          detail="Dort kannst du ihn 30 Tage lang wiederherstellen."
+          confirmLabel="In den Papierkorb"
           onCancel={() => setConfirmDelete(false)}
           onConfirm={() => void remove()}
         />

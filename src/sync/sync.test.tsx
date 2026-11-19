@@ -1,7 +1,7 @@
 import { EditorView } from '@codemirror/view'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, expect, test } from 'vitest'
+import { beforeEach, expect, test, vi } from 'vitest'
 import { Editor } from '../editor/Editor'
 import { createBook, createChapter, deleteBook, getChapter, listBooks, resetDatabaseForTests, updateChapter } from '../storage/db'
 import { createFakeGitHub } from './fakeGitHub'
@@ -284,4 +284,23 @@ test('changes waiting in the repository from another device are pointed out', as
   await repo.commit({ parent: head.commit, baseTree: head.tree, write: new Map(), inline: new Map([['books/x/book.json', '{}']]), remove: [], message: 'anderes Gerät' })
   expect(await status('Neues vom anderen Gerät')).toBeInTheDocument()
   unmount()
+})
+
+test('the sync window offers a backup download, even without a repository', async () => {
+  const user = userEvent.setup()
+  await createBook('Sturmlied')
+  const createObjectURL = vi.fn(() => 'blob:backup')
+  Object.assign(URL, { createObjectURL, revokeObjectURL: vi.fn() })
+  const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+  try {
+    renderSync()
+    await user.click(await status('Nicht eingerichtet'))
+    const dialog = screen.getByRole('dialog', { name: 'Synchronisation' })
+    expect(within(dialog).getByRole('heading', { name: 'Sicherung' })).toBeInTheDocument()
+    await user.click(within(dialog).getByRole('button', { name: 'Sicherung herunterladen' }))
+    await waitFor(() => expect(click).toHaveBeenCalled())
+    expect(createObjectURL).toHaveBeenCalled()
+  } finally {
+    click.mockRestore()
+  }
 })

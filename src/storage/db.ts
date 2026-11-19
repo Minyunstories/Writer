@@ -78,7 +78,7 @@ export async function savePlace(bookId: string, place: BookPlace): Promise<void>
   announceChange()
 }
 
-const BOOK_OWNED_STORES = ['chapters', 'wikiFolders', 'wikiEntries', 'wikiImages', 'versions'] as const
+const BOOK_OWNED_STORES = ['chapters', 'wikiFolders', 'wikiEntries', 'wikiImages', 'versions', 'trash'] as const
 
 export async function deleteBook(id: string): Promise<void> {
   const tx = (await db()).transaction(['books', ...BOOK_OWNED_STORES], 'readwrite')

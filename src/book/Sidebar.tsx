@@ -21,6 +21,8 @@ interface Props {
   wiki?: ReactNode
   /** Content of the outline tab. */
   outline?: ReactNode
+  /** At the very bottom, under every tab (the trash button). */
+  footer?: ReactNode
   onSelectSection: (section: Section) => void
   onNavigate: () => void
   onCreateChapter: () => void
@@ -50,6 +52,7 @@ export function Sidebar({
   activeChapterId,
   wiki,
   outline,
+  footer,
   onSelectSection,
   onNavigate,
   onCreateChapter,
@@ -190,6 +193,8 @@ export function Sidebar({
       {section === 'wiki' && wiki}
 
       {section === 'outline' && outline}
+
+      {footer}
     </nav>
   )
 }

@@ -88,8 +88,9 @@ test('rename and delete update the list; deleting the open chapter selects the n
   const renamed = (await screen.findByRole('link', { name: 'Prolog' })).closest('li')!
 
   await user.click(within(renamed).getByRole('button', { name: 'Kapitel löschen' }))
-  expect(screen.getByText('Kapitel „Prolog" wirklich löschen?')).toBeInTheDocument()
-  await user.click(screen.getByRole('button', { name: 'Endgültig löschen' }))
+  expect(screen.getByText('Kapitel „Prolog" in den Papierkorb legen?')).toBeInTheDocument()
+  expect(screen.getByText('Dort kannst du es 30 Tage lang wiederherstellen.')).toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: 'In den Papierkorb' }))
   await waitFor(() => expect(screen.queryByRole('link', { name: 'Prolog' })).not.toBeInTheDocument())
   await waitFor(() =>
     expect(screen.getByTestId('location')).toHaveTextContent(`/book/${book.id}/chapters/${b.id}`),
@@ -97,7 +98,7 @@ test('rename and delete update the list; deleting the open chapter selects the n
 
   const last = screen.getByRole('link', { name: 'Sturm' }).closest('li')!
   await user.click(within(last).getByRole('button', { name: 'Kapitel löschen' }))
-  await user.click(screen.getByRole('button', { name: 'Endgültig löschen' }))
+  await user.click(screen.getByRole('button', { name: 'In den Papierkorb' }))
   expect(await screen.findByText('Noch keine Kapitel')).toBeInTheDocument()
 })
 
@@ -1091,4 +1092,53 @@ test('Strg+/ in a wiki text field leaves the text alone', async () => {
   fireEvent.keyDown(field.contentDOM, { key: '/', ctrlKey: true })
   expect(field.state.doc.toString()).toBe('Notiz')
   expect(screen.getByRole('dialog', { name: 'Tastenkürzel' })).toBeInTheDocument()
+})
+
+test('a deleted chapter waits in the trash and comes back, opened', async () => {
+  const user = userEvent.setup()
+  const book = await createBook('Sturmlied')
+  const a = await createChapter(book.id, 'Eins')
+  const b = await createChapter(book.id, 'Zwei')
+  await createChapter(book.id, 'Drei')
+  renderAt(`/book/${book.id}/chapters/${a.id}`)
+  await screen.findByRole('link', { name: 'Zwei' })
+  expect(screen.queryByRole('button', { name: /Papierkorb/ })).toBeNull()
+
+  const item = screen.getByRole('link', { name: 'Zwei' }).closest('li')!
+  await user.click(within(item).getByRole('button', { name: 'Kapitel löschen' }))
+  await user.click(screen.getByRole('button', { name: 'In den Papierkorb' }))
+  await waitFor(() => expect(screen.queryByRole('link', { name: 'Zwei' })).toBeNull())
+
+  await user.click(await screen.findByRole('button', { name: 'Papierkorb · 1' }))
+  const dialog = screen.getByRole('dialog', { name: 'Papierkorb' })
+  await user.click(within(dialog).getByRole('button', { name: '„Zwei" wiederherstellen' }))
+  await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(`/book/${book.id}/chapters/${b.id}`))
+  expect(screen.queryByRole('dialog', { name: 'Papierkorb' })).toBeNull()
+  expect((await listChapters(book.id)).map((c) => c.title)).toEqual(['Eins', 'Zwei', 'Drei'])
+  await waitFor(() => expect(screen.queryByRole('button', { name: /Papierkorb/ })).toBeNull())
+})
+
+test('a restored wiki entry opens in the wiki', async () => {
+  const user = userEvent.setup()
+  const { trashEntry } = await import('../storage/trash')
+  const book = await createBook('Sturmlied')
+  const entry = await createEntry(book.id, 'Pascal')
+  await trashEntry(entry.id)
+  renderAt(`/book/${book.id}/wiki`)
+  await user.click(await screen.findByRole('button', { name: 'Papierkorb · 1' }))
+  await user.click(screen.getByRole('button', { name: '„Pascal" wiederherstellen' }))
+  await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(`/book/${book.id}/wiki/${entry.id}`))
+})
+
+test('opening a book clears what has been in the trash for 30 days', async () => {
+  const { listTrash, trashChapter } = await import('../storage/trash')
+  const { db } = await import('../storage/connection')
+  const book = await createBook('Sturmlied')
+  const old = await createChapter(book.id, 'Alt')
+  const item = await trashChapter(old.id)
+  await (await db()).put('trash', { ...item!, deletedAt: Date.now() - 31 * 24 * 60 * 60 * 1000 })
+  renderAt(`/book/${book.id}`)
+  await screen.findByRole('heading', { name: 'Sturmlied' })
+  await waitFor(async () => expect(await listTrash(book.id)).toEqual([]))
+  expect(screen.queryByRole('button', { name: /Papierkorb/ })).toBeNull()
 })

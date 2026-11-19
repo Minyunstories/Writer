@@ -114,13 +114,16 @@ test('an unreadable image is reported', async () => {
   expect(await screen.findByText('Das Bild konnte nicht gelesen werden.')).toBeInTheDocument()
 })
 
-test('deleting asks first', async () => {
+test('deleting asks first and puts the entry in the trash', async () => {
+  const { listTrash } = await import('../storage/trash')
   const { entry, user, onDeleted } = await setup()
   await user.click(screen.getByRole('button', { name: 'Eintrag löschen' }))
-  expect(screen.getByText('Eintrag „Pascal" wirklich löschen?')).toBeInTheDocument()
-  await user.click(screen.getByRole('button', { name: 'Endgültig löschen' }))
+  expect(screen.getByText('Eintrag „Pascal" in den Papierkorb legen?')).toBeInTheDocument()
+  expect(screen.getByText('Dort kannst du ihn 30 Tage lang wiederherstellen.')).toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: 'In den Papierkorb' }))
   await waitFor(() => expect(onDeleted).toHaveBeenCalled())
   expect(await getEntry(entry.id)).toBeUndefined()
+  expect((await listTrash(entry.bookId)).map((item) => item.title)).toEqual(['Pascal'])
 })
 
 test('unmounting right after typing still saves', async () => {

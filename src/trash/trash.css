@@ -1,0 +1,117 @@
+.trash-dialog {
+  width: min(34rem, 100%);
+  max-height: 88dvh;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  gap: 0.6rem;
+}
+
+.trash-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.trash-header button.icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 10px;
+}
+
+.trash-note,
+.trash-empty {
+  margin: 0;
+  font-size: 14px;
+}
+
+.trash-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+}
+
+.trash-item {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.85rem 0;
+  border-top: 1px solid var(--border);
+}
+
+.trash-info {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.trash-kind {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.trash-title {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  overflow-wrap: anywhere;
+}
+
+.trash-when {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.trash-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.trash-question {
+  margin-right: auto;
+  font-size: 14px;
+}
+
+button.trash-forever {
+  color: var(--text-muted);
+}
+
+/* The sidebar's trash button: quiet, at the very bottom. */
+button.sidebar-trash {
+  margin-top: auto;
+  align-self: stretch;
+  padding: 0.55rem 0.75rem;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+button.sidebar-trash:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--accent);
+  background: transparent;
+}
+
+/* Narrow screens: both buttons side by side, each half the row. */
+@media (max-width: 480px) {
+  .trash-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .trash-actions > button {
+    padding-inline: 0.4rem;
+    font-size: 14px;
+    white-space: nowrap;
+  }
+
+  .trash-question {
+    grid-column: 1 / -1;
+  }
+}

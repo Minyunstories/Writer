@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { GitHubErrorKind } from './github'
 import type { ConflictNote } from './local'
 import { maskToken, parseRepository } from './settings'
+import { downloadBackup } from './backup'
 import { useSync, type SyncState } from './SyncProvider'
 import './sync.css'
 
@@ -124,6 +125,17 @@ function SyncSettingsDialog({ onClose }: { onClose: () => void }) {
   const [token, setToken] = useState('')
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null)
   const [busy, setBusy] = useState(false)
+  const [backup, setBackup] = useState<'idle' | 'packing' | 'failed'>('idle')
+
+  const download = async () => {
+    setBackup('packing')
+    try {
+      await downloadBackup()
+      setBackup('idle')
+    } catch {
+      setBackup('failed')
+    }
+  }
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -242,6 +254,21 @@ function SyncSettingsDialog({ onClose }: { onClose: () => void }) {
             </button>
           </div>
         )}
+
+        <section className="sync-backup" aria-labelledby="sync-backup-title">
+          <h3 id="sync-backup-title">Sicherung</h3>
+          <p className="muted">Alle Bücher und die Sammlung als ZIP-Datei auf dieses Gerät laden – in derselben Ordnerstruktur wie dein Bücher-Repository.</p>
+          <div className="sync-actions">
+            <button onClick={() => void download()} disabled={backup === 'packing'}>
+              {backup === 'packing' ? 'Wird gepackt …' : 'Sicherung herunterladen'}
+            </button>
+          </div>
+          {backup === 'failed' && (
+            <p className="status-error" role="alert">
+              Das hat nicht geklappt. Bitte noch einmal versuchen.
+            </p>
+          )}
+        </section>
 
         <details className="sync-help">
           <summary>So bekommst du einen Zugangsschlüssel</summary>

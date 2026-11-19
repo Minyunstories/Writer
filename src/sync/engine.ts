@@ -74,6 +74,7 @@ async function once(api: RemoteApi, options: SyncOptions, noted: ConflictNote[])
   // 1. Bring repository changes to this device.
   const pulled = plan.pull.length + plan.conflicts.length + plan.deleteLocal.length
   const skipped = new Set<string>()
+  const obsolete: string[] = []
   let current = snapshot
   let currentSha = local
   if (pulled > 0) {
@@ -85,6 +86,7 @@ async function once(api: RemoteApi, options: SyncOptions, noted: ConflictNote[])
     const applied = await applyRemoteFiles({ write, remove: plan.deleteLocal, conflicts: both, snapshot })
     noted.push(...applied.notes)
     for (const path of applied.skipped) skipped.add(path)
+    obsolete.push(...applied.obsolete)
 
     // Remember at once what was taken over. If the rest of this run fails or is repeated,
     // the same repository change is then not applied, merged or copied a second time.
@@ -120,7 +122,7 @@ async function once(api: RemoteApi, options: SyncOptions, noted: ConflictNote[])
   }
   if (!initialised) inline.set(MARKER_PATH, MARKER_CONTENT)
   // Only deletions that were planned as such.
-  const remove = plan.deleteRemote.filter((path) => !currentSha.has(path) && remote.has(path))
+  const remove = [...plan.deleteRemote, ...obsolete].filter((path) => !currentSha.has(path) && remote.has(path))
   const pushed = write.size + inline.size + remove.length - (initialised ? 0 : 1)
   let latest = head?.commit ?? null
   if (write.size + inline.size + remove.length > 0) {

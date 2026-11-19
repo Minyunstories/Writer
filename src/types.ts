@@ -348,3 +348,17 @@ export interface BookAddress {
   deleted?: string[]
   extra?: Extra
 }
+
+/**
+ * Something deleted that can still come back (30 days). `file` is the exact text of its
+ * repository file (books/<book>/trash/<id>.json): written once, then passed on unchanged.
+ */
+export interface TrashItem {
+  id: string
+  bookId: string
+  /** 'chapter' or 'entry'; other kinds (from a newer version) are listed but not restored. */
+  kind: string
+  title: string
+  deletedAt: number
+  file: string
+}

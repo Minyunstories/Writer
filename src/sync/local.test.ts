@@ -698,3 +698,57 @@ test('groups: taken over, kept when changed here during the run, joined on confl
   expect((await getBook(book.id))!.chapterGroups).toBeUndefined()
   expect((await getChapter(b.id))!.group).toBeUndefined()
 })
+
+const trashFile = (id: string, kind = 'chapter') => `${JSON.stringify({ id, kind, title: 'Zwei', deletedAt: 1700000000000, chapter: { id: 'c9' } }, null, 2)}\n`
+
+test('a trash file from the repository becomes a trash item, and leaves with it', async () => {
+  const { listTrash } = await import('../storage/trash')
+  const { p, book } = await seed()
+  const file = trashFile('t1')
+  await apply({ write: new Map([[`${p}trash/t1.json`, file]]), snapshot: await readLocalFiles() })
+  expect(await listTrash(book.id)).toEqual([{ id: 't1', bookId: book.id, kind: 'chapter', title: 'Zwei', deletedAt: 1700000000000, file }])
+  // Not mistaken for an image or an entry.
+  expect(await listEntries(book.id)).toHaveLength(1)
+
+  await apply({ remove: [`${p}trash/t1.json`], snapshot: await readLocalFiles() })
+  expect(await listTrash(book.id)).toEqual([])
+})
+
+test('an unreadable trash file is skipped', async () => {
+  const { listTrash } = await import('../storage/trash')
+  const { p, book } = await seed()
+  const result = await applyFull({ write: new Map([[`${p}trash/t1.json`, 'not json'], [`${p}trash/t2.json`, trashFile('other')]]), snapshot: await readLocalFiles() })
+  expect(result.skipped.sort()).toEqual([`${p}trash/t1.json`, `${p}trash/t2.json`])
+  expect(await listTrash(book.id)).toEqual([])
+})
+
+test('a book removed in the repository takes its trash along', async () => {
+  const { listTrash, trashChapter } = await import('../storage/trash')
+  const { p, book, a } = await seed()
+  await trashChapter(a.id)
+  const snapshot = await readLocalFiles()
+  await apply({ remove: [...snapshot.keys()].filter((path) => path.startsWith(p)), snapshot })
+  expect(await listBooks()).toEqual([])
+  expect(await listTrash(book.id)).toEqual([])
+})
+
+test('readLocalFiles writes the same bytes for a trash item every time', async () => {
+  const { trashChapter } = await import('../storage/trash')
+  const { p, a } = await seed()
+  const item = await trashChapter(a.id)
+  const first = await readLocalFiles()
+  const second = await readLocalFiles()
+  expect(first.get(`${p}trash/${item!.id}.json`)).toBe(item!.file)
+  expect(second.get(`${p}trash/${item!.id}.json`)).toBe(item!.file)
+  expect(first.has(`${p}chapters/${a.id}.md`)).toBe(false)
+})
+
+test('a trash file for a book that is not here is not kept, and the repository should drop it', async () => {
+  const { db } = await import('../storage/connection')
+  await seed()
+  const path = 'books/gone/trash/t1.json'
+  const result = await applyFull({ write: new Map([[path, trashFile('t1')]]), snapshot: await readLocalFiles() })
+  expect(result.skipped).toEqual([])
+  expect(result.obsolete).toEqual([path])
+  expect(await (await db()).getAll('trash')).toEqual([])
+})
