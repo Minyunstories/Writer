@@ -49,10 +49,10 @@ test('typing a name saves it and reports the change', async () => {
 
 test('aliases are added with Enter and can be removed', async () => {
   const { entry, user } = await setup()
-  await user.type(screen.getByLabelText('Auch bekannt als'), 'Nys{Enter}the Heir{Enter}')
-  await waitFor(async () => expect((await getEntry(entry.id))!.aliases).toEqual(['Nys', 'the Heir']))
-  await user.click(screen.getByRole('button', { name: '„Nys" entfernen' }))
-  await waitFor(async () => expect((await getEntry(entry.id))!.aliases).toEqual(['the Heir']))
+  await user.type(screen.getByLabelText('Auch bekannt als'), 'Cal{Enter}the Captain{Enter}')
+  await waitFor(async () => expect((await getEntry(entry.id))!.aliases).toEqual(['Cal', 'the Captain']))
+  await user.click(screen.getByRole('button', { name: '„Cal“ entfernen' }))
+  await waitFor(async () => expect((await getEntry(entry.id))!.aliases).toEqual(['the Captain']))
 })
 
 test('properties can be added, edited and removed', async () => {
@@ -118,7 +118,7 @@ test('deleting asks first and puts the entry in the trash', async () => {
   const { listTrash } = await import('../storage/trash')
   const { entry, user, onDeleted } = await setup()
   await user.click(screen.getByRole('button', { name: 'Eintrag löschen' }))
-  expect(screen.getByText('Eintrag „Pascal" in den Papierkorb legen?')).toBeInTheDocument()
+  expect(screen.getByText('Eintrag „Pascal“ in den Papierkorb legen?')).toBeInTheDocument()
   expect(screen.getByText('Dort kannst du ihn 30 Tage lang wiederherstellen.')).toBeInTheDocument()
   await user.click(screen.getByRole('button', { name: 'In den Papierkorb' }))
   await waitFor(() => expect(onDeleted).toHaveBeenCalled())
@@ -176,10 +176,10 @@ test('a save that fails after closing is reported to the parent', async () => {
 test('Backspace in the empty alias field does not delete aliases', async () => {
   const { entry, user } = await setup()
   const field = screen.getByLabelText('Auch bekannt als')
-  await user.type(field, 'Nys{Enter}')
+  await user.type(field, 'Cal{Enter}')
   await user.type(field, '{Backspace}{Backspace}')
   await new Promise((resolve) => setTimeout(resolve, 600))
-  expect((await getEntry(entry.id))!.aliases).toEqual(['Nys'])
+  expect((await getEntry(entry.id))!.aliases).toEqual(['Cal'])
 })
 
 test('after a sync run the entry shows what was pulled, notes included', async () => {
@@ -193,12 +193,12 @@ test('after a sync run the entry shows what was pulled, notes included', async (
 test('an entry changed elsewhere while typing here is not overwritten; my version becomes its own entry', async () => {
   const { book, entry, user } = await setup()
   const name = screen.getByLabelText('Name')
-  await updateEntry(entry.id, { body: 'vom anderen Gerät', aliases: ['Nys'] })
+  await updateEntry(entry.id, { body: 'vom anderen Gerät', aliases: ['Cal'] })
   await user.type(name, 'ss')
   expect(await screen.findByText(/an anderer Stelle geändert/)).toBeInTheDocument()
   const all = await wikiStorage.listEntries(book.id)
   expect(all.map((e) => [e.name, e.body, e.aliases, e.autoLink])).toEqual([
-    ['Pascal', 'vom anderen Gerät', ['Nys'], true],
+    ['Pascal', 'vom anderen Gerät', ['Cal'], true],
     ['Pascalss (meine Fassung)', '', [], false],
   ])
   await waitFor(() => expect(name).toHaveValue('Pascal'))
@@ -244,8 +244,8 @@ describe('renaming', () => {
     await user.click(name)
     await user.type(name, 'bel')
     await user.tab()
-    expect(await screen.findByText('„Mira" kommt 2-mal in deinen Kapiteln vor.')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Überall durch „Mirabel" ersetzen' }))
+    expect(await screen.findByText('„Mira“ kommt 2-mal in deinen Kapiteln vor.')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Überall durch „Mirabel“ ersetzen' }))
     await waitFor(() => expect(onReplaceName).toHaveBeenCalledWith('Mira', 'Mirabel'))
     expect(screen.queryByRole('dialog')).toBeNull()
   })
@@ -255,7 +255,7 @@ describe('renaming', () => {
     await user.click(name)
     await user.type(name, 'bel')
     await user.tab()
-    await user.click(await screen.findByRole('button', { name: '„Mira" als „auch bekannt als" behalten' }))
+    await user.click(await screen.findByRole('button', { name: '„Mira“ als „auch bekannt als“ behalten' }))
     await waitFor(async () => expect((await getEntry(entry.id))!.aliases).toEqual(['Mira']))
     expect((await getEntry(entry.id))!.name).toBe('Mirabel')
     expect(onReplaceName).not.toHaveBeenCalled()
@@ -295,7 +295,7 @@ test('the rename question counts what is stored, not an older list', async () =>
   await user.click(name)
   await user.type(name, 'bel')
   await user.tab()
-  expect(await screen.findByText('„Mira" kommt 2-mal in deinen Kapiteln vor.')).toBeInTheDocument()
+  expect(await screen.findByText('„Mira“ kommt 2-mal in deinen Kapiteln vor.')).toBeInTheDocument()
 })
 
 test('keeping an old name that already is an alias saves nothing more', async () => {
@@ -311,7 +311,7 @@ test('keeping an old name that already is an alias saves nothing more', async ()
   await user.tab()
   await waitFor(async () => expect((await getEntry(entry.id))!.name).toBe('Mirabel'))
   const saves = vi.spyOn(wikiStorage, 'updateEntry')
-  await user.click(await screen.findByRole('button', { name: '„Mira" als „auch bekannt als" behalten' }))
+  await user.click(await screen.findByRole('button', { name: '„Mira“ als „auch bekannt als“ behalten' }))
   await new Promise((resolve) => setTimeout(resolve, 900))
   expect(saves).not.toHaveBeenCalled()
   saves.mockRestore()

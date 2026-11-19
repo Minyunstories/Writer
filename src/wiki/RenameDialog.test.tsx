@@ -13,18 +13,18 @@ test('says what happened and offers both ways', async () => {
   const onReplace = vi.fn()
   const onKeepAlias = vi.fn()
   render(<RenameDialog oldName="Mira" newName="Mirabel" count={3} onReplace={onReplace} onKeepAlias={onKeepAlias} onClose={() => {}} />)
-  expect(screen.getByRole('dialog', { name: '„Mira" heißt jetzt „Mirabel"' })).toBeInTheDocument()
-  expect(screen.getByText('„Mira" kommt 3-mal in deinen Kapiteln vor.')).toBeInTheDocument()
+  expect(screen.getByRole('dialog', { name: '„Mira“ heißt jetzt „Mirabel“' })).toBeInTheDocument()
+  expect(screen.getByText('„Mira“ kommt 3-mal in deinen Kapiteln vor.')).toBeInTheDocument()
   const user = userEvent.setup()
-  await user.click(screen.getByRole('button', { name: 'Überall durch „Mirabel" ersetzen' }))
+  await user.click(screen.getByRole('button', { name: 'Überall durch „Mirabel“ ersetzen' }))
   expect(onReplace).toHaveBeenCalledTimes(1)
-  await user.click(screen.getByRole('button', { name: '„Mira" als „auch bekannt als" behalten' }))
+  await user.click(screen.getByRole('button', { name: '„Mira“ als „auch bekannt als“ behalten' }))
   expect(onKeepAlias).toHaveBeenCalledTimes(1)
 })
 
 test('once: "kommt einmal vor"', () => {
   render(<RenameDialog oldName="Mira" newName="Mirabel" count={1} onReplace={() => {}} onKeepAlias={() => {}} onClose={() => {}} />)
-  expect(screen.getByText('„Mira" kommt einmal in deinen Kapiteln vor.')).toBeInTheDocument()
+  expect(screen.getByText('„Mira“ kommt einmal in deinen Kapiteln vor.')).toBeInTheDocument()
 })
 
 test('Esc and ✕ change nothing', async () => {

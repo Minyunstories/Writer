@@ -34,7 +34,7 @@ export function RenameDialog({ oldName, newName, count, onReplace, onKeepAlias, 
     return () => window.removeEventListener('keydown', onKey, true)
   }, [onClose])
 
-  const title = `„${oldName}" heißt jetzt „${newName}"`
+  const title = `„${oldName}“ heißt jetzt „${newName}“`
   return (
     <div
       className="dialog-backdrop"
@@ -51,14 +51,14 @@ export function RenameDialog({ oldName, newName, count, onReplace, onKeepAlias, 
           </button>
         </header>
         <p>
-          „{oldName}" kommt {count === 1 ? 'einmal' : `${count}-mal`} in deinen Kapiteln vor.
+          „{oldName}“ kommt {count === 1 ? 'einmal' : `${count}-mal`} in deinen Kapiteln vor.
         </p>
         <div className="dialog-actions rename-actions">
           <button type="button" className="ghost" onClick={onKeepAlias}>
-            „{oldName}" als „auch bekannt als" behalten
+            „{oldName}“ als „auch bekannt als“ behalten
           </button>
           <button type="button" className="primary" onClick={onReplace}>
-            Überall durch „{newName}" ersetzen
+            Überall durch „{newName}“ ersetzen
           </button>
         </div>
       </div>

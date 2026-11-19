@@ -69,7 +69,7 @@ export function ChapterDialog({ chapter, groups, onSave, onCancel, next, onMerge
         {next && onMerge && (
           <div className="chapter-dialog-merge">
             <button type="button" className="ghost" onClick={onMerge}>
-              Mit „{next.title}" zusammenführen
+              Mit „{next.title}“ zusammenführen
             </button>
           </div>
         )}

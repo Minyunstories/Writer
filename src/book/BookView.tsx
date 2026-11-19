@@ -1281,8 +1281,8 @@ export function BookView({ renderChapter }: Props) {
       )}
       {dialog?.kind === 'merge' && (
         <ConfirmDialog
-          message={`„${dialog.next.title}" an „${dialog.chapter.title}" anhängen?`}
-          detail={`„${dialog.next.title}" wird zur Zwischenüberschrift in „${dialog.chapter.title}". Das Kapitel „${dialog.next.title}" selbst kommt in den Papierkorb.`}
+          message={`„${dialog.next.title}“ an „${dialog.chapter.title}“ anhängen?`}
+          detail={`„${dialog.next.title}“ wird zur Zwischenüberschrift in „${dialog.chapter.title}“. Das Kapitel „${dialog.next.title}“ selbst kommt in den Papierkorb.`}
           confirmLabel="Zusammenführen"
           onCancel={() => setDialog(null)}
           onConfirm={() => void mergeChapter(dialog.chapter)}
@@ -1303,7 +1303,7 @@ export function BookView({ renderChapter }: Props) {
       )}
       {dialog?.kind === 'deleteGroup' && (
         <ConfirmDialog
-          message={`Gruppe „${dialog.group.name}" auflösen? Die Kapitel bleiben erhalten.`}
+          message={`Gruppe „${dialog.group.name}“ auflösen? Die Kapitel bleiben erhalten.`}
           confirmLabel="Auflösen"
           onCancel={() => setDialog(null)}
           onConfirm={() => {
@@ -1315,7 +1315,7 @@ export function BookView({ renderChapter }: Props) {
       )}
       {dialog?.kind === 'delete' && (
         <ConfirmDialog
-          message={`Kapitel „${dialog.chapter.title}" in den Papierkorb legen?`}
+          message={`Kapitel „${dialog.chapter.title}“ in den Papierkorb legen?`}
           detail="Dort kannst du es 30 Tage lang wiederherstellen."
           confirmLabel="In den Papierkorb"
           onCancel={() => setDialog(null)}
@@ -1341,7 +1341,7 @@ export function BookView({ renderChapter }: Props) {
       )}
       {dialog?.kind === 'deleteFolder' && (
         <ConfirmDialog
-          message={`Ordner „${dialog.folder.name}" wirklich löschen?`}
+          message={`Ordner „${dialog.folder.name}“ wirklich löschen?`}
           detail="Die Einträge darin bleiben erhalten."
           confirmLabel="Ordner löschen"
           onCancel={() => setDialog(null)}

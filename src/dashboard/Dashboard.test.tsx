@@ -91,7 +91,7 @@ test('deleting asks first and then removes the card', async () => {
   const card = await screen.findByRole('article', { name: 'Sturmlied' })
   await user.click(within(card).getByRole('button', { name: 'Buchmenü für Sturmlied' }))
   await user.click(screen.getByRole('button', { name: 'Löschen' }))
-  expect(screen.getByText('Buch „Sturmlied" wirklich löschen?')).toBeInTheDocument()
+  expect(screen.getByText('Buch „Sturmlied“ wirklich löschen?')).toBeInTheDocument()
   await user.click(screen.getByRole('button', { name: 'Endgültig löschen' }))
   await waitFor(() => expect(screen.queryByRole('article', { name: 'Sturmlied' })).not.toBeInTheDocument())
   expect(await listBooks()).toEqual([])

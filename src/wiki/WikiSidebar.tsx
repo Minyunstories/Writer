@@ -144,7 +144,7 @@ export function WikiSidebar({
     const item: WikiItem = { kind: 'folder', id: folder.id }
     // Subfolders take the colour of their top-level folder.
     const tint = depth === 0 ? folder.color : color
-    const label = `Farbe für „${folder.name}"`
+    const label = `Farbe für „${folder.name}“`
     return (
       <li key={folder.id} data-folder={folder.id} className={`wiki-tree-folder depth-${Math.min(depth, 2)}`}>
         <div
@@ -170,7 +170,7 @@ export function WikiSidebar({
             <>
               <button
                 className="ghost icon"
-                aria-label={`Eintrag in „${folder.name}" anlegen`}
+                aria-label={`Eintrag in „${folder.name}“ anlegen`}
                 title="Neuer Eintrag in diesem Ordner"
                 onClick={() => onCreateEntry(folder.id)}
               >
@@ -179,7 +179,7 @@ export function WikiSidebar({
               {depth < 4 && (
                 <button
                   className="ghost icon"
-                  aria-label={`Unterordner in „${folder.name}" anlegen`}
+                  aria-label={`Unterordner in „${folder.name}“ anlegen`}
                   title="Neuer Unterordner"
                   onClick={() => onCreateFolder(folder.id)}
                 >
@@ -188,7 +188,7 @@ export function WikiSidebar({
               )}
               <button
                 className="ghost icon"
-                aria-label={`Ordner „${folder.name}" umbenennen`}
+                aria-label={`Ordner „${folder.name}“ umbenennen`}
                 title="Umbenennen"
                 onClick={() => onRenameFolder(folder)}
               >
@@ -196,7 +196,7 @@ export function WikiSidebar({
               </button>
               <button
                 className="ghost icon danger"
-                aria-label={`Ordner „${folder.name}" löschen`}
+                aria-label={`Ordner „${folder.name}“ löschen`}
                 title="Löschen"
                 onClick={() => onDeleteFolder(folder)}
               >

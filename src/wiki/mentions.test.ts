@@ -35,7 +35,7 @@ const folders = [
   folder('loopB', 'B', 'loopA'),
 ]
 const entries = [
-  entry('pascal', 'Pascal', 'royals', { aliases: ['the Heir'] }),
+  entry('pascal', 'Pascal', 'royals', { aliases: ['the Captain'] }),
   entry('mira', 'Mira', 'chars'),
   entry('hafen', 'Hafen', 'locs'),
   entry('note', 'Notiz'),
@@ -45,13 +45,13 @@ const matcher = buildMatcher(entries)
 const chapters = [
   chapter('c1', 'Pascal ging zum Hafen. Storm zog auf.'),
   chapter('c2', 'Nichts.'),
-  chapter('c3', 'Mira sah the Heir. Pascal lachte.\nMira auch.'),
+  chapter('c3', 'Mira sah the Captain. Pascal lachte.\nMira auch.'),
 ]
 
 test('mentionsOf counts per chapter in order with the first position', () => {
   expect(mentionsOf('pascal', chapters, matcher)).toEqual([
     { chapterId: 'c1', count: 1, first: { from: 0, to: 6 } },
-    { chapterId: 'c3', count: 2, first: { from: 9, to: 17 } },
+    { chapterId: 'c3', count: 2, first: { from: 9, to: 20 } },
   ])
   expect(mentionsOf('off', chapters, matcher)).toEqual([])
   expect(mentionsOf('unknown', chapters, matcher)).toEqual([])

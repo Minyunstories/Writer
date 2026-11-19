@@ -25,14 +25,14 @@ const ERROR_TEXT: Record<GitHubErrorKind, string> = {
 }
 
 function describe(note: ConflictNote): string {
-  const book = `„${note.bookTitle}"`
+  const book = `„${note.bookTitle}“`
   switch (note.kind) {
     case 'chapter':
-      return `Kapitel „${note.name}" in ${book}: Die Fassung von diesem Gerät steht als eigenes Kapitel direkt dahinter.`
+      return `Kapitel „${note.name}“ in ${book}: Die Fassung von diesem Gerät steht als eigenes Kapitel direkt dahinter.`
     case 'entry':
-      return `Wiki-Eintrag „${note.name}" in ${book}: Die Fassung von diesem Gerät steht als eigener Eintrag daneben.`
+      return `Wiki-Eintrag „${note.name}“ in ${book}: Die Fassung von diesem Gerät steht als eigener Eintrag daneben.`
     case 'outline':
-      return `Notiz zu „${note.name}" in ${book}: Beide Notizen stehen jetzt untereinander.`
+      return `Notiz zu „${note.name}“ in ${book}: Beide Notizen stehen jetzt untereinander.`
     case 'book':
       return `Titel und Kapitelreihenfolge von ${book}: Es gilt der Stand des anderen Geräts; neue Kapitel von hier hängen am Ende.`
     case 'folders':
@@ -76,10 +76,10 @@ export function SyncStatus() {
             <h2>Buch auf einem anderen Gerät gelöscht</h2>
             <p>
               {sync.deletion.titles.length === 1 ? 'Dieses Buch wurde' : 'Diese Bücher wurden'} auf einem anderen Gerät oder im
-              Repository gelöscht: {sync.deletion.titles.map((title) => `„${title}"`).join(', ')}.
+              Repository gelöscht: {sync.deletion.titles.map((title) => `„${title}“`).join(', ')}.
             </p>
             <p className="muted">
-              „Behalten" lässt alles auf diesem Gerät und überträgt es wieder ins Repository. „Hier auch löschen" entfernt es
+              „Behalten“ lässt alles auf diesem Gerät und überträgt es wieder ins Repository. „Hier auch löschen“ entfernt es
               von diesem Gerät.
             </p>
             <div className="dialog-actions">
@@ -150,7 +150,7 @@ function SyncSettingsDialog({ onClose }: { onClose: () => void }) {
     const parsed = parseRepository(repository)
     const useToken = token.trim() || saved?.token || ''
     if (!parsed) {
-      setMessage({ ok: false, text: 'Gib das Repository als „Name/Repository" oder als GitHub-Link an.' })
+      setMessage({ ok: false, text: 'Gib das Repository als „Name/Repository“ oder als GitHub-Link an.' })
       return null
     }
     if (!useToken) {
@@ -273,9 +273,9 @@ function SyncSettingsDialog({ onClose }: { onClose: () => void }) {
         <details className="sync-help">
           <summary>So bekommst du einen Zugangsschlüssel</summary>
           <ol>
-            <li>Bei GitHub: Settings, Developer settings, Personal access tokens, Fine-grained tokens, „Generate new token".</li>
-            <li>Bei „Repository access" „Only select repositories" wählen und nur dein Bücher-Repository auswählen.</li>
-            <li>Bei „Permissions", „Repository permissions" den Punkt „Contents" auf „Read and write" stellen.</li>
+            <li>Bei GitHub: Settings, Developer settings, Personal access tokens, Fine-grained tokens, „Generate new token“.</li>
+            <li>Bei „Repository access“ „Only select repositories“ wählen und nur dein Bücher-Repository auswählen.</li>
+            <li>Bei „Permissions“, „Repository permissions“ den Punkt „Contents“ auf „Read and write“ stellen.</li>
             <li>Schlüssel erzeugen, kopieren und hier einfügen. Auf jedem Gerät einmal.</li>
           </ol>
         </details>

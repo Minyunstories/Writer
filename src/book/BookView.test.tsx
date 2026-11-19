@@ -88,7 +88,7 @@ test('rename and delete update the list; deleting the open chapter selects the n
   const renamed = (await screen.findByRole('link', { name: 'Prolog' })).closest('li')!
 
   await user.click(within(renamed).getByRole('button', { name: 'Kapitel löschen' }))
-  expect(screen.getByText('Kapitel „Prolog" in den Papierkorb legen?')).toBeInTheDocument()
+  expect(screen.getByText('Kapitel „Prolog“ in den Papierkorb legen?')).toBeInTheDocument()
   expect(screen.getByText('Dort kannst du es 30 Tage lang wiederherstellen.')).toBeInTheDocument()
   await user.click(screen.getByRole('button', { name: 'In den Papierkorb' }))
   await waitFor(() => expect(screen.queryByRole('link', { name: 'Prolog' })).not.toBeInTheDocument())
@@ -166,7 +166,7 @@ test('wiki: folders and entries can be created from the sidebar', async () => {
   await user.click(screen.getByRole('button', { name: 'Anlegen' }))
   expect(await screen.findByText('Personen')).toBeInTheDocument()
 
-  await user.click(screen.getByRole('button', { name: 'Eintrag in „Personen" anlegen' }))
+  await user.click(screen.getByRole('button', { name: 'Eintrag in „Personen“ anlegen' }))
   const [folder] = await listFolders(book.id)
   const [entry] = await waitFor(async () => {
     const all = await listEntries(book.id)
@@ -199,8 +199,8 @@ test('wiki: deleting a folder keeps its entries', async () => {
   const orte = await createFolder(book.id, 'Orte')
   const hafen = await createEntry(book.id, 'Hafen', orte.id)
   renderAt(`/book/${book.id}/wiki`)
-  await user.click(await screen.findByRole('button', { name: 'Ordner „Orte" löschen' }))
-  expect(screen.getByText('Ordner „Orte" wirklich löschen?')).toBeInTheDocument()
+  await user.click(await screen.findByRole('button', { name: 'Ordner „Orte“ löschen' }))
+  expect(screen.getByText('Ordner „Orte“ wirklich löschen?')).toBeInTheDocument()
   expect(screen.getByText('Die Einträge darin bleiben erhalten.')).toBeInTheDocument()
   await user.click(screen.getByRole('button', { name: 'Ordner löschen' }))
   await waitFor(() => expect(screen.queryByText('Orte')).not.toBeInTheDocument())
@@ -388,12 +388,12 @@ test('chapter: [[ creates an entry in the chosen folder', async () => {
   const { startCompletion, currentCompletions, acceptCompletion, selectedCompletionIndex, setSelectedCompletion } = await import('@codemirror/autocomplete')
   view.dispatch({ changes: { from: 0, insert: 'Da kam [[Mira' }, selection: { anchor: 13 } })
   startCompletion(view)
-  await waitFor(() => expect(currentCompletions(view.state).map((c) => c.label)).toContain('„Mira" neu anlegen in: Characters'))
+  await waitFor(() => expect(currentCompletions(view.state).map((c) => c.label)).toContain('„Mira“ neu anlegen in: Characters'))
   // Nothing is picked until the writer picks it: Enter keeps writing.
   await new Promise((resolve) => setTimeout(resolve, 120))
   expect(selectedCompletionIndex(view.state)).toBeNull()
   expect(acceptCompletion(view)).toBe(false)
-  const index = currentCompletions(view.state).findIndex((c) => c.label === '„Mira" neu anlegen in: Characters')
+  const index = currentCompletions(view.state).findIndex((c) => c.label === '„Mira“ neu anlegen in: Characters')
   view.dispatch({ effects: setSelectedCompletion(index) })
   // CodeMirror ignores an accept within its short interaction delay after the list opens.
   await new Promise((resolve) => setTimeout(resolve, 120))
@@ -1111,7 +1111,7 @@ test('a deleted chapter waits in the trash and comes back, opened', async () => 
 
   await user.click(await screen.findByRole('button', { name: 'Papierkorb · 1' }))
   const dialog = screen.getByRole('dialog', { name: 'Papierkorb' })
-  await user.click(within(dialog).getByRole('button', { name: '„Zwei" wiederherstellen' }))
+  await user.click(within(dialog).getByRole('button', { name: '„Zwei“ wiederherstellen' }))
   await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(`/book/${book.id}/chapters/${b.id}`))
   expect(screen.queryByRole('dialog', { name: 'Papierkorb' })).toBeNull()
   expect((await listChapters(book.id)).map((c) => c.title)).toEqual(['Eins', 'Zwei', 'Drei'])
@@ -1126,7 +1126,7 @@ test('a restored wiki entry opens in the wiki', async () => {
   await trashEntry(entry.id)
   renderAt(`/book/${book.id}/wiki`)
   await user.click(await screen.findByRole('button', { name: 'Papierkorb · 1' }))
-  await user.click(screen.getByRole('button', { name: '„Pascal" wiederherstellen' }))
+  await user.click(screen.getByRole('button', { name: '„Pascal“ wiederherstellen' }))
   await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(`/book/${book.id}/wiki/${entry.id}`))
 })
 
@@ -1220,9 +1220,9 @@ test('a chapter can be merged with the next from its window; the next goes to th
   renderAt(`/book/${book.id}/chapters/${a.id}`)
   const row = (await screen.findByRole('link', { name: 'Anfang' })).closest('li')!
   await user.click(within(row).getByRole('button', { name: 'Kapitel umbenennen' }))
-  await user.click(screen.getByRole('button', { name: 'Mit „Der Winter" zusammenführen' }))
-  expect(screen.getByText('„Der Winter" an „Anfang" anhängen?')).toBeInTheDocument()
-  expect(screen.getByText('„Der Winter" wird zur Zwischenüberschrift in „Anfang". Das Kapitel „Der Winter" selbst kommt in den Papierkorb.')).toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: 'Mit „Der Winter“ zusammenführen' }))
+  expect(screen.getByText('„Der Winter“ an „Anfang“ anhängen?')).toBeInTheDocument()
+  expect(screen.getByText('„Der Winter“ wird zur Zwischenüberschrift in „Anfang“. Das Kapitel „Der Winter“ selbst kommt in den Papierkorb.')).toBeInTheDocument()
   await user.click(screen.getByRole('button', { name: 'Zusammenführen' }))
   await waitFor(async () => expect((await listChapters(book.id)).map((c) => c.title)).toEqual(['Anfang', 'Ende']))
   expect((await getChapter(a.id))!.content).toBe('Mira closed the door.\n\n## Der Winter\n\nSnow came early.')
@@ -1246,7 +1246,7 @@ test('renaming a wiki entry can change the name in every chapter', async () => {
   await user.click(name)
   await user.type(name, 'bel')
   await user.tab()
-  await user.click(await screen.findByRole('button', { name: 'Überall durch „Mirabel" ersetzen' }))
+  await user.click(await screen.findByRole('button', { name: 'Überall durch „Mirabel“ ersetzen' }))
   await waitFor(async () => expect((await getChapter(a.id))!.content).toBe("Mirabel smiled. Mirabel's cup."))
   expect((await getChapter(b.id))!.content).toBe('Miras plan. Lea and Mirabel.')
   const { listVersions } = await import('../storage/versions')
@@ -1294,7 +1294,7 @@ test('merging into the open chapter keeps its comments where they were', async (
   await waitFor(() => expect(document.querySelector('.editor .cm-content')?.textContent).toContain('Mira closed'))
   const row = screen.getByRole('link', { name: 'Anfang' }).closest('li')!
   await user.click(within(row).getByRole('button', { name: 'Kapitel umbenennen' }))
-  await user.click(screen.getByRole('button', { name: 'Mit „Der Winter" zusammenführen' }))
+  await user.click(screen.getByRole('button', { name: 'Mit „Der Winter“ zusammenführen' }))
   await user.click(screen.getByRole('button', { name: 'Zusammenführen' }))
   await waitFor(() => expect(document.querySelector('.editor .cm-content')?.textContent).toContain('Snow came early.'))
   // The editor stores comment places a little later; give it time to do so.

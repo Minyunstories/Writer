@@ -38,19 +38,19 @@ test('lists items newest first with kind, title, date and days left', async () =
 
 test('restoring calls onRestored with what came back', async () => {
   const { chapter, user, onRestored } = await setup()
-  await user.click(screen.getByRole('button', { name: '„Zwei" wiederherstellen' }))
+  await user.click(screen.getByRole('button', { name: '„Zwei“ wiederherstellen' }))
   await waitFor(() => expect(onRestored).toHaveBeenCalledWith({ kind: 'chapter', targetId: chapter.id }))
 })
 
 test('deleting for good asks first', async () => {
   const { book, user, dialog } = await setup()
-  await user.click(screen.getByRole('button', { name: '„Zwei" endgültig löschen' }))
+  await user.click(screen.getByRole('button', { name: '„Zwei“ endgültig löschen' }))
   const row = within(dialog).getByText('Zwei').closest('li')!
   expect(within(row).getByText('Endgültig löschen?')).toBeInTheDocument()
   await user.click(within(row).getByRole('button', { name: 'Abbrechen' }))
   expect(await listTrash(book.id)).toHaveLength(2)
 
-  await user.click(screen.getByRole('button', { name: '„Zwei" endgültig löschen' }))
+  await user.click(screen.getByRole('button', { name: '„Zwei“ endgültig löschen' }))
   await user.click(within(dialog).getByRole('button', { name: 'Ja, löschen' }))
   await waitFor(() => expect(within(dialog).queryByText('Zwei')).toBeNull())
   expect((await listTrash(book.id)).map((item) => item.title)).toEqual(['Pascal'])
@@ -58,7 +58,7 @@ test('deleting for good asks first', async () => {
 
 test('an empty trash says so', async () => {
   const { user, dialog } = await setup()
-  for (const name of ['„Zwei" endgültig löschen', '„Pascal" endgültig löschen']) {
+  for (const name of ['„Zwei“ endgültig löschen', '„Pascal“ endgültig löschen']) {
     await user.click(screen.getByRole('button', { name }))
     await user.click(within(dialog).getByRole('button', { name: 'Ja, löschen' }))
   }
@@ -70,8 +70,8 @@ test('an unknown kind has no restore button', async () => {
   await (await db()).put('trash', { id: 'x', bookId: book.id, kind: 'folder', title: 'Orte', deletedAt: Date.now(), file: '{}\n' })
   render(<TrashDialog bookId={book.id} onRestored={() => {}} onClose={() => {}} />)
   await screen.findByText('Orte')
-  expect(screen.queryByRole('button', { name: '„Orte" wiederherstellen' })).toBeNull()
-  expect(screen.getByRole('button', { name: '„Orte" endgültig löschen' })).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: '„Orte“ wiederherstellen' })).toBeNull()
+  expect(screen.getByRole('button', { name: '„Orte“ endgültig löschen' })).toBeInTheDocument()
 })
 
 test('Esc and ✕ close', async () => {

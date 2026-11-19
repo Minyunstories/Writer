@@ -64,13 +64,13 @@ test('pinning an own field adds it to the folder template; unpinning keeps the v
   await user.click(screen.getByRole('button', { name: 'Eigenschaft hinzufügen' }))
   await user.type(screen.getByLabelText('Eigenschaft'), 'Größe')
   await user.type(screen.getByLabelText('Wert'), '1,80')
-  const pin = screen.getByRole('button', { name: 'Feld für alle Einträge in „Characters"', pressed: false })
+  const pin = screen.getByRole('button', { name: 'Feld für alle Einträge in „Characters“', pressed: false })
   await user.click(pin)
   await waitFor(async () => expect((await listFolders(chars.bookId)).find((f) => f.id === chars.id)!.template).toEqual(['Augenfarbe', 'Alter', 'Größe']))
   await waitFor(() => expect(screen.getByLabelText('Größe')).toHaveValue('1,80'))
 
   const row = screen.getByLabelText('Größe').closest('li')!
-  await user.click(within(row).getByRole('button', { name: 'Feld für alle Einträge in „Characters"', pressed: true }))
+  await user.click(within(row).getByRole('button', { name: 'Feld für alle Einträge in „Characters“', pressed: true }))
   await waitFor(async () => expect((await listFolders(chars.bookId)).find((f) => f.id === chars.id)!.template).toEqual(['Augenfarbe', 'Alter']))
   await waitFor(() => expect(screen.getByLabelText('Eigenschaft')).toHaveValue('Größe'))
   await waitFor(async () => expect((await getEntry(pascal.id))!.properties.map((p) => [p.key, p.value])).toEqual([['Größe', '1,80']]))
@@ -200,7 +200,7 @@ test('blocks: named by hand, filled, and starred for every entry of the folder',
     await updateEntry(pascal.id, { properties: [{ id: 'p1', key: 'Größe', value: '1,80' }] })
   })
   await user.click(screen.getByRole('button', { name: '+ Block' }))
-  const name = screen.getByRole('textbox', { name: 'Name des Blocks „Neuer Block"' })
+  const name = screen.getByRole('textbox', { name: 'Name des Blocks „Neuer Block“' })
   await waitFor(() => expect(name).toHaveFocus())
   await user.keyboard('Aussehen{Enter}')
   const block = await screen.findByRole('region', { name: 'Block Aussehen' })
@@ -208,7 +208,7 @@ test('blocks: named by hand, filled, and starred for every entry of the folder',
   const grip = screen.getByDisplayValue('Größe').closest('li')!.querySelector('.wiki-grip')!
   dragOnto(grip, block)
   await waitFor(async () => expect((await getEntry(pascal.id))!.properties[0].group).toBe('Aussehen'))
-  await user.click(within(block).getByRole('button', { name: 'Block „Aussehen" für alle Einträge in „Characters"' }))
+  await user.click(within(block).getByRole('button', { name: 'Block „Aussehen“ für alle Einträge in „Characters“' }))
   await waitFor(async () => {
     const folder = (await listFolders(chars.bookId)).find((f) => f.id === chars.id)!
     expect(folder.templateBlocks).toEqual(['Aussehen'])
@@ -220,7 +220,7 @@ test('blocks: named by hand, filled, and starred for every entry of the folder',
   dragOnto(screen.getByText('Augenfarbe').closest('li')!.querySelector('.wiki-grip')!, starred)
   await waitFor(async () => expect((await listFolders(chars.bookId)).find((f) => f.id === chars.id)!.templateGroups).toEqual({ Größe: 'Aussehen', Augenfarbe: 'Aussehen' }))
   // Unstarred: gone from the folder, kept in this entry.
-  await user.click(within(await screen.findByRole('region', { name: 'Block Aussehen' })).getByRole('button', { name: /^Block „Aussehen" für alle/ }))
+  await user.click(within(await screen.findByRole('region', { name: 'Block Aussehen' })).getByRole('button', { name: /^Block „Aussehen“ für alle/ }))
   await waitFor(async () => {
     const folder = (await listFolders(chars.bookId)).find((f) => f.id === chars.id)!
     expect(folder.templateBlocks).toBeUndefined()

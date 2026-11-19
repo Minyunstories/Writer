@@ -118,11 +118,11 @@ export function TrashDialog({ bookId, onRestored, onClose }: Props) {
                     </div>
                   ) : (
                     <div className="trash-actions">
-                      <button type="button" className="ghost trash-forever" aria-label={`„${item.title}" endgültig löschen`} onClick={() => setAsking(item.id)}>
+                      <button type="button" className="ghost trash-forever" aria-label={`„${item.title}“ endgültig löschen`} onClick={() => setAsking(item.id)}>
                         Endgültig löschen
                       </button>
                       {known && (
-                        <button type="button" aria-label={`„${item.title}" wiederherstellen`} onClick={() => void restore(item)}>
+                        <button type="button" aria-label={`„${item.title}“ wiederherstellen`} onClick={() => void restore(item)}>
                           Wiederherstellen
                         </button>
                       )}

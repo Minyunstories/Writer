@@ -467,7 +467,7 @@ export function WikiEntryEditor({
       {replaced && (
         <p className="wiki-replaced" role="alert">
           Dieser Eintrag wurde an anderer Stelle geändert. Du siehst jetzt den gespeicherten Stand; deine Fassung steht als
-          eigener Eintrag mit dem Zusatz „(meine Fassung)" im Wiki.
+          eigener Eintrag mit dem Zusatz „(meine Fassung)“ im Wiki.
           <button className="ghost" onClick={() => setReplaced(false)}>
             Verstanden
           </button>
@@ -525,7 +525,7 @@ export function WikiEntryEditor({
                   {alias}
                   <button
                     className="ghost"
-                    aria-label={`„${alias}" entfernen`}
+                    aria-label={`„${alias}“ entfernen`}
                     onClick={() => change({ aliases: entry.aliases.filter((a) => a !== alias) })}
                   >
                     ×
@@ -715,7 +715,7 @@ export function WikiEntryEditor({
 
       {confirmDelete && (
         <ConfirmDialog
-          message={`Eintrag „${entry.name}" in den Papierkorb legen?`}
+          message={`Eintrag „${entry.name}“ in den Papierkorb legen?`}
           detail="Dort kannst du ihn 30 Tage lang wiederherstellen."
           confirmLabel="In den Papierkorb"
           onCancel={() => setConfirmDelete(false)}

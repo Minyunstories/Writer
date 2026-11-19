@@ -32,12 +32,12 @@ export function Tags({ tags, suggestions, onChange, onFilter }: Props) {
     <div className="outline-tags">
       {tags.map((tag) => (
         <span key={tag} className="outline-tag" style={{ ['--tag' as string]: tagColor(tag) }}>
-          <button className="outline-tag-name" aria-label={`Nach Tag „${tag}" filtern`} onClick={() => onFilter(tag)}>
+          <button className="outline-tag-name" aria-label={`Nach Tag „${tag}“ filtern`} onClick={() => onFilter(tag)}>
             {tag}
           </button>
           <button
             className="outline-tag-remove"
-            aria-label={`Tag „${tag}" entfernen`}
+            aria-label={`Tag „${tag}“ entfernen`}
             onClick={() => onChange({ remove: tag })}
           >
             ×

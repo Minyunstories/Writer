@@ -34,7 +34,7 @@ export function PropertyBlocks({ properties, blocks, layout, folderName, matcher
   const empty: TemplateLayout = { template: [], blocks: [], groups: {} }
   const sections = layoutProperties(properties, blocks, layout ?? empty, editingKey)
   const ownBlocks = sections.filter((section) => section.name && !section.starred).map((section) => section.name!)
-  const pinLabel = `Feld für alle Einträge in „${folderName}"`
+  const pinLabel = `Feld für alle Einträge in „${folderName}“`
   const linkProps = { matcher, onOpen }
 
   const setProperty = (id: string, patch: Partial<WikiProperty>) =>
@@ -370,18 +370,18 @@ export function PropertyBlocks({ properties, blocks, layout, folderName, matcher
                 <button
                   className="ghost icon wiki-pin"
                   aria-pressed={section.starred}
-                  aria-label={`Block „${section.name}" für alle Einträge in „${folderName}"`}
+                  aria-label={`Block „${section.name}“ für alle Einträge in „${folderName}“`}
                   title={section.starred ? 'Block mit allen Feldern für alle Einträge (an)' : 'Block mit allen Feldern für alle Einträge'}
                   onClick={() => (section.starred ? unstarBlock(section) : starBlock(section))}
                 >
                   {section.starred ? '★' : '☆'}
                 </button>
               )}
-              <button className="ghost icon" aria-label={`Eigenschaft in „${section.name}" hinzufügen`} title="Eigenschaft hinzufügen" onClick={() => addField(section.name)}>
+              <button className="ghost icon" aria-label={`Eigenschaft in „${section.name}“ hinzufügen`} title="Eigenschaft hinzufügen" onClick={() => addField(section.name)}>
                 +
               </button>
               {!section.starred && (
-                <button className="ghost icon" aria-label={`Block „${section.name}" entfernen`} title="Block entfernen (Felder bleiben)" onClick={() => removeBlock(section.name!)}>
+                <button className="ghost icon" aria-label={`Block „${section.name}“ entfernen`} title="Block entfernen (Felder bleiben)" onClick={() => removeBlock(section.name!)}>
                   ×
                 </button>
               )}
@@ -417,7 +417,7 @@ function BlockName({ name, autoFocus, onFocused, onRename }: { name: string; aut
       ref={ref}
       type="text"
       className="wiki-block-name"
-      aria-label={`Name des Blocks „${name}"`}
+      aria-label={`Name des Blocks „${name}“`}
       value={draft}
       onChange={(event) => setDraft(event.target.value)}
       onBlur={() => (draft.trim() ? onRename(draft) : setDraft(name))}

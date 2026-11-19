@@ -11,7 +11,7 @@ const entry = (id: string, name: string, extra: Partial<{ aliases: string[]; aut
 })
 
 const matcher = buildMatcher([
-  entry('pascal', 'Pascal', { aliases: ['the Heir'] }),
+  entry('pascal', 'Pascal', { aliases: ['the Captain'] }),
   entry('arlen', 'Pascal Arlen'),
   entry('rose', 'Rose'),
   entry('storm', 'Storm', { autoLink: false }),
@@ -34,7 +34,7 @@ test('the longest name wins', () => {
 })
 
 test('aliases match; entries with autoLink off do not', () => {
-  expect(ids('Hail the Heir!')).toEqual(['pascal:the Heir'])
+  expect(ids('Hail the Captain!')).toEqual(['pascal:the Captain'])
   expect(ids('Storm came')).toEqual([])
 })
 

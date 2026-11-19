@@ -29,7 +29,7 @@ afterEach(() => {
 function setup(doc: string) {
   const create = vi.fn(async () => {})
   const options: WikiCompletionOptions = {
-    entries: () => [entry('p', 'Pascal', ['the Heir']), entry('m', 'Mira'), entry('g', 'Größe Halle')],
+    entries: () => [entry('p', 'Pascal', ['the Captain']), entry('m', 'Mira'), entry('g', 'Größe Halle')],
     topFolders: () => [folder('c', 'Characters'), folder('l', 'Locations')],
     create,
   }
@@ -49,14 +49,14 @@ test('after [[ matching entries and "create" choices are offered', () => {
   expect(result).not.toBeNull()
   expect(labels(result!.options)).toEqual([
     'Pascal',
-    '„Pa" neu anlegen in: Characters',
-    '„Pa" neu anlegen in: Locations',
-    '„Pa" neu anlegen ohne Ordner',
+    '„Pa“ neu anlegen in: Characters',
+    '„Pa“ neu anlegen in: Locations',
+    '„Pa“ neu anlegen ohne Ordner',
   ])
 })
 
 test('aliases, umlauts and spaces are found; an exact name offers no "create"', () => {
-  expect(labels(setup('[[the H').result!.options)).toEqual(['Pascal', '„the H" neu anlegen in: Characters', '„the H" neu anlegen in: Locations', '„the H" neu anlegen ohne Ordner'])
+  expect(labels(setup('[[the C').result!.options)).toEqual(['Pascal', '„the C“ neu anlegen in: Characters', '„the C“ neu anlegen in: Locations', '„the C“ neu anlegen ohne Ordner'])
   expect(labels(setup('[[größe h').result!.options)[0]).toBe('Größe Halle')
   expect(labels(setup('[[Mira').result!.options)).toEqual(['Mira'])
 })
@@ -109,5 +109,5 @@ test('sentences after an unclosed [[ never offer "create"; long ones close the l
   expect(labels(setup('Er sah [[Privat und ging.').result?.options ?? [])).toEqual([])
   expect(labels(setup('[[eins zwei drei vier fünf').result?.options ?? [])).toEqual([])
   expect(setup('[[' + 'x'.repeat(41)).result).toBeNull()
-  expect(labels(setup('[[Mira Voss').result!.options)).toContain('„Mira Voss" neu anlegen ohne Ordner')
+  expect(labels(setup('[[Mira Voss').result!.options)).toContain('„Mira Voss“ neu anlegen ohne Ordner')
 })

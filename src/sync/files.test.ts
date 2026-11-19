@@ -18,7 +18,7 @@ const entries: WikiEntry[] = [
     bookId: 'b1',
     folderId: 'f2',
     name: 'Pascal',
-    aliases: ['the Heir', 'Nys'],
+    aliases: ['the Captain', 'Cal'],
     properties: [{ id: 'p1', key: 'Augenfarbe', value: 'grün' }],
     imageIds: ['i1'],
     body: 'Notiz\n---\nmit Strich',
@@ -249,7 +249,7 @@ test('property blocks: groups and own blocks travel in the entry, starred blocks
 
 test('spelling settings live in their own file', () => {
   const plain = bundleToFiles(bundle)
-  const spelling = { dialect: 'british' as const, words: ['Nysss', 'Guidelight'], ignored: ['123'] }
+  const spelling = { dialect: 'british' as const, words: ['Wobblex', 'Zarnwick'], ignored: ['123'] }
   const files = bundleToFiles({ ...bundle, book: { ...book, spelling } })
   expect(files.get('books/b1/book.json')).toBe(plain.get('books/b1/book.json'))
   expect(JSON.parse(files.get('books/b1/spelling.json') as string)).toEqual(spelling)

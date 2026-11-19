@@ -138,7 +138,7 @@ export function WikiHome({ bookId, folders, entries, order, stars, onCreateEntry
                     <h3 id={`wiki-home-${folder.id}`}>{folder.name}</h3>
                     <button
                       className="ghost icon"
-                      aria-label={`Eintrag in „${folder.name}" anlegen`}
+                      aria-label={`Eintrag in „${folder.name}“ anlegen`}
                       title="Neuer Eintrag in diesem Ordner"
                       onClick={() => onCreateEntry(folder.id)}
                     >

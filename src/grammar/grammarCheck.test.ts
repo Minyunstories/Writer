@@ -47,17 +47,17 @@ test('problems are underlined; with the cursor inside, a box offers the fix', as
 
 test('a word can be accepted and a spot ignored', async () => {
   const items = (text: string): GrammarItem[] => {
-    const at = text.indexOf('Nysss')
-    return at < 0 ? [] : [{ from: at, to: at + 5, message: 'Unknown word.', kind: 'Spelling', suggestions: [], word: 'Nysss', hash: 'h2' }]
+    const at = text.indexOf('Wobblex')
+    return at < 0 ? [] : [{ from: at, to: at + 7, message: 'Unknown word.', kind: 'Spelling', suggestions: [], word: 'Wobblex', hash: 'h2' }]
   }
-  const { view, onAddWord, onIgnore } = setup('Hello Nysss.', items)
+  const { view, onAddWord, onIgnore } = setup('Hello Wobblex.', items)
   await wait()
   view.dispatch({ selection: { anchor: 8 } })
   await wait()
   const ignore = document.querySelector('.cm-mw-grammar-box button[data-action="ignore"]') as HTMLButtonElement
   expect(ignore).not.toBeNull()
   ;(document.querySelector('.cm-mw-grammar-box button[data-action="word"]') as HTMLButtonElement).click()
-  expect(onAddWord).toHaveBeenCalledWith('Nysss')
+  expect(onAddWord).toHaveBeenCalledWith('Wobblex')
   // The mark goes at once, without waiting for the next check.
   expect(view.dom.querySelector('.cm-mw-grammar')).toBeNull()
   ignore.click()

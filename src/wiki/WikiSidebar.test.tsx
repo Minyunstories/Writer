@@ -109,12 +109,12 @@ test('dragging: onto a folder moves inside, onto an entry places before it; neve
 
 test('a folder colour is chosen from the palette and can be removed', async () => {
   const { orte, user } = await setup()
-  await user.click(screen.getByRole('button', { name: 'Farbe für „Orte"' }))
-  const palette = screen.getByRole('dialog', { name: 'Farbe für „Orte"' })
+  await user.click(screen.getByRole('button', { name: 'Farbe für „Orte“' }))
+  const palette = screen.getByRole('dialog', { name: 'Farbe für „Orte“' })
   await user.click(within(palette).getByRole('button', { name: 'Petrol' }))
   await waitFor(async () => expect((await listFolders(orte.bookId)).find((f) => f.id === orte.id)!.color).toBe('#1f4a4f'))
   await waitFor(() => expect(screen.getByText('Orte').closest('.wiki-tree-row')).toHaveStyle({ '--folder': '#1f4a4f' }))
-  await user.click(screen.getByRole('button', { name: 'Farbe für „Orte"' }))
-  await user.click(within(screen.getByRole('dialog', { name: 'Farbe für „Orte"' })).getByRole('button', { name: 'Keine Farbe' }))
+  await user.click(screen.getByRole('button', { name: 'Farbe für „Orte“' }))
+  await user.click(within(screen.getByRole('dialog', { name: 'Farbe für „Orte“' })).getByRole('button', { name: 'Keine Farbe' }))
   await waitFor(async () => expect((await listFolders(orte.bookId)).find((f) => f.id === orte.id)!.color).toBeUndefined())
 })

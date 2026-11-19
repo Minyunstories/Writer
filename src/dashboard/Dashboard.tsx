@@ -225,7 +225,7 @@ export function Dashboard() {
       )}
       {dialog?.kind === 'delete' && (
         <ConfirmDialog
-          message={`Buch „${dialog.book.title}" wirklich löschen?`}
+          message={`Buch „${dialog.book.title}“ wirklich löschen?`}
           confirmLabel="Endgültig löschen"
           onCancel={() => setDialog(null)}
           onConfirm={() => run(() => deleteBook(dialog.book.id))}

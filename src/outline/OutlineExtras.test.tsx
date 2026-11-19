@@ -66,8 +66,8 @@ test('a tag is added with Enter and removed with its ×', async () => {
   const { a, user } = await setup()
   await user.type(within(card('Anfang')).getByLabelText('Tag hinzufügen'), 'PoV: Pascal{Enter}')
   await waitFor(async () => expect((await getChapter(a.id))!.tags).toEqual(['PoV: Pascal']))
-  expect(await within(card('Anfang')).findByRole('button', { name: 'Nach Tag „PoV: Pascal" filtern' })).toBeInTheDocument()
-  await user.click(within(card('Anfang')).getByRole('button', { name: 'Tag „PoV: Pascal" entfernen' }))
+  expect(await within(card('Anfang')).findByRole('button', { name: 'Nach Tag „PoV: Pascal“ filtern' })).toBeInTheDocument()
+  await user.click(within(card('Anfang')).getByRole('button', { name: 'Tag „PoV: Pascal“ entfernen' }))
   await waitFor(async () => expect((await getChapter(a.id))!.tags).toBeUndefined())
 })
 
@@ -80,7 +80,7 @@ test('tags already used in the book are suggested', async () => {
 
 test('clicking a tag filters the outline until the filter is removed', async () => {
   const { user } = await setup()
-  await user.click(within(card('Ende')).getByRole('button', { name: 'Nach Tag „PoV: Pascal" filtern' }))
+  await user.click(within(card('Ende')).getByRole('button', { name: 'Nach Tag „PoV: Pascal“ filtern' }))
   expect(titles()).toEqual(['Ende'])
   expect(screen.getByText('Filter: PoV: Pascal')).toBeInTheDocument()
   expect(within(card('Ende')).getByRole('button', { name: 'Ende nach oben' })).toBeDisabled()
@@ -112,7 +112,7 @@ test('two quick tag changes both survive', async () => {
   const { c, user } = await setup()
   const input = within(card('Ende')).getByLabelText('Tag hinzufügen')
   await user.type(input, 'Nacht{Enter}')
-  await user.click(within(card('Ende')).getByRole('button', { name: 'Tag „Rückblick" entfernen' }))
+  await user.click(within(card('Ende')).getByRole('button', { name: 'Tag „Rückblick“ entfernen' }))
   await waitFor(async () => expect((await getChapter(c.id))!.tags).toEqual(['PoV: Pascal', 'Nacht']))
 })
 

@@ -45,13 +45,13 @@ test('entries: defaults, update, alias clean-up, name fallback', async () => {
   expect(entry).toMatchObject({ name: 'Pascal', aliases: [], properties: [], imageIds: [], body: '', autoLink: true, folderId: null })
   const updated = await updateEntry(entry.id, {
     name: '  ',
-    aliases: [' Nys ', '', 'Nys', 'the Heir'],
+    aliases: [' Cal ', '', 'Cal', 'the Captain'],
     properties: [{ id: 'p1', key: 'Augenfarbe', value: 'grün' }],
     body: 'Text',
     autoLink: false,
   })
   expect(updated.name).toBe('Unbenannt')
-  expect(updated.aliases).toEqual(['Nys', 'the Heir'])
+  expect(updated.aliases).toEqual(['Cal', 'the Captain'])
   expect((await getEntry(entry.id))!.properties).toEqual([{ id: 'p1', key: 'Augenfarbe', value: 'grün' }])
   expect((await getEntry(entry.id))!.autoLink).toBe(false)
   await createEntry(book.id, 'Anna')

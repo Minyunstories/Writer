@@ -72,9 +72,9 @@ export function wikiCompletionSource(options: WikiCompletionOptions) {
         void options.create(query, folderId)
       }
       for (const folder of options.topFolders()) {
-        choices.push({ label: `„${query}" neu anlegen in: ${folder.name}`, type: 'wiki-new', apply: create(folder.id) })
+        choices.push({ label: `„${query}“ neu anlegen in: ${folder.name}`, type: 'wiki-new', apply: create(folder.id) })
       }
-      choices.push({ label: `„${query}" neu anlegen ohne Ordner`, type: 'wiki-new', apply: create(null) })
+      choices.push({ label: `„${query}“ neu anlegen ohne Ordner`, type: 'wiki-new', apply: create(null) })
     }
 
     return choices.length > 0 ? { from: before.from, options: choices, filter: false } : null
