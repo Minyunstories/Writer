@@ -1,18 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { SHORTCUT_GROUPS } from './shortcuts'
+import { useRestoreFocus } from '../ui/useRestoreFocus'
 import './help.css'
 
 /** All shortcuts at a glance. Esc, ✕ or a click beside it closes. */
 export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
-  // Taken while rendering, before the ✕ button takes the focus.
-  const [before] = useState(() => document.activeElement)
-  // Back to where the writer was (usually the text), so typing can go on.
-  useEffect(
-    () => () => {
-      if (before instanceof HTMLElement && before.isConnected) before.focus()
-    },
-    [before],
-  )
+  const windowRef = useRef<HTMLDivElement>(null)
+  useRestoreFocus(windowRef)
 
   // Esc closes only the overview: caught first, so focus mode and the like stay as they are.
   useEffect(() => {
@@ -33,7 +27,7 @@ export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
         if (event.target === event.currentTarget) onClose()
       }}
     >
-      <div className="dialog shortcuts-dialog" role="dialog" aria-modal="true" aria-label="Tastenkürzel">
+      <div className="dialog shortcuts-dialog" role="dialog" ref={windowRef} aria-modal="true" aria-label="Tastenkürzel">
         <header className="shortcuts-header">
           <h2>Tastenkürzel</h2>
           <button type="button" className="ghost icon" aria-label="Schließen" onClick={onClose} autoFocus>

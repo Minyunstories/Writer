@@ -28,6 +28,7 @@ export const SHORTCUT_GROUPS: { title: string; items: Shortcut[] }[] = [
   {
     title: 'Leisten und Ansicht',
     items: [
+      { keys: 'Strg+O', what: 'Schnellsprung zu Kapitel oder Wiki-Eintrag' },
       { keys: 'Strg+Umschalt+F', what: 'im ganzen Buch suchen und ersetzen' },
       { keys: 'Strg+Umschalt+N', what: 'Notizblock' },
       { keys: 'Strg+B', what: 'Seitenleiste (außerhalb des Textes)' },

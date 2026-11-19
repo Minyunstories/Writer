@@ -1142,3 +1142,47 @@ test('opening a book clears what has been in the trash for 30 days', async () =>
   await waitFor(async () => expect(await listTrash(book.id)).toEqual([]))
   expect(screen.queryByRole('button', { name: /Papierkorb/ })).toBeNull()
 })
+
+test('Strg+O jumps to a chapter', async () => {
+  const user = userEvent.setup()
+  const book = await createBook('Sturmlied')
+  const a = await createChapter(book.id, 'Anfang')
+  const b = await createChapter(book.id, 'Der lange Winter')
+  renderAt(`/book/${book.id}/chapters/${a.id}`)
+  await screen.findByRole('link', { name: 'Der lange Winter' })
+  fireEvent.keyDown(window, { key: 'o', ctrlKey: true })
+  const dialog = screen.getByRole('dialog', { name: 'Schnellsprung' })
+  await user.type(within(dialog).getByRole('combobox'), 'winter{Enter}')
+  await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(`/book/${book.id}/chapters/${b.id}`))
+  expect(screen.queryByRole('dialog', { name: 'Schnellsprung' })).toBeNull()
+})
+
+test('Strg+O in a chapter opens a wiki entry in the side panel', async () => {
+  const user = userEvent.setup()
+  const book = await createBook('Sturmlied')
+  const a = await createChapter(book.id, 'Anfang')
+  await createEntry(book.id, 'Pascal')
+  renderAt(`/book/${book.id}/chapters/${a.id}`, true)
+  const view = await waitFor(() => {
+    const found = EditorView.findFromDOM(document.querySelector<HTMLElement>('.editor .cm-editor')!)
+    if (!found) throw new Error('not mounted')
+    return found
+  })
+  fireEvent.keyDown(view.contentDOM, { key: 'o', ctrlKey: true })
+  await user.type(screen.getByRole('combobox', { name: 'Kapitel oder Wiki-Eintrag suchen' }), 'pas{Enter}')
+  const panel = await screen.findByRole('complementary', { name: 'Wiki-Eintrag' })
+  expect(await within(panel).findByLabelText('Name')).toHaveValue('Pascal')
+  expect(screen.getByTestId('location')).toHaveTextContent(`/chapters/${a.id}`)
+})
+
+test('outside the chapters, a wiki entry from the jump opens in the wiki', async () => {
+  const user = userEvent.setup()
+  const book = await createBook('Sturmlied')
+  await createChapter(book.id, 'Anfang')
+  const entry = await createEntry(book.id, 'Pascal')
+  renderAt(`/book/${book.id}/outline`)
+  await screen.findByRole('heading', { name: 'Sturmlied' })
+  fireEvent.keyDown(window, { key: 'o', ctrlKey: true })
+  await user.type(screen.getByRole('combobox', { name: 'Kapitel oder Wiki-Eintrag suchen' }), 'pas{Enter}')
+  await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(`/book/${book.id}/wiki/${entry.id}`))
+})

@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { TrashItem } from '../types'
 import { daysLeft, deleteTrash, listTrash, restoreTrash } from '../storage/trash'
+import { useRestoreFocus } from '../ui/useRestoreFocus'
 import './trash.css'
 
 const KIND_LABEL: Record<string, string> = { chapter: 'Kapitel', entry: 'Wiki' }
@@ -22,8 +23,6 @@ export function TrashDialog({ bookId, onRestored, onClose }: Props) {
   const [items, setItems] = useState<TrashItem[] | null>(null)
   const [asking, setAsking] = useState<string | null>(null)
   const [failed, setFailed] = useState(false)
-  // Taken while rendering, before the ✕ button takes the focus.
-  const [before] = useState(() => document.activeElement)
 
   const load = useCallback(async () => {
     try {
@@ -37,12 +36,8 @@ export function TrashDialog({ bookId, onRestored, onClose }: Props) {
     void load()
   }, [load])
 
-  useEffect(
-    () => () => {
-      if (before instanceof HTMLElement && before.isConnected) before.focus()
-    },
-    [before],
-  )
+  const windowRef = useRef<HTMLDivElement>(null)
+  useRestoreFocus(windowRef)
 
   // Esc closes only this window: caught first, so focus mode and the like stay as they are.
   useEffect(() => {
@@ -86,7 +81,7 @@ export function TrashDialog({ bookId, onRestored, onClose }: Props) {
         if (event.target === event.currentTarget) onClose()
       }}
     >
-      <div className="dialog trash-dialog" role="dialog" aria-modal="true" aria-label="Papierkorb">
+      <div className="dialog trash-dialog" role="dialog" ref={windowRef} aria-modal="true" aria-label="Papierkorb">
         <header className="trash-header">
           <h2>Papierkorb</h2>
           <button type="button" className="ghost icon" aria-label="Schließen" onClick={onClose} autoFocus>

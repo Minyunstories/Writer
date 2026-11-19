@@ -18,6 +18,8 @@ test('lists the paragraph move and the help key itself', () => {
   expect(screen.getByText('Alt+↑ / ↓')).toBeInTheDocument()
   expect(screen.getByText('Absatz verschieben (Leerzeilen zählen mit)')).toBeInTheDocument()
   expect(screen.getByText('Strg+/')).toBeInTheDocument()
+  expect(screen.getByText('Strg+O')).toBeInTheDocument()
+  expect(screen.getByText('Schnellsprung zu Kapitel oder Wiki-Eintrag')).toBeInTheDocument()
 })
 
 test('closes with the button', async () => {

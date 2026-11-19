@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { CHANGED_EVENT, SYNCED_EVENT } from '../storage/connection'
 import { createChapter, getBook, listChapters, updateChapter } from '../storage/db'
-import { createEntry, createFolder, deleteFolder, listEntries, listFolders, moveWikiItem, renameFolder, setFolderColor, stepWikiItem } from '../storage/wiki'
+import { createEntry, createFolder, deleteFolder, getImage, listEntries, listFolders, moveWikiItem, renameFolder, setFolderColor, stepWikiItem } from '../storage/wiki'
 import type { Book, Chapter, ChapterGroup, WikiEntry, WikiFolder } from '../types'
 import { Outline } from '../outline/Outline'
 import { SyncStatus } from '../sync/SyncStatus'
@@ -15,6 +15,8 @@ import { listTrash, purgeTrash, trashChapter } from '../storage/trash'
 import { TrashDialog } from '../trash/TrashDialog'
 import { ShortcutsDialog } from '../help/ShortcutsDialog'
 import { isHelpKey } from '../help/shortcuts'
+import { JumpDialog } from '../jump/JumpDialog'
+import { isJumpKey, type JumpHit } from '../jump/jump'
 import { Icon } from '../ui/Icon'
 import { buildMatcher } from '../wiki/linker'
 import { entriesIn } from '../wiki/mentions'
@@ -29,6 +31,7 @@ import { activeLearners, spellingNames } from '../vocabulary/knowledge'
 import { captureWord } from '../storage/vocabulary'
 import { WikiEntryEditor } from '../wiki/WikiEntryEditor'
 import { createWikiLinks } from '../wiki/wikiLinks'
+import { previewCard, previewData } from '../wiki/wikiPreview'
 import { grammarCheck } from '../grammar/grammarCheck'
 import { GRAMMAR_EVENT, isGrammarOn, recheckAll } from '../grammar/grammarSetting'
 import { checkText, knownWords } from '../grammar/harper'
@@ -271,7 +274,18 @@ export function BookView({ renderChapter }: Props) {
 
   // Names in the chapter text link to their wiki entry; a click opens the panel.
   const links = useMemo(
-    () => createWikiLinks({ onOpen: (entryId) => openPanelRef.current(entryId) }),
+    () =>
+      createWikiLinks({
+        onOpen: (entryId) => openPanelRef.current(entryId),
+        // The card for a name the mouse rests on: portrait, aliases, first properties.
+        preview: async (entryId) => {
+          const entry = entriesRef.current.find((item) => item.id === entryId)
+          if (!entry) return null
+          const data = previewData(entry, foldersRef.current)
+          const portrait = entry.imageIds[0] ? await getImage(entry.imageIds[0]).catch(() => undefined) : undefined
+          return () => previewCard(data, portrait ?? null)
+        },
+      }),
     // One instance per book.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [bookId],
@@ -515,13 +529,17 @@ export function BookView({ renderChapter }: Props) {
 
   // Strg+/: the shortcut overview. Caught before the editors see it (CodeMirror would wrap the
   // line in an HTML comment).
+  // Strg+O: the quick jump, caught the same way (the browser would offer to open a file).
   const [helpOpen, setHelpOpen] = useState(false)
+  const [jumpOpen, setJumpOpen] = useState(false)
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (!isHelpKey(event)) return
+      const help = isHelpKey(event)
+      if (!help && !isJumpKey(event)) return
       event.preventDefault()
       event.stopPropagation()
-      setHelpOpen((open) => !open)
+      if (help) setHelpOpen((open) => !open)
+      else setJumpOpen(true)
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
@@ -1141,6 +1159,21 @@ export function BookView({ renderChapter }: Props) {
         />
       )}
       {helpOpen && <ShortcutsDialog onClose={() => setHelpOpen(false)} />}
+      {jumpOpen && book && (
+        <JumpDialog
+          chapters={chapters}
+          entries={entries}
+          folders={folders}
+          onClose={() => setJumpOpen(false)}
+          onPick={(hit: JumpHit) => {
+            setJumpOpen(false)
+            if (hit.kind === 'chapter') navigate(`/book/${book.id}/chapters/${hit.id}`)
+            // While writing, an entry opens beside the text, like a click on a name.
+            else if (section === 'chapters' && activeChapter) openPanel(hit.id)
+            else navigate(`/book/${book.id}/wiki/${hit.id}`)
+          }}
+        />
+      )}
       {trashOpen && book && (
         <TrashDialog
           bookId={book.id}
