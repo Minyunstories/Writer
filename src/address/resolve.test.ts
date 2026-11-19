@@ -17,7 +17,7 @@ const entry = (id: string, name: string, folderId: string | null = 'chars'): Wik
 })
 const folder = (id: string, name: string, parentId: string | null = null): WikiFolder => ({ id, bookId: 'b', parentId, name, createdAt: 1 })
 
-const lea = entry('lea', 'Lea Ravel')
+const lea = entry('lea', 'Lea Brandt')
 const mira = entry('mira', 'Mira')
 const tom = entry('tom', 'Tom')
 const pascal = entry('pascal', 'Pascal', 'noble')
@@ -32,7 +32,7 @@ const book = (patch: Partial<BookAddress>): BookAddress => ({ ranks: [duchess, l
 
 test('rule with placeholders, names from the entry when empty', () => {
   const resolved = resolveAddress(book({}), mira, lea, order, 'c1')
-  expect(resolved).toMatchObject({ public: 'Your Grace · Lady Ravel', private: 'Your Grace · Lady Ravel', source: 'rule', rankName: 'Duchess' })
+  expect(resolved).toMatchObject({ public: 'Your Grace · Lady Brandt', private: 'Your Grace · Lady Brandt', source: 'rule', rankName: 'Duchess' })
   expect(fill('Sir {Vorname} {Nachname}', { first: 'Tom', last: 'Tom' })).toBe('Sir Tom Tom')
   expect(fill('Lady {Nachname}', { first: 'A', last: '' })).toBe('Lady {Nachname}')
   expect(personAt(book({}), tom, order, null)).toEqual({ first: 'Tom', last: 'Tom' })
@@ -40,7 +40,7 @@ test('rule with placeholders, names from the entry when empty', () => {
 
 test('a form replaces only what it fills; changes apply up to the chapter', () => {
   const address = book({ forms: [form({ private: 'Lea', changes: [{ id: 'x', chapterId: 'c3', label: 'Phase 2', private: 'Leelee', note: 'nach dem Ball' }] })] })
-  expect(resolveAddress(address, mira, lea, order, 'c2')).toMatchObject({ public: 'Your Grace · Lady Ravel', private: 'Lea', source: 'form' })
+  expect(resolveAddress(address, mira, lea, order, 'c2')).toMatchObject({ public: 'Your Grace · Lady Brandt', private: 'Lea', source: 'form' })
   const later = resolveAddress(address, mira, lea, order, 'c3')
   expect(later.private).toBe('Leelee')
   expect(later.notes).toContainEqual({ source: 'Phase 2', text: 'nach dem Ball' })
@@ -53,7 +53,7 @@ test('open changes and changes in deleted chapters are pending, not applied', ()
       form({
         private: 'Lea',
         changes: [
-          { id: 'o', private: 'Ravel', note: 'sobald sie es anbietet' },
+          { id: 'o', private: 'Brandt', note: 'sobald sie es anbietet' },
           { id: 'g', chapterId: 'gone', private: 'X' },
         ],
       }),
@@ -95,7 +95,7 @@ test('rank and surname change from a chapter on', () => {
       },
     ],
   })
-  expect(resolveAddress(address, mira, lea, order, 'c2').public).toBe('Lady Ravel')
+  expect(resolveAddress(address, mira, lea, order, 'c2').public).toBe('Lady Brandt')
   expect(resolveAddress(address, mira, lea, order, 'c3').public).toBe('Your Grace · Lady Hale')
   expect(personAt(address, lea, order, null).rank?.id).toBe('r0')
 })
@@ -112,8 +112,8 @@ test('a deleted rank counts as no rank', () => {
 
 test('reordered chapters: changes follow the chapter', () => {
   const address = book({ people: [{ entryId: 'lea', rankId: 'r0', changes: [{ id: 'p', chapterId: 'c2', rankId: 'r1' }], updatedAt: 1 }] })
-  expect(resolveAddress(address, mira, lea, ['c1', 'c3', 'c2'], 'c3').public).toBe('Lady Ravel')
-  expect(resolveAddress(address, mira, lea, ['c1', 'c3', 'c2'], 'c2').public).toBe('Your Grace · Lady Ravel')
+  expect(resolveAddress(address, mira, lea, ['c1', 'c3', 'c2'], 'c3').public).toBe('Lady Brandt')
+  expect(resolveAddress(address, mira, lea, ['c1', 'c3', 'c2'], 'c2').public).toBe('Your Grace · Lady Brandt')
 })
 
 test('history lists each change point once', () => {
@@ -132,9 +132,9 @@ test('history lists each change point once', () => {
     forms: [form({ changes: [{ id: 'x', chapterId: 'c3', label: 'Phase 2', private: 'Leelee' }] })],
   })
   expect(addressHistory(address, mira, lea, order)).toEqual([
-    { chapterId: null, public: 'Lady Ravel', private: 'Lady Ravel' },
-    { chapterId: 'c2', public: 'Your Grace · Lady Ravel', private: 'Your Grace · Lady Ravel' },
-    { chapterId: 'c3', label: 'Phase 2', public: 'Your Grace · Lady Ravel', private: 'Leelee' },
+    { chapterId: null, public: 'Lady Brandt', private: 'Lady Brandt' },
+    { chapterId: 'c2', public: 'Your Grace · Lady Brandt', private: 'Your Grace · Lady Brandt' },
+    { chapterId: 'c3', label: 'Phase 2', public: 'Your Grace · Lady Brandt', private: 'Leelee' },
   ])
 })
 

@@ -13,7 +13,7 @@ const sorted: BookAddress = {
       entryId: 'lea',
       rankId: 'r1',
       first: 'Lea',
-      last: 'Ravel',
+      last: 'Brandt',
       changes: [
         { id: 'p1', chapterId: 'c2', rankId: 'r2' },
         { id: 'p2', chapterId: 'c3', last: 'Hale' },
@@ -30,7 +30,7 @@ const sorted: BookAddress = {
       private: 'Lea',
       changes: [
         { id: 'ch1', chapterId: 'c2', label: 'Phase 2', private: 'Leelee', note: 'nach dem Ball' },
-        { id: 'ch2', private: 'Ravel', note: 'sobald sie es anbietet' },
+        { id: 'ch2', private: 'Brandt', note: 'sobald sie es anbietet' },
       ],
       createdAt: 1,
       updatedAt: 4,
@@ -51,14 +51,14 @@ test('round trip is lossless and stable', () => {
     entry: 'lea',
     rank: 'r1',
     first: 'Lea',
-    last: 'Ravel',
+    last: 'Brandt',
     changes: [
       { id: 'p1', chapter: 'c2', rank: 'r2' },
       { id: 'p2', chapter: 'c3', last: 'Hale' },
     ],
     updatedAt: 3,
   })
-  expect(raw.forms[0].changes[1]).toEqual({ id: 'ch2', private: 'Ravel', note: 'sobald sie es anbietet' })
+  expect(raw.forms[0].changes[1]).toEqual({ id: 'ch2', private: 'Brandt', note: 'sobald sie es anbietet' })
   expect(raw.forms[1]).toEqual({ id: 'b', from: 'lea', to: 'mira', public: 'Mistress Mira', changes: [], createdAt: 2, updatedAt: 2 })
 })
 

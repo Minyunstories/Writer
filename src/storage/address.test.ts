@@ -78,7 +78,7 @@ test('saveForm creates, updates and sorts changes, open ones last', async () => 
       to: 'lea',
       private: ' Lea ',
       changes: [
-        { private: 'Ravel', note: 'sobald sie es anbietet' },
+        { private: 'Brandt', note: 'sobald sie es anbietet' },
         { chapterId: 'c3', label: 'Phase 2', private: 'Leelee' },
         { chapterId: 'c1', public: 'Lady Lea' },
       ],

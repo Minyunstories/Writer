@@ -70,7 +70,7 @@ describe('matchFigure', () => {
     const mage = entry('mage', 'High Mage Ida')
     expect(matchFigure('Sir Ben', [knight, mage])).toBeUndefined()
     expect(matchFigure('High Mage Nora', [knight, mage])).toBeUndefined()
-    expect(matchFigure('Lea Ravel', figures)).toBeUndefined()
+    expect(matchFigure('Lea Brandt', figures)).toBeUndefined()
     expect(matchFigure('Tom Berg', [tomL])).toBeUndefined()
   })
 
