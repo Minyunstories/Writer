@@ -16,6 +16,8 @@ import {
   type TemplateLayout,
 } from '../storage/wiki'
 import { trashEntry } from '../storage/trash'
+import { listChapters } from '../storage/db'
+import { countName, RenameDialog } from './RenameDialog'
 import type { Chapter, WikiEntry, WikiFolder, ZoomArea } from '../types'
 import { ConfirmDialog } from '../ui/Dialogs'
 import { prepareImage } from './image'
@@ -46,6 +48,8 @@ interface Props {
   chapters?: Chapter[]
   onOpenEntry?: (entryId: string) => void
   onOpenChapter?: (chapterId: string, range: { from: number; to: number }) => void
+  /** After a rename: change the old name to the new one in every chapter (with a version first). */
+  onReplaceName?: (oldName: string, newName: string) => Promise<void>
   /** A new entry: put the cursor in its name, with the placeholder name selected. */
   focusName?: boolean
   /** Marked with a star, e.g. a main character. */
@@ -176,9 +180,13 @@ export function WikiEntryEditor({
   onStar,
   relations,
   address,
+  onReplaceName,
 }: Props) {
   const [entry, setEntry] = useState<WikiEntry | null | undefined>(undefined)
   const nameRef = useRef<HTMLInputElement>(null)
+  /** The name when the field was entered; on leaving it, a change may ask about the old name in the text. */
+  const nameAtFocus = useRef<string | null>(null)
+  const [renamed, setRenamed] = useState<{ oldName: string; newName: string; count: number } | null>(null)
   const nameFocused = useRef(false)
   const loaded = Boolean(entry)
   useEffect(() => {
@@ -476,8 +484,24 @@ export function WikiEntryEditor({
               aria-label="Name"
               value={entry.name}
               onChange={(event) => change({ name: event.target.value })}
+              onFocus={() => {
+                nameAtFocus.current = entry.name
+              }}
               onBlur={() => {
                 if (!entry.name.trim()) change({ name: 'Unbenannt' })
+                const before = nameAtFocus.current?.trim() ?? ''
+                const after = entry.name.trim()
+                nameAtFocus.current = null
+                // A new entry's placeholder is no name to keep.
+                if (!onReplaceName || !before || before === 'Unbenannt' || !after || after === before) return
+                // Count in what is stored: the list handed in is not reloaded on every save.
+                const bookId = entry.bookId
+                void listChapters(bookId)
+                  .then((stored) => {
+                    const count = stored.reduce((sum, chapter) => sum + countName(chapter.content, before), 0)
+                    if (count > 0) setRenamed({ oldName: before, newName: after, count })
+                  })
+                  .catch(() => {})
               }}
             />
             {onStar && (
@@ -669,6 +693,22 @@ export function WikiEntryEditor({
             const imageId = imageToRemove
             setImageToRemove(null)
             void detach(imageId)
+          }}
+        />
+      )}
+
+      {renamed && (
+        <RenameDialog
+          {...renamed}
+          onClose={() => setRenamed(null)}
+          onKeepAlias={() => {
+            // Already an alias: nothing to save (no new updatedAt for nothing).
+            if (!entry.aliases.includes(renamed.oldName)) change({ aliases: [...entry.aliases, renamed.oldName] })
+            setRenamed(null)
+          }}
+          onReplace={() => {
+            setRenamed(null)
+            void onReplaceName?.(renamed.oldName, renamed.newName)
           }}
         />
       )}

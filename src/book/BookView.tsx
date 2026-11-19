@@ -2,7 +2,7 @@ import type { Extension } from '@codemirror/state'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { CHANGED_EVENT, SYNCED_EVENT } from '../storage/connection'
-import { createChapter, getBook, listChapters, updateChapter } from '../storage/db'
+import { createChapter, getBook, getChapter, listChapters, updateChapter } from '../storage/db'
 import { createEntry, createFolder, deleteFolder, getImage, listEntries, listFolders, moveWikiItem, renameFolder, setFolderColor, stepWikiItem } from '../storage/wiki'
 import type { Book, Chapter, ChapterGroup, WikiEntry, WikiFolder } from '../types'
 import { Outline } from '../outline/Outline'
@@ -12,7 +12,10 @@ import { wikiCompletion } from '../editor/wikiComplete'
 import { ConfirmDialog, PromptDialog } from '../ui/Dialogs'
 import { useWakeLock } from '../lib/wakeLock'
 import { listTrash, purgeTrash, trashChapter } from '../storage/trash'
+import { mergeWithNext, splitChapter } from '../storage/split'
+import { splitButton } from '../editor/splitButton'
 import { TrashDialog } from '../trash/TrashDialog'
+import { ChapterReader } from './ChapterReader'
 import { ShortcutsDialog } from '../help/ShortcutsDialog'
 import { isHelpKey } from '../help/shortcuts'
 import { JumpDialog } from '../jump/JumpDialog'
@@ -88,6 +91,7 @@ type DialogState =
   | { kind: 'renameGroup'; group: ChapterGroup }
   | { kind: 'deleteGroup'; group: ChapterGroup }
   | { kind: 'delete'; chapter: Chapter }
+  | { kind: 'merge'; chapter: Chapter; next: Chapter }
   | { kind: 'newFolder'; parentId: string | null }
   | { kind: 'renameFolder'; folder: WikiFolder }
   | { kind: 'deleteFolder'; folder: WikiFolder }
@@ -150,7 +154,7 @@ export function BookView({ renderChapter }: Props) {
       // Only a convenience.
     }
   }
-  const [notesTab, setNotesTab] = useState<'notes' | 'collection' | 'comments'>('notes')
+  const [notesTab, setNotesTab] = useState<'notes' | 'collection' | 'comments' | 'reader'>('notes')
   const collection = useCollection()
   const collectionRef = useRef(collection)
   collectionRef.current = collection
@@ -329,9 +333,50 @@ export function BookView({ renderChapter }: Props) {
     })()
     return true
   }
+  /**
+   * "In neues Kapitel" on a ## line: save what the editor still holds, split the stored text,
+   * let the editor take the shortened text, then open the new chapter.
+   */
+  const splitAt = async (lineFrom: number) => {
+    const chapter = activeChapterRef.current
+    if (!chapter || !book) return
+    window.dispatchEvent(new Event('pagehide'))
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    try {
+      const stored = await getChapter(chapter.id)
+      // Only when the stored text is what the editor shows; otherwise the line could be elsewhere.
+      if (!stored || stored.content !== editorViewRef.current?.state.doc.toString()) throw new Error('not saved yet')
+      const created = await splitChapter(chapter.id, lineFrom)
+      if (!created) throw new Error('no ## line')
+      await reload()
+      window.dispatchEvent(new Event(SYNCED_EVENT))
+      navigate(`/book/${book.id}/chapters/${created.id}`)
+    } catch {
+      setActionError(true)
+    }
+  }
+  /** Merges a chapter with the next one (the next goes to the trash), after saving the editor. */
+  const mergeChapter = async (chapter: Chapter) => {
+    setDialog(null)
+    window.dispatchEvent(new Event('pagehide'))
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    try {
+      if (!(await mergeWithNext(chapter.id))) throw new Error('nothing to merge')
+    } catch {
+      setActionError(true)
+    }
+    await reload()
+    window.dispatchEvent(new Event(SYNCED_EVENT))
+    // Show the result (the next chapter, maybe open right now, is in the trash).
+    if (book) navigate(`/book/${book.id}/chapters/${chapter.id}`)
+  }
+  const splitAtRef = useRef(splitAt)
+  splitAtRef.current = splitAt
+
   const extensions = useMemo(
     () => [
       links.extension,
+      splitButton((lineFrom) => void splitAtRef.current(lineFrom)),
       ViewPlugin.define((view) => {
         editorViewRef.current = view
         setScenes(splitScenes(view.state.doc.toString()))
@@ -504,6 +549,23 @@ export function BookView({ renderChapter }: Props) {
     window.dispatchEvent(new Event(SYNCED_EVENT))
     return count
   }
+  /** After renaming a wiki entry: the old name becomes the new one in every chapter, each with a version first. */
+  const replaceName = async (oldName: string, newName: string) => {
+    window.dispatchEvent(new Event('pagehide'))
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    try {
+      for (const chapter of await listChapters(bookId)) {
+        const result = replaceMatches(chapter.content, oldName, newName, { caseSensitive: true, wholeWord: true })
+        if (result.count === 0) continue
+        await autoVersion(chapter, chapter.content, { label: 'Vor dem Umbenennen', always: true })
+        await updateChapter(chapter.id, { content: result.text }, { expectedContent: chapter.content })
+      }
+    } catch {
+      setActionError(true)
+    }
+    await reload()
+    window.dispatchEvent(new Event(SYNCED_EVENT))
+  }
   /** Curly quotes and dashes in every chapter, each against its stored text. */
   const typographyEverywhere = async () => {
     window.dispatchEvent(new Event('pagehide'))
@@ -668,6 +730,9 @@ export function BookView({ renderChapter }: Props) {
       </button>
       <button role="tab" aria-selected={notesTab === 'comments'} onClick={() => setNotesTab('comments')}>
         Kommentare
+      </button>
+      <button role="tab" aria-selected={notesTab === 'reader'} onClick={() => setNotesTab('reader')}>
+        Kapitel
       </button>
     </span>
   )
@@ -904,6 +969,7 @@ export function BookView({ renderChapter }: Props) {
                 }
                 address={<PersonSection book={book} entry={activeEntry} entries={entries} folders={folders} chapters={chapters} chapterId={null} onChanged={() => void reload()} />}
                 onOpenChapter={openChapterAt}
+                onReplaceName={replaceName}
                 focusName={activeEntry.id === freshEntryId}
                 onChanged={reloadWiki}
                 onSaveFailed={() => setActionError(true)}
@@ -1034,6 +1100,19 @@ export function BookView({ renderChapter }: Props) {
             onClose={() => setSearchOpen(false)}
           />
         )}
+        {notesOpen && book && notesTab === 'reader' && (
+          <ChapterReader
+            bookId={book.id}
+            chapters={chapters}
+            currentId={section === 'chapters' ? (activeChapter?.id ?? null) : null}
+            tabs={panelTabs}
+            onOpen={(chapterId) => {
+              navigate(`/book/${book.id}/chapters/${chapterId}`)
+              closeSidebarOnPhone()
+            }}
+            onClose={() => setNotesOpen(false)}
+          />
+        )}
         {notesOpen && book && notesTab === 'comments' && (
           <CommentsPanel bookId={book.id} tabs={panelTabs} onOpen={(chapterId, range) => openChapterAt(chapterId, range)} onClose={() => setNotesOpen(false)} />
         )}
@@ -1131,6 +1210,7 @@ export function BookView({ renderChapter }: Props) {
                 relations={<RelationsSection book={book} entryId={panelEntry.id} entries={entries} onOpenEntry={pushPanel} onChanged={() => void reload()} />}
                 address={<PersonSection book={book} entry={panelEntry} entries={entries} folders={folders} chapters={chapters} chapterId={activeChapter?.id ?? null} onChanged={() => void reload()} />}
                 onOpenChapter={openChapterAt}
+                onReplaceName={replaceName}
                 onChanged={reloadWiki}
                 onSaveFailed={() => setActionError(true)}
                 onDeleted={() => {
@@ -1192,6 +1272,20 @@ export function BookView({ renderChapter }: Props) {
           groups={book.chapterGroups ?? []}
           onCancel={() => setDialog(null)}
           onSave={(title, group) => handleRename(dialog.chapter, title, group)}
+          next={chapters[chapters.findIndex((c) => c.id === dialog.chapter.id) + 1]}
+          onMerge={() => {
+            const next = chapters[chapters.findIndex((c) => c.id === dialog.chapter.id) + 1]
+            if (next) setDialog({ kind: 'merge', chapter: dialog.chapter, next })
+          }}
+        />
+      )}
+      {dialog?.kind === 'merge' && (
+        <ConfirmDialog
+          message={`„${dialog.next.title}" an „${dialog.chapter.title}" anhängen?`}
+          detail={`„${dialog.next.title}" wird zur Zwischenüberschrift in „${dialog.chapter.title}". Das Kapitel „${dialog.next.title}" selbst kommt in den Papierkorb.`}
+          confirmLabel="Zusammenführen"
+          onCancel={() => setDialog(null)}
+          onConfirm={() => void mergeChapter(dialog.chapter)}
         />
       )}
       {dialog?.kind === 'renameGroup' && (

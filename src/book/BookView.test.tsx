@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { beforeEach, expect, test, vi } from 'vitest'
 import * as db from '../storage/db'
-import { createBook, createChapter, listChapters, resetDatabaseForTests, savePlace, setBookStyle, updateChapter } from '../storage/db'
+import { createBook, createChapter, getChapter, listChapters, resetDatabaseForTests, savePlace, setBookStyle, updateChapter } from '../storage/db'
 import { Editor } from '../editor/Editor'
 import { createEntry, createFolder, getEntry, listEntries, listFolders } from '../storage/wiki'
 import { BookView } from './BookView'
@@ -1186,3 +1186,122 @@ test('outside the chapters, a wiki entry from the jump opens in the wiki', async
   await user.type(screen.getByRole('combobox', { name: 'Kapitel oder Wiki-Eintrag suchen' }), 'pas{Enter}')
   await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(`/book/${book.id}/wiki/${entry.id}`))
 })
+
+test('the button in a ## line makes a new chapter from there and opens it', async () => {
+  const book = await createBook('Sturmlied')
+  const a = await createChapter(book.id, 'Anfang', 'Mira closed the door.\n\n## Der Winter\n\nSnow came early.')
+  await createChapter(book.id, 'Ende', '')
+  renderAt(`/book/${book.id}/chapters/${a.id}`, true)
+  const view = await waitFor(() => {
+    const found = EditorView.findFromDOM(document.querySelector<HTMLElement>('.editor .cm-editor')!)
+    if (!found) throw new Error('not mounted')
+    return found
+  })
+  view.dispatch({ selection: { anchor: view.state.doc.toString().indexOf('Winter') } })
+  const button = await waitFor(() => {
+    const found = view.dom.querySelector<HTMLButtonElement>('.cm-mw-split')
+    if (!found) throw new Error('no button')
+    return found
+  })
+  button.click()
+  await waitFor(async () => expect((await listChapters(book.id)).map((c) => c.title)).toEqual(['Anfang', 'Der Winter', 'Ende']))
+  const created = (await listChapters(book.id))[1]
+  await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(`/book/${book.id}/chapters/${created.id}`))
+  expect(created.content).toBe('Snow came early.')
+  expect((await getChapter(a.id))!.content).toBe('Mira closed the door.')
+})
+
+test('a chapter can be merged with the next from its window; the next goes to the trash', async () => {
+  const user = userEvent.setup()
+  const book = await createBook('Sturmlied')
+  const a = await createChapter(book.id, 'Anfang', 'Mira closed the door.')
+  await createChapter(book.id, 'Der Winter', 'Snow came early.')
+  const last = await createChapter(book.id, 'Ende', '')
+  renderAt(`/book/${book.id}/chapters/${a.id}`)
+  const row = (await screen.findByRole('link', { name: 'Anfang' })).closest('li')!
+  await user.click(within(row).getByRole('button', { name: 'Kapitel umbenennen' }))
+  await user.click(screen.getByRole('button', { name: 'Mit „Der Winter" zusammenführen' }))
+  expect(screen.getByText('„Der Winter" an „Anfang" anhängen?')).toBeInTheDocument()
+  expect(screen.getByText('„Der Winter" wird zur Zwischenüberschrift in „Anfang". Das Kapitel „Der Winter" selbst kommt in den Papierkorb.')).toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: 'Zusammenführen' }))
+  await waitFor(async () => expect((await listChapters(book.id)).map((c) => c.title)).toEqual(['Anfang', 'Ende']))
+  expect((await getChapter(a.id))!.content).toBe('Mira closed the door.\n\n## Der Winter\n\nSnow came early.')
+  expect(await screen.findByRole('button', { name: 'Papierkorb · 1' })).toBeInTheDocument()
+
+  // The last chapter has no next one.
+  const lastRow = screen.getByRole('link', { name: 'Ende' }).closest('li')!
+  await user.click(within(lastRow).getByRole('button', { name: 'Kapitel umbenennen' }))
+  expect(screen.queryByRole('button', { name: /zusammenführen/ })).toBeNull()
+  void last
+})
+
+test('renaming a wiki entry can change the name in every chapter', async () => {
+  const user = userEvent.setup()
+  const book = await createBook('Sturmlied')
+  const a = await createChapter(book.id, 'Eins', "Mira smiled. Mira's cup.")
+  const b = await createChapter(book.id, 'Zwei', 'Miras plan. Lea and Mira.')
+  const entry = await createEntry(book.id, 'Mira')
+  renderAt(`/book/${book.id}/wiki/${entry.id}`)
+  const name = await screen.findByLabelText('Name')
+  await user.click(name)
+  await user.type(name, 'bel')
+  await user.tab()
+  await user.click(await screen.findByRole('button', { name: 'Überall durch „Mirabel" ersetzen' }))
+  await waitFor(async () => expect((await getChapter(a.id))!.content).toBe("Mirabel smiled. Mirabel's cup."))
+  expect((await getChapter(b.id))!.content).toBe('Miras plan. Lea and Mirabel.')
+  const { listVersions } = await import('../storage/versions')
+  expect((await listVersions(a.id)).map((v) => v.label)).toEqual(['Vor dem Umbenennen'])
+})
+
+test('the side panel has a tab to read another chapter', async () => {
+  const user = userEvent.setup()
+  const book = await createBook('Sturmlied')
+  const a = await createChapter(book.id, 'Anfang', 'Mira closed the door.')
+  const b = await createChapter(book.id, 'Mitte', 'Lea laughed.')
+  renderAt(`/book/${book.id}/chapters/${b.id}`)
+  await screen.findByRole('link', { name: 'Anfang' })
+  await user.click(screen.getByRole('button', { name: /^Notizblock/ }))
+  await user.click(within(screen.getByRole('tablist', { name: 'Seitenleiste' })).getByRole('tab', { name: 'Kapitel' }))
+  const panel = screen.getByRole('complementary', { name: 'Kapitel lesen' })
+  expect(within(panel).getByText('Mira closed the door.')).toBeInTheDocument()
+  await user.click(within(panel).getByRole('button', { name: 'Öffnen' }))
+  await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(`/book/${book.id}/chapters/${a.id}`))
+})
+
+test('with four tabs, the side panel closes with a small ✕ so the tabs fit', async () => {
+  const user = userEvent.setup()
+  const book = await createBook('Sturmlied')
+  const a = await createChapter(book.id, 'Anfang', '')
+  renderAt(`/book/${book.id}/chapters/${a.id}`)
+  await screen.findByRole('link', { name: 'Anfang' })
+  await user.click(screen.getByRole('button', { name: /^Notizblock/ }))
+  for (const tab of ['Notizen', 'Sammlung', 'Kommentare', 'Kapitel']) {
+    await user.click(within(screen.getByRole('tablist', { name: 'Seitenleiste' })).getByRole('tab', { name: tab }))
+    const panel = screen.getAllByRole('complementary').find((element) => element.classList.contains('notes-panel'))!
+    expect(within(panel).getByRole('button', { name: 'Schließen' })).toHaveTextContent('✕')
+  }
+})
+
+test('merging into the open chapter keeps its comments where they were', async () => {
+  const user = userEvent.setup()
+  const { addComment } = await import('../storage/comments')
+  const book = await createBook('Sturmlied')
+  const a = await createChapter(book.id, 'Anfang', 'Mira closed the door.')
+  const next = await createChapter(book.id, 'Der Winter', 'Snow came early.')
+  await addComment(a.id, { from: 5, to: 11, quote: 'closed', text: 'besser?' })
+  await addComment(next.id, { from: 0, to: 4, quote: 'Snow', text: 'Schnee' })
+  renderAt(`/book/${book.id}/chapters/${a.id}`, true)
+  await waitFor(() => expect(document.querySelector('.editor .cm-content')?.textContent).toContain('Mira closed'))
+  const row = screen.getByRole('link', { name: 'Anfang' }).closest('li')!
+  await user.click(within(row).getByRole('button', { name: 'Kapitel umbenennen' }))
+  await user.click(screen.getByRole('button', { name: 'Mit „Der Winter" zusammenführen' }))
+  await user.click(screen.getByRole('button', { name: 'Zusammenführen' }))
+  await waitFor(() => expect(document.querySelector('.editor .cm-content')?.textContent).toContain('Snow came early.'))
+  // The editor stores comment places a little later; give it time to do so.
+  await new Promise((resolve) => setTimeout(resolve, 1800))
+  const stored = (await getChapter(a.id))!
+  expect(stored.comments!.map((comment) => [comment.text, stored.content.slice(comment.from, comment.to)])).toEqual([
+    ['besser?', 'closed'],
+    ['Schnee', 'Snow'],
+  ])
+}, 10000)

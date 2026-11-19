@@ -825,6 +825,16 @@ a.sidebar-manuscript.active {
   color: var(--text-muted);
 }
 
+.chapter-dialog-merge {
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--border);
+}
+
+.chapter-dialog-merge button {
+  padding-inline: 0;
+  color: var(--text-muted);
+}
+
 .chapter-dialog-hint {
   margin: 0.4rem 0 0;
   font-size: 12px;

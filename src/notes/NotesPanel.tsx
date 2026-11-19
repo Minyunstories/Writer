@@ -35,8 +35,8 @@ export function NotesPanel({ notes, chapters, entries, onAdd, onDone, onDelete, 
     <aside className="book-panel notes-panel" aria-label="Notizblock">
       <header className="book-panel-header">
         {tabs ?? <span className="notes-title">Notizblock</span>}
-        <button className="ghost" onClick={onClose}>
-          Schließen
+        <button className="ghost icon panel-close" aria-label="Schließen" title="Schließen" onClick={onClose}>
+          ✕
         </button>
       </header>
       <div className="book-panel-body notes-body">

@@ -74,3 +74,11 @@ test('a new comment on the selection opens for writing; Enter saves, an empty on
   ;(empty[empty.length - 1] as HTMLTextAreaElement).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
   expect(second.options.onDelete).toHaveBeenCalledWith('new')
 })
+
+test('after stored text came in, stored places win over places known here', () => {
+  const { view } = setup('Mira closed the door.', [comment('a', 21, 21, 'collapsed')])
+  refreshComments(view, [comment('a', 5, 11, 'collapsed')])
+  expect(currentPlaces(view.state)[0]).toMatchObject({ from: 21, to: 21 })
+  refreshComments(view, [comment('a', 5, 11, 'collapsed')], { trustGiven: true })
+  expect(currentPlaces(view.state)[0]).toMatchObject({ from: 5, to: 11, quote: 'closed' })
+})

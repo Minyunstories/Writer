@@ -1,0 +1,55 @@
+.reader-body {
+  padding: 0 1rem 2rem;
+}
+
+.reader-choice {
+  margin: 0 -1rem;
+  padding: 0.75rem 1rem 0.6rem;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  background: var(--surface);
+}
+
+.reader-choice select {
+  flex: 1;
+  min-width: 0;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  font-size: 14px;
+}
+
+.reader-text {
+  font-family: var(--font-text);
+  font-size: 1rem;
+  line-height: 1.75;
+}
+
+.reader-text p,
+.reader-text .manuscript-subhead {
+  margin: 0 0 0.7em;
+}
+
+.reader-text .manuscript-subhead {
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.reader-text .manuscript-separator {
+  margin: 1.1em 0;
+  text-align: center;
+  letter-spacing: 0.4em;
+  color: var(--text-muted);
+}
+
+.reader-text mark {
+  background: var(--mw-highlight, rgba(213, 141, 98, 0.3));
+  color: inherit;
+  border-radius: 3px;
+}

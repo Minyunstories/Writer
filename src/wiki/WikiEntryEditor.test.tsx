@@ -1,8 +1,8 @@
 import { EditorView } from '@codemirror/view'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, expect, test, vi } from 'vitest'
-import { createBook, resetDatabaseForTests } from '../storage/db'
+import { beforeEach, describe, expect, test, vi } from 'vitest'
+import { createBook, createChapter, listChapters, resetDatabaseForTests } from '../storage/db'
 import * as wikiStorage from '../storage/wiki'
 import { createEntry, createFolder, getEntry, getImage, listFolders, updateEntry } from '../storage/wiki'
 import { WikiEntryEditor } from './WikiEntryEditor'
@@ -215,4 +215,104 @@ test('the first image is the portrait beside the name; another image can take it
   await user.click(within(secondItem).getByRole('button', { name: 'Als Porträt' }))
   await waitFor(async () => expect((await getEntry(entry.id))!.imageIds).toEqual([second, first]))
   expect(within(screen.getByRole('img', { name: 'Bild 1 von Pascal' }).closest('li')!).getByText('Porträt')).toBeInTheDocument()
+})
+
+describe('renaming', () => {
+  async function renameSetup(texts: string[]) {
+    const book = await createBook('B')
+    const entry = await createEntry(book.id, 'Mira')
+    const chapters = await Promise.all(texts.map((text, i) => createChapter(book.id, `K${i}`, text)))
+    const onReplaceName = vi.fn(async () => {})
+    render(
+      <WikiEntryEditor
+        entryId={entry.id}
+        folders={[]}
+        zoomArea="wiki"
+        onChanged={() => {}}
+        onDeleted={() => {}}
+        prepare={prepare}
+        chapters={chapters}
+        onReplaceName={onReplaceName}
+      />,
+    )
+    const name = await screen.findByLabelText('Name')
+    return { entry, name, onReplaceName, user: userEvent.setup() }
+  }
+
+  test('a new name asks what to do with the old one in the text', async () => {
+    const { name, user, onReplaceName } = await renameSetup(['Mira smiled.', "Mira's cup."])
+    await user.click(name)
+    await user.type(name, 'bel')
+    await user.tab()
+    expect(await screen.findByText('„Mira" kommt 2-mal in deinen Kapiteln vor.')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Überall durch „Mirabel" ersetzen' }))
+    await waitFor(() => expect(onReplaceName).toHaveBeenCalledWith('Mira', 'Mirabel'))
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  test('keeping the old name puts it under "auch bekannt als"', async () => {
+    const { entry, name, user, onReplaceName } = await renameSetup(['Mira smiled.'])
+    await user.click(name)
+    await user.type(name, 'bel')
+    await user.tab()
+    await user.click(await screen.findByRole('button', { name: '„Mira" als „auch bekannt als" behalten' }))
+    await waitFor(async () => expect((await getEntry(entry.id))!.aliases).toEqual(['Mira']))
+    expect((await getEntry(entry.id))!.name).toBe('Mirabel')
+    expect(onReplaceName).not.toHaveBeenCalled()
+  })
+
+  test('no question when the old name is not in the text, or nothing changed', async () => {
+    const { name, user } = await renameSetup(['Lea smiled.'])
+    await user.click(name)
+    await user.type(name, 'bel')
+    await user.tab()
+    await user.click(name)
+    await user.tab()
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+})
+
+test('no question when a new entry gets its first name', async () => {
+  const book = await createBook('B')
+  const entry = await createEntry(book.id, 'Unbenannt')
+  await createChapter(book.id, 'K', 'Unbenannt hier.')
+  render(<WikiEntryEditor entryId={entry.id} folders={[]} zoomArea="wiki" onChanged={() => {}} onDeleted={() => {}} prepare={prepare} chapters={await listChapters(book.id)} onReplaceName={async () => {}} />)
+  const name = await screen.findByLabelText('Name')
+  const user = userEvent.setup()
+  await user.clear(name)
+  await user.type(name, 'Tom')
+  await user.tab()
+  expect(screen.queryByRole('dialog')).toBeNull()
+})
+
+test('the rename question counts what is stored, not an older list', async () => {
+  const book = await createBook('B')
+  const entry = await createEntry(book.id, 'Mira')
+  await createChapter(book.id, 'K', 'Mira smiled. Mira left.')
+  render(<WikiEntryEditor entryId={entry.id} folders={[]} zoomArea="wiki" onChanged={() => {}} onDeleted={() => {}} prepare={prepare} chapters={[]} onReplaceName={async () => {}} />)
+  const name = await screen.findByLabelText('Name')
+  const user = userEvent.setup()
+  await user.click(name)
+  await user.type(name, 'bel')
+  await user.tab()
+  expect(await screen.findByText('„Mira" kommt 2-mal in deinen Kapiteln vor.')).toBeInTheDocument()
+})
+
+test('keeping an old name that already is an alias saves nothing more', async () => {
+  const book = await createBook('B')
+  const entry = await createEntry(book.id, 'Mira')
+  await updateEntry(entry.id, { aliases: ['Mira'] })
+  await createChapter(book.id, 'K', 'Mira smiled.')
+  render(<WikiEntryEditor entryId={entry.id} folders={[]} zoomArea="wiki" onChanged={() => {}} onDeleted={() => {}} prepare={prepare} chapters={await listChapters(book.id)} onReplaceName={async () => {}} />)
+  const name = await screen.findByLabelText('Name')
+  const user = userEvent.setup()
+  await user.click(name)
+  await user.type(name, 'bel')
+  await user.tab()
+  await waitFor(async () => expect((await getEntry(entry.id))!.name).toBe('Mirabel'))
+  const saves = vi.spyOn(wikiStorage, 'updateEntry')
+  await user.click(await screen.findByRole('button', { name: '„Mira" als „auch bekannt als" behalten' }))
+  await new Promise((resolve) => setTimeout(resolve, 900))
+  expect(saves).not.toHaveBeenCalled()
+  saves.mockRestore()
 })

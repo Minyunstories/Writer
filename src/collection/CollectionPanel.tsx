@@ -82,8 +82,8 @@ export function CollectionPanel({ collection, tabs, onInsert, onAddSelection, on
     <aside className="book-panel notes-panel collection-panel" aria-label="Sammlung">
       <header className="book-panel-header">
         {tabs ?? <span className="notes-title">Sammlung</span>}
-        <button className="ghost" onClick={onClose}>
-          Schließen
+        <button className="ghost icon panel-close" aria-label="Schließen" title="Schließen" onClick={onClose}>
+          ✕
         </button>
       </header>
       <div className="book-panel-body notes-body">

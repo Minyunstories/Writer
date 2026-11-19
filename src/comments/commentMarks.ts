@@ -65,14 +65,16 @@ export function currentPlaces(state: EditorState) {
 /**
  * Takes over comments changed elsewhere (the panel, another device). Places already known here
  * stay as they are: while the chapter is open, the editor knows best where the words are.
+ * `trustGiven`: right after stored text came into the editor, the given (stored) places are the
+ * right ones – a merge or rename may have moved comments the editor had only guessed at.
  */
-export function refreshComments(view: EditorView, comments: ChapterComment[]) {
+export function refreshComments(view: EditorView, comments: ChapterComment[], options: { trustGiven?: boolean } = {}) {
   const known = new Map(view.state.field(field).marks.map((mark) => [mark.id, mark]))
   const length = view.state.doc.length
   const marks = comments.map((comment) => {
     const here = known.get(comment.id)
     const mark = toMark(comment)
-    if (here) return { ...mark, from: here.from, to: here.to }
+    if (here && !options.trustGiven) return { ...mark, from: here.from, to: here.to }
     return { ...mark, from: Math.min(mark.from, length), to: Math.min(mark.to, length) }
   })
   view.dispatch({ effects: setMarks.of(marks) })

@@ -20,6 +20,7 @@ import { editorTheme } from './editorTheme'
 import { isGrammarOn, setGrammarOn } from '../grammar/grammarSetting'
 import { toggleHighlight, typewriter, writingMarkdown } from './markdownSetup'
 import { ChapterSaver, type SaveState } from './saver'
+import { minimalChanges } from './minimalChanges'
 import { StatusBar } from './StatusBar'
 import './editor.css'
 
@@ -171,16 +172,34 @@ export function Editor({ book, chapter, onChanged, extraExtensions, jumpTo, onJu
 
   const flush = useCallback(() => void saverRef.current?.flush(), [])
 
-  /** Puts stored text into the editor without treating it as typing. */
-  const showStored = useCallback((content: string) => {
-    const view = viewRef.current
-    if (!view) return
-    view.dispatch({
-      changes: { from: 0, to: view.state.doc.length, insert: content },
-      annotations: external.of(true),
-    })
-    setWords(countWords(content))
-  }, [])
+  /**
+   * Puts stored text into the editor without treating it as typing. Only the spots that differ are
+   * changed, so the cursor and the comments elsewhere stay put; then the comments are placed again
+   * from storage against the new text (a merge or a rename may have moved or added some).
+   */
+  const showStored = useCallback(
+    (content: string) => {
+      const view = viewRef.current
+      if (!view) return
+      view.dispatch({
+        changes: minimalChanges(view.state.doc.toString(), content),
+        annotations: external.of(true),
+      })
+      setWords(countWords(content))
+      void getChapter(chapter.id).then((stored) => {
+        if (!stored || viewRef.current !== view) return
+        const text = view.state.doc.toString()
+        refreshComments(
+          view,
+          (stored.comments ?? []).map((comment) => ({ ...comment, ...resolveAnchor(text, comment) })),
+          { trustGiven: true },
+        )
+      })
+    },
+    // The editor is recreated per chapter, so the id does not change while this exists.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  )
 
   // Create the editor once the freshest text is loaded from storage.
   useEffect(() => {

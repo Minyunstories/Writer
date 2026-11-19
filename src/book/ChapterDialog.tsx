@@ -8,12 +8,15 @@ interface Props {
   groups: ChapterGroup[]
   onSave: (title: string, group: GroupChoice) => void
   onCancel: () => void
+  /** The chapter after this one, if any: offers to merge it into this one. */
+  next?: { title: string }
+  onMerge?: () => void
 }
 
 const NEW = '__new'
 
 /** A chapter's title and the group it belongs to. */
-export function ChapterDialog({ chapter, groups, onSave, onCancel }: Props) {
+export function ChapterDialog({ chapter, groups, onSave, onCancel, next, onMerge }: Props) {
   const [title, setTitle] = useState(chapter.title)
   const [group, setGroup] = useState(chapter.group && groups.some((g) => g.id === chapter.group) ? chapter.group : '')
   const [newName, setNewName] = useState('')
@@ -63,6 +66,13 @@ export function ChapterDialog({ chapter, groups, onSave, onCancel }: Props) {
           </>
         )}
         <p className="muted chapter-dialog-hint">Kapitel einer Gruppe stehen in der Kapitelliste unter einer gemeinsamen Überschrift.</p>
+        {next && onMerge && (
+          <div className="chapter-dialog-merge">
+            <button type="button" className="ghost" onClick={onMerge}>
+              Mit „{next.title}" zusammenführen
+            </button>
+          </div>
+        )}
         <div className="dialog-actions">
           <button type="button" className="ghost" onClick={onCancel}>
             Abbrechen

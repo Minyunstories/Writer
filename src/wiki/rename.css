@@ -1,0 +1,33 @@
+.rename-dialog {
+  width: min(32rem, 100%);
+}
+
+.rename-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.rename-header h2 {
+  overflow-wrap: anywhere;
+}
+
+.rename-header button.icon {
+  flex: none;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 10px;
+}
+
+.rename-actions {
+  flex-wrap: wrap;
+}
+
+/* Narrow screens: one button per line, the main one on top. */
+@media (max-width: 480px) {
+  .rename-actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+}
