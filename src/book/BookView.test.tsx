@@ -1022,3 +1022,73 @@ test('both modules on: the button says Module and the drawer has two tabs', asyn
   await user.click(within(drawer).getByRole('tab', { name: 'Anreden' }))
   expect(await within(drawer).findByText('Wähle, wer spricht.')).toBeInTheDocument()
 })
+
+test('keeps the screen on while a chapter is open, not in the wiki', async () => {
+  const release = vi.fn(async () => {})
+  const request = vi.fn(async () => ({ released: false, release }))
+  Object.defineProperty(navigator, 'wakeLock', { configurable: true, value: { request } })
+  try {
+    const user = userEvent.setup()
+    const book = await createBook('Sturmlied')
+    const chapter = await createChapter(book.id, 'Eins')
+    renderAt(`/book/${book.id}/chapters/${chapter.id}`)
+    await waitFor(() => expect(request).toHaveBeenCalledWith('screen'))
+    await user.click(screen.getByRole('tab', { name: 'Wiki' }))
+    await waitFor(() => expect(release).toHaveBeenCalled())
+  } finally {
+    delete (navigator as { wakeLock?: unknown }).wakeLock
+  }
+})
+
+test('Strg+/ opens and closes the shortcut overview', async () => {
+  const book = await createBook('Sturmlied')
+  renderAt(`/book/${book.id}`)
+  await screen.findByRole('heading', { name: 'Sturmlied' })
+  // German keyboard: Ctrl+Shift+7 gives "/".
+  fireEvent.keyDown(window, { key: '/', ctrlKey: true, shiftKey: true })
+  expect(screen.getByRole('dialog', { name: 'Tastenkürzel' })).toBeInTheDocument()
+  fireEvent.keyDown(window, { key: '/', ctrlKey: true, shiftKey: true })
+  expect(screen.queryByRole('dialog', { name: 'Tastenkürzel' })).toBeNull()
+})
+
+test('the keyboard button opens the shortcut overview, Esc closes it', async () => {
+  const user = userEvent.setup()
+  const book = await createBook('Sturmlied')
+  renderAt(`/book/${book.id}`)
+  await user.click(await screen.findByRole('button', { name: 'Tastenkürzel' }))
+  expect(screen.getByRole('dialog', { name: 'Tastenkürzel' })).toBeInTheDocument()
+  await user.keyboard('{Escape}')
+  expect(screen.queryByRole('dialog', { name: 'Tastenkürzel' })).toBeNull()
+})
+
+test('Strg+/ in the chapter opens the overview and leaves the text alone', async () => {
+  const book = await createBook('Sturmlied')
+  const chapter = await createChapter(book.id, 'Eins')
+  await updateChapter(chapter.id, { content: 'Hallo' })
+  renderAt(`/book/${book.id}/chapters/${chapter.id}`, true)
+  const view = await waitFor(() => {
+    const found = EditorView.findFromDOM(document.querySelector<HTMLElement>('.editor .cm-editor')!)
+    if (!found) throw new Error('not mounted')
+    return found
+  })
+  view.focus()
+  fireEvent.keyDown(view.contentDOM, { key: '/', ctrlKey: true })
+  expect(view.state.doc.toString()).toBe('Hallo')
+  expect(screen.getByRole('dialog', { name: 'Tastenkürzel' })).toBeInTheDocument()
+})
+
+test('Strg+/ in a wiki text field leaves the text alone', async () => {
+  const book = await createBook('Sturmlied')
+  const entry = await createEntry(book.id, 'Pascal')
+  renderAt(`/book/${book.id}/wiki/${entry.id}`)
+  const field = await waitFor(() => {
+    const found = document.querySelector<HTMLElement>('.wiki-entry .cm-editor')
+    if (!found) throw new Error('not mounted')
+    return EditorView.findFromDOM(found)!
+  })
+  field.dispatch({ changes: { from: 0, insert: 'Notiz' } })
+  field.focus()
+  fireEvent.keyDown(field.contentDOM, { key: '/', ctrlKey: true })
+  expect(field.state.doc.toString()).toBe('Notiz')
+  expect(screen.getByRole('dialog', { name: 'Tastenkürzel' })).toBeInTheDocument()
+})

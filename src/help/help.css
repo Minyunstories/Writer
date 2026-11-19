@@ -1,0 +1,95 @@
+/* The keyboard button in the book header: only where there is a keyboard to speak of. */
+@media (hover: none), (max-width: 600px) {
+  .book-header button.help-button {
+    display: none;
+  }
+}
+
+button.help-button .icon-svg {
+  width: 20px;
+  height: 20px;
+}
+
+.shortcuts-dialog {
+  width: min(36rem, 100%);
+  max-height: 88dvh;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 0.5rem;
+}
+
+.shortcuts-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.shortcuts-header button.icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 10px;
+}
+
+.shortcuts-body {
+  overflow-y: auto;
+  display: grid;
+  gap: 1.1rem;
+  padding-bottom: 0.25rem;
+}
+
+.shortcuts-group h3 {
+  margin: 0 0 0.45rem;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.shortcuts-group dl {
+  margin: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.shortcuts-row {
+  display: grid;
+  grid-template-columns: 12.5rem minmax(0, 1fr);
+  align-items: baseline;
+  gap: 0.75rem;
+}
+
+.shortcuts-row dt,
+.shortcuts-row dd {
+  margin: 0;
+}
+
+.shortcuts-row dd {
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.shortcuts-row kbd {
+  display: inline-block;
+  padding: 0.15em 0.5em;
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 6px;
+  background: var(--surface-2);
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+/* Narrow windows: the keys above their meaning. */
+@media (max-width: 480px) {
+  .shortcuts-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.2rem;
+  }
+
+  .shortcuts-row + .shortcuts-row {
+    margin-top: 0.3rem;
+  }
+}

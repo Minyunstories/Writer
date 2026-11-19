@@ -10,6 +10,10 @@ import { SyncStatus } from '../sync/SyncStatus'
 import type { JumpTarget } from '../editor/Editor'
 import { wikiCompletion } from '../editor/wikiComplete'
 import { ConfirmDialog, PromptDialog } from '../ui/Dialogs'
+import { useWakeLock } from '../lib/wakeLock'
+import { ShortcutsDialog } from '../help/ShortcutsDialog'
+import { isHelpKey } from '../help/shortcuts'
+import { Icon } from '../ui/Icon'
 import { buildMatcher } from '../wiki/linker'
 import { entriesIn } from '../wiki/mentions'
 import { ModuleDrawer } from '../modules/ModuleDrawer'
@@ -377,6 +381,7 @@ export function BookView({ renderChapter }: Props) {
   const activeChapter = section === 'chapters' ? chapters.find((c) => c.id === itemId) : undefined
   const activeChapterRef = useRef(activeChapter)
   activeChapterRef.current = activeChapter
+  useWakeLock(section === 'chapters' && !!activeChapter)
 
   // Keep the URL pointing at an existing chapter. Opening the book itself continues where text
   // was last changed; the chapter list and links open what they point at.
@@ -483,6 +488,20 @@ export function BookView({ renderChapter }: Props) {
   }
   const toggleNotesRef = useRef(toggleNotes)
   toggleNotesRef.current = toggleNotes
+
+  // Strg+/: the shortcut overview. Caught before the editors see it (CodeMirror would wrap the
+  // line in an HTML comment).
+  const [helpOpen, setHelpOpen] = useState(false)
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (!isHelpKey(event)) return
+      event.preventDefault()
+      event.stopPropagation()
+      setHelpOpen((open) => !open)
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [])
 
   // Ctrl+Shift+N: the notepad from anywhere. Ctrl+B outside text fields: the sidebar.
   useEffect(() => {
@@ -668,6 +687,15 @@ export function BookView({ renderChapter }: Props) {
         <img className="book-logo" src={FEATHER} alt="" />
         <h1>{book.title}</h1>
         <span className="book-header-space" />
+        <button
+          className="notes-button search-button help-button"
+          aria-pressed={helpOpen}
+          aria-label="Tastenkürzel"
+          title="Tastenkürzel (Strg+/)"
+          onClick={() => setHelpOpen((open) => !open)}
+        >
+          <Icon name="keyboard" />
+        </button>
         <button
           className="notes-button search-button"
           aria-pressed={searchOpen}
@@ -1075,6 +1103,7 @@ export function BookView({ renderChapter }: Props) {
           }}
         />
       )}
+      {helpOpen && <ShortcutsDialog onClose={() => setHelpOpen(false)} />}
       {dialog?.kind === 'rename' && (
         <ChapterDialog
           chapter={dialog.chapter}
