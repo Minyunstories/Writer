@@ -18,6 +18,7 @@ import { createChapter, getChapter, savePlace, updateBook } from '../storage/db'
 import type { Book, Chapter, FontId } from '../types'
 import { editorTheme } from './editorTheme'
 import { CheckMenu } from '../grammar/CheckMenu'
+import { isModuleOn } from '../modules/modules'
 import { toggleHighlight, typewriter, writingMarkdown } from './markdownSetup'
 import { ChapterSaver, type SaveState } from './saver'
 import { minimalChanges } from './minimalChanges'
@@ -472,7 +473,7 @@ export function Editor({ book, chapter, onChanged, extraExtensions, jumpTo, onJu
           <Icon name="synonyms" />
           <span className="tool-label">Synonyme</span>
         </button>
-        <CheckMenu onReturn={returnToText} />
+        <CheckMenu onReturn={returnToText} address={isModuleOn(book, 'address')} />
  <button
           className="editor-highlight"
           title="Kommentar zum markierten Text (Strg+Alt+M)"

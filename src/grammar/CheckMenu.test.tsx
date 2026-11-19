@@ -121,3 +121,18 @@ test('ticking with the mouse leaves the focus in the text', async () => {
   expect(document.activeElement).toBe(text)
   expect(screen.getByRole('group', { name: 'Prüfungen' })).toBeInTheDocument()
 })
+
+test('"Anreden" appears only with the module on; ticking it stores it and lights the button', async () => {
+  const user = userEvent.setup()
+  const { rerender } = render(<CheckMenu onReturn={() => {}} />)
+  await user.click(button())
+  expect(screen.queryByRole('checkbox', { name: 'Anreden' })).not.toBeInTheDocument()
+  rerender(<CheckMenu onReturn={() => {}} address />)
+  await user.click(screen.getByRole('checkbox', { name: 'Rechtschreibung und Grammatik' }))
+  expect(button()).not.toHaveClass('on')
+  const address = screen.getByRole('checkbox', { name: 'Anreden' })
+  expect(address).not.toBeChecked()
+  await user.click(address)
+  expect(localStorage.getItem('mw:address-check')).toBe('on')
+  expect(button()).toHaveClass('on')
+})

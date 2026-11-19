@@ -36,8 +36,11 @@ import { WikiEntryEditor } from '../wiki/WikiEntryEditor'
 import { createWikiLinks } from '../wiki/wikiLinks'
 import { previewCard, previewData } from '../wiki/wikiPreview'
 import { grammarCheck } from '../grammar/grammarCheck'
-import { GRAMMAR_EVENT, isGrammarOn, isRepeatsOn, recheckAll } from '../grammar/grammarSetting'
+import { GRAMMAR_EVENT, isAddressCheckOn, isGrammarOn, isRepeatsOn, recheckAll } from '../grammar/grammarSetting'
 import { repeatMarks } from '../repeats/repeatMarks'
+import { addressMarks } from '../address/addressMarks'
+import { checkAddress } from '../address/addressCheck'
+import { figuresOf } from '../address/resolve'
 import { checkText, knownWords } from '../grammar/harper'
 import { Manuscript } from '../manuscript/Manuscript'
 import { NotesPanel } from '../notes/NotesPanel'
@@ -297,6 +300,11 @@ export function BookView({ renderChapter }: Props) {
   )
   const bookRef = useRef(book)
   bookRef.current = book
+  // The open chapter and the chapter order, for the address check (its extension is made once per book).
+  const chapterOrderRef = useRef<string[]>([])
+  chapterOrderRef.current = chapters.map((chapter) => chapter.id)
+  const chapterIdRef = useRef<string | null>(null)
+  chapterIdRef.current = section === 'chapters' ? (itemId ?? null) : null
   const collectRef = useRef<(view: EditorView) => void>(() => {})
   collectRef.current = (view) => {
     const selection = view.state.selection.main
@@ -415,6 +423,23 @@ export function BookView({ renderChapter }: Props) {
         recheckEvent: GRAMMAR_EVENT,
         names: () => entriesRef.current.flatMap((entry) => [entry.name, ...entry.aliases]),
       }),
+      addressMarks({
+        enabled: () => isAddressCheckOn() && !!bookRef.current && isModuleOn(bookRef.current, 'address'),
+        recheckEvent: GRAMMAR_EVENT,
+        check: (text) => {
+          const current = bookRef.current
+          if (!current) return []
+          const figures = figuresOf(current.address, entriesRef.current, foldersRef.current)
+          const named = new Set(buildMatcher(entriesRef.current).find(text).map((match) => match.entryId))
+          return checkAddress(text, {
+            address: current.address,
+            figures,
+            present: figures.filter((figure) => named.has(figure.id)).map((figure) => figure.id),
+            chapterOrder: chapterOrderRef.current,
+            chapterId: chapterIdRef.current,
+          })
+        },
+      }),
       grammarCheck({
         enabled: isGrammarOn,
         recheckEvent: GRAMMAR_EVENT,
@@ -462,6 +487,12 @@ export function BookView({ renderChapter }: Props) {
   }, [links, entries])
   // New wiki names or another English variant: check again.
   // The vocabulary counts too while its module is on, so taking or editing a word checks again.
+  // Changed forms of address or the module switched: the address check looks again.
+  const addressKey = JSON.stringify([book?.modules?.address, book?.address, entries.map((entry) => [entry.id, entry.name, entry.aliases, entry.folderId])])
+  useEffect(() => {
+    if (book && isModuleOn(book, 'address')) recheckAll()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [addressKey])
   const spellingKey = JSON.stringify([book?.spelling?.dialect, book ? spellingNames(book, entries) : entries.map((entry) => [entry.name, entry.aliases])])
   useEffect(() => {
     recheckAll()

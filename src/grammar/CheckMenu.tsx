@@ -1,18 +1,21 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type FocusEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon } from '../ui/Icon'
-import { isGrammarOn, isRepeatsOn, setGrammarOn, setRepeatsOn } from './grammarSetting'
+import { isAddressCheckOn, isGrammarOn, isRepeatsOn, setAddressCheckOn, setGrammarOn, setRepeatsOn } from './grammarSetting'
 
 interface Props {
   /** Puts the cursor back into the text (after Esc). */
   onReturn: () => void
+  /** The forms-of-address module is on in this book: offer its check. */
+  address?: boolean
 }
 
 /** The "Prüfung" button: a small menu to tick which checks run on this device. */
-export function CheckMenu({ onReturn }: Props) {
+export function CheckMenu({ onReturn, address = false }: Props) {
   const [open, setOpen] = useState(false)
   const [grammar, setGrammar] = useState(isGrammarOn)
   const [repeats, setRepeats] = useState(isRepeatsOn)
+  const [addressCheck, setAddressCheck] = useState(isAddressCheckOn)
   const ref = useRef<HTMLSpanElement>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -74,7 +77,7 @@ export function CheckMenu({ onReturn }: Props) {
       <button
         ref={buttonRef}
         type="button"
-        className={`editor-grammar${grammar || repeats ? ' on' : ''}`}
+        className={`editor-grammar${grammar || repeats || (address && addressCheck) ? ' on' : ''}`}
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
         title="Prüfungen auswählen (laufen nur auf diesem Gerät)"
@@ -123,6 +126,19 @@ export function CheckMenu({ onReturn }: Props) {
               />
               Wortwiederholungen
             </label>
+            {address && (
+              <label>
+                <input
+                  type="checkbox"
+                  checked={addressCheck}
+                  onChange={(event) => {
+                    setAddressCheckOn(event.target.checked)
+                    setAddressCheck(event.target.checked)
+                  }}
+                />
+                Anreden
+              </label>
+            )}
             <p className="muted">Läuft nur auf diesem Gerät.</p>
           </div>,
           document.body,

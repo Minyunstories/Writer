@@ -40,6 +40,26 @@ export function setRepeatsOn(on: boolean): void {
   recheckAll()
 }
 
+const ADDRESS_KEY = 'mw:address-check'
+
+/** Forms of address are checked only when switched on on this device (and the module is on). */
+export function isAddressCheckOn(): boolean {
+  try {
+    return localStorage.getItem(ADDRESS_KEY) === 'on'
+  } catch {
+    return false
+  }
+}
+
+export function setAddressCheckOn(on: boolean): void {
+  try {
+    localStorage.setItem(ADDRESS_KEY, on ? 'on' : 'off')
+  } catch {
+    // Not remembered; it still applies now.
+  }
+  recheckAll()
+}
+
 /** Every open text checks again, e.g. after a word was accepted. */
 export function recheckAll(): void {
   window.dispatchEvent(new Event(GRAMMAR_EVENT))
