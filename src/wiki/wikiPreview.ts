@@ -47,7 +47,7 @@ export function previewData(entry: WikiEntry, folders: WikiFolder[]): PreviewDat
   return { name: entry.name, aliases: entry.aliases, properties: properties.slice(0, SHOWN) }
 }
 
-/** The card itself: portrait on the left, name, aliases and properties on the right. */
+/** The card itself: portrait in the left third, name, aliases and properties in the other two. */
 export function previewCard(data: PreviewData, portrait: Pick<WikiImage, 'data' | 'type'> | null): { dom: HTMLElement; destroy(): void } {
   const element = <K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string) => {
     const node = document.createElement(tag)
@@ -59,10 +59,14 @@ export function previewCard(data: PreviewData, portrait: Pick<WikiImage, 'data' 
   let url: string | null = null
   if (portrait) {
     url = URL.createObjectURL(new Blob([portrait.data], { type: portrait.type }))
-    const image = element('img', 'cm-mw-preview-portrait')
+    // A third of the card's width and its full height; the picture is cropped to fill it.
+    dom.classList.add('cm-mw-preview-with-portrait')
+    const frame = element('div', 'cm-mw-preview-portrait')
+    const image = element('img')
     image.src = url
     image.alt = ''
-    dom.append(image)
+    frame.append(image)
+    dom.append(frame)
   }
   const text = element('div', 'cm-mw-preview-text')
   text.append(element('div', 'cm-mw-preview-name', data.name))

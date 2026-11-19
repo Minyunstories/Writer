@@ -76,7 +76,10 @@ test('previewCard shows name, aliases, properties and the portrait, and frees th
   expect(card.dom.querySelector('.cm-mw-preview-aliases')!.textContent).toBe('auch: die Ältere, M.')
   expect([...card.dom.querySelectorAll('dt')].map((el) => el.textContent)).toEqual(['Alter'])
   expect([...card.dom.querySelectorAll('dd')].map((el) => el.textContent)).toEqual(['32'])
-  expect(card.dom.querySelector('img')!.getAttribute('src')).toBe('blob:portrait')
+  // A third of the width, the full height: the picture sits in its own column.
+  expect(card.dom.classList.contains('cm-mw-preview-with-portrait')).toBe(true)
+  expect(card.dom.firstElementChild!.className).toBe('cm-mw-preview-portrait')
+  expect(card.dom.querySelector('.cm-mw-preview-portrait > img')!.getAttribute('src')).toBe('blob:portrait')
   card.destroy()
   expect(revokeObjectURL).toHaveBeenCalledWith('blob:portrait')
 })
@@ -84,6 +87,7 @@ test('previewCard shows name, aliases, properties and the portrait, and frees th
 test('previewCard without portrait or properties shows just the name', () => {
   const card = previewCard({ name: 'Lea', aliases: [], properties: [] }, null)
   expect(card.dom.querySelector('img')).toBeNull()
+  expect(card.dom.classList.contains('cm-mw-preview-with-portrait')).toBe(false)
   expect(card.dom.querySelector('dl')).toBeNull()
   expect(card.dom.querySelector('.cm-mw-preview-aliases')).toBeNull()
   expect(card.dom.textContent).toBe('Lea')
