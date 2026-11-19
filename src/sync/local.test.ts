@@ -565,6 +565,42 @@ test('modules: taken over, kept when switched here during the run, GitHub wins a
   expect((await getBook(book.id))!.modules).toBeUndefined()
 })
 
+test('shelf: taken over, kept when changed here during the run, GitHub wins a conflict, removed', async () => {
+  const { setPattern, setStarred } = await import('../storage/shelf')
+  const { p, book } = await seed()
+  const updatedAt = (await getBook(book.id))!.updatedAt
+  await apply({ write: new Map([[`${p}shelf.json`, '{"pattern":"dots","starred":true,"ribbon":"red"}']]), snapshot: await readLocalFiles() })
+  let stored = (await getBook(book.id))!
+  expect(stored.shelf).toEqual({ starred: true, pattern: 'dots', extra: { ribbon: 'red' } })
+  expect(stored.updatedAt).toBe(updatedAt)
+
+  const planned = await readLocalFiles()
+  await setPattern(book.id, 'zigzag')
+  await apply({ write: new Map([[`${p}shelf.json`, '{"pattern":"stripes"}']]), snapshot: planned })
+  expect((await getBook(book.id))!.shelf).toEqual({ starred: true, pattern: 'zigzag', extra: { ribbon: 'red' } })
+
+  await applyFull({ conflicts: [{ path: `${p}shelf.json`, remote: '{"starred":true}' }], snapshot: await readLocalFiles() })
+  expect((await getBook(book.id))!.shelf).toEqual({ starred: true })
+
+  await apply({ remove: [`${p}shelf.json`], snapshot: await readLocalFiles() })
+  expect((await getBook(book.id))!.shelf).toBeUndefined()
+
+  // Removed there, but starred here during the run: the star stays.
+  await setStarred(book.id, true)
+  const before = await readLocalFiles()
+  await setStarred(book.id, false)
+  await setStarred(book.id, true)
+  await setPattern(book.id, 'dots')
+  await apply({ remove: [`${p}shelf.json`], snapshot: before })
+  stored = (await getBook(book.id))!
+  expect(stored.shelf).toEqual({ starred: true, pattern: 'dots' })
+
+  // A file that is not JSON is skipped and changes nothing.
+  const { skipped } = await applyFull({ write: new Map([[`${p}shelf.json`, 'kaputt']]), snapshot: await readLocalFiles() })
+  expect(skipped).toEqual([`${p}shelf.json`])
+  expect((await getBook(book.id))!.shelf).toEqual({ starred: true, pattern: 'dots' })
+})
+
 test('vocabulary: taken over, kept when changed here during the run, merged on conflict, removed', async () => {
   const { vocabularyFile } = await import('../vocabulary/vocabularyFile')
   const { p, book } = await seed()

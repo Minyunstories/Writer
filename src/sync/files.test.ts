@@ -320,6 +320,17 @@ test('module switches travel in modules.json', () => {
   expect(filesToBundle('b1', bundleToFiles(bundle)).book.modules).toBeUndefined()
 })
 
+test('star and cover pattern travel in shelf.json', () => {
+  const files = bundleToFiles({ ...bundle, book: { ...book, shelf: { starred: true, pattern: 'scales' } } })
+  expect(classifyPath('books/b1/shelf.json')).toEqual({ bookId: 'b1', kind: 'shelf', id: 'b1' })
+  expect(files.get('books/b1/shelf.json')).toBe('{\n  "pattern": "scales",\n  "starred": true\n}\n')
+  expect(filesToBundle('b1', files).book.shelf).toEqual({ starred: true, pattern: 'scales' })
+  expect(bundleToFiles(bundle).has('books/b1/shelf.json')).toBe(false)
+  expect(filesToBundle('b1', bundleToFiles(bundle)).book.shelf).toBeUndefined()
+  // An empty file from elsewhere gives no shelf at all.
+  expect(filesToBundle('b1', new Map([...bundleToFiles(bundle), ['books/b1/shelf.json', '{}']])).book.shelf).toBeUndefined()
+})
+
 test('vocabulary travels in vocabulary.json, also while the module is off', () => {
   const vocabulary = {
     learners: [{ entryId: 'e1', updatedAt: 2 }],

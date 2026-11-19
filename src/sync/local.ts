@@ -1,5 +1,6 @@
 import { collectionFile, hasCollection, mergeCollections, parseCollection } from '../collection/collectionFile'
 import { modulesFile, parseModules } from '../modules/modulesFile'
+import { parseShelf, shelfFile } from '../shelf/shelfFile'
 import { mergeVocabulary, parseVocabulary, vocabularyFile } from '../vocabulary/vocabularyFile'
 import { addressFile, mergeAddress, parseAddress } from '../address/addressFile'
 import { COLLECTION_ID } from '../storage/collection'
@@ -99,7 +100,7 @@ export async function readLocalFiles(): Promise<FileSet> {
   return files
 }
 
-const KIND_ORDER = ['book', 'style', 'modules', 'place', 'folders', 'templates', 'templateBlocks', 'chapter', 'outline', 'tags', 'dates', 'status', 'groups', 'comments', 'entry', 'wikiOrder', 'folderColors', 'notes', 'relations', 'vocabulary', 'address', 'graph', 'stars', 'spelling', 'collection', 'version', 'image']
+const KIND_ORDER = ['book', 'style', 'modules', 'shelf', 'place', 'folders', 'templates', 'templateBlocks', 'chapter', 'outline', 'tags', 'dates', 'status', 'groups', 'comments', 'entry', 'wikiOrder', 'folderColors', 'notes', 'relations', 'vocabulary', 'address', 'graph', 'stars', 'spelling', 'collection', 'version', 'image']
 
 /**
  * Applies changes from the repository to this device, file by file, in one transaction.
@@ -331,6 +332,24 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
     const next: Book = { ...book }
     if (Object.keys(remote).length) next.modules = remote
     else delete next.modules
+    await books.put(next)
+  }
+
+  /** Star and cover pattern: the repository's, unless changed here since the run was planned. On conflict GitHub's. */
+  async function writeShelf(path: string, bookId: string, data: FileData | undefined, conflict: boolean) {
+    const remote = parseShelf(data)
+    if (!remote) {
+      skipped.push(path)
+      return
+    }
+    const book = await books.get(bookId)
+    if (!book) return
+    const local = (book.shelf && shelfFile(book.shelf)) ?? ''
+    if (!conflict && (snapshotText(path) ?? '') !== local) return
+    if ((shelfFile(remote) ?? '') === local) return
+    const next: Book = { ...book }
+    if (shelfFile(remote)) next.shelf = remote
+    else delete next.shelf
     await books.put(next)
   }
 
@@ -840,6 +859,7 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
       else if (info.kind === 'tags') await writeTags(path, info.bookId, data, conflict)
       else if (info.kind === 'style') await writeStyle(path, info.bookId, data, conflict)
       else if (info.kind === 'modules') await writeModules(path, info.bookId, data, conflict)
+      else if (info.kind === 'shelf') await writeShelf(path, info.bookId, data, conflict)
       else if (info.kind === 'place') await writePlace(path, info.bookId, data)
       else if (info.kind === 'dates') await writeDates(path, info.bookId, data, conflict)
       else if (info.kind === 'status') await writeStatus(path, info.bookId, data)
@@ -885,6 +905,7 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
       else if (info.kind === 'graph') await writeGraph(item.path, info.bookId, '{}', false)
       else if (info.kind === 'style') await removeStyle(item.path, info.bookId)
       else if (info.kind === 'modules') await writeModules(item.path, info.bookId, '{}', false)
+      else if (info.kind === 'shelf') await writeShelf(item.path, info.bookId, '{}', false)
       else if (info.kind === 'place') await removePlace(item.path, info.bookId)
       else if (info.kind === 'wikiOrder') await writeOrder(item.path, info.bookId, '{}', false)
       else if (info.kind === 'folderColors') await writeColors(item.path, info.bookId, '{}', false)

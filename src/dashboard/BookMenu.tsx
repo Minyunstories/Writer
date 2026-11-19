@@ -1,12 +1,15 @@
 import { useEffect, useRef } from 'react'
 import { COVERS, coverOf, HIGHLIGHTS, highlightOf } from '../lib/bookStyle'
 import { isModuleOn, MODULES, type ModuleId } from '../modules/modules'
+import { COVER_PATTERNS, patternOf, type CoverPattern } from '../shelf/shelf'
 import type { Book, EnglishDialect } from '../types'
 
 interface Props {
   book: Book
   onCover: (color: string) => void
   onHighlight: (color: string) => void
+  /** null: no pattern. */
+  onPattern: (pattern: CoverPattern | null) => void
   onDialect: (dialect: EnglishDialect) => void
   onModule: (id: ModuleId, on: boolean) => void
   onRename: () => void
@@ -14,12 +17,13 @@ interface Props {
   onClose: () => void
 }
 
-/** The "⋯" menu of a book on the shelf: colours, rename, delete. */
-export function BookMenu({ book, onCover, onHighlight, onDialect, onModule, onRename, onDelete, onClose }: Props) {
+/** The "⋯" menu of a book on the shelf: colours, pattern, check, modules, rename, delete. */
+export function BookMenu({ book, onCover, onHighlight, onPattern, onDialect, onModule, onRename, onDelete, onClose }: Props) {
   const ref = useRef<HTMLDivElement>(null)
   const label = `Buchmenü für ${book.title}`
   const cover = coverOf(book)
   const highlight = highlightOf(book)
+  const pattern = patternOf(book)
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -52,6 +56,31 @@ export function BookMenu({ book, onCover, onHighlight, onDialect, onModule, onRe
             aria-pressed={cover === swatch.color}
             style={{ background: swatch.color }}
             onClick={() => onCover(swatch.color)}
+          />
+        ))}
+      </div>
+      <span className="book-menu-label">Muster</span>
+      <div className="book-menu-patterns">
+        <button
+          type="button"
+          className="book-menu-swatch book-menu-swatch-square"
+          aria-label="Ohne Muster"
+          title="Ohne"
+          aria-pressed={pattern === undefined}
+          style={{ backgroundColor: cover }}
+          onClick={() => onPattern(null)}
+        />
+        {COVER_PATTERNS.map((option) => (
+          <button
+            key={option.id}
+            type="button"
+            className="book-menu-swatch book-menu-swatch-square book-menu-pattern"
+            aria-label={`Muster ${option.name}`}
+            title={option.name}
+            aria-pressed={pattern === option.id}
+            data-pattern={option.id}
+            style={{ backgroundColor: cover }}
+            onClick={() => onPattern(option.id)}
           />
         ))}
       </div>

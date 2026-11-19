@@ -9,6 +9,8 @@ import type { Book } from '../types'
 import { ConfirmDialog, PromptDialog } from '../ui/Dialogs'
 import { updateSpelling } from '../storage/spelling'
 import { setModule } from '../storage/modules'
+import { setPattern, setStarred } from '../storage/shelf'
+import { isStarred, patternOf, shelfOrder } from '../shelf/shelf'
 import { BookMenu } from './BookMenu'
 import './Dashboard.css'
 
@@ -33,7 +35,7 @@ export function lastChanged(time: number, now = new Date()): string {
 }
 
 async function loadSummaries(): Promise<BookSummary[]> {
-  const books = await listBooks()
+  const books = shelfOrder(await listBooks())
   return Promise.all(
     books.map(async (book) => {
       const chapters = await listChapters(book.id)
@@ -71,6 +73,16 @@ export function Dashboard() {
   const restyle = async (bookId: string, style: { cover?: string; highlight?: string }) => {
     try {
       await setBookStyle(bookId, style)
+    } catch {
+      setError('Das hat nicht geklappt. Bitte versuche es noch einmal.')
+    }
+    await refresh()
+  }
+
+  /** Star and pattern: saved, then the shelf is sorted again. */
+  const reshelve = async (action: () => Promise<unknown>) => {
+    try {
+      await action()
     } catch {
       setError('Das hat nicht geklappt. Bitte versuche es noch einmal.')
     }
@@ -126,6 +138,7 @@ export function Dashboard() {
               className="book-cover"
               aria-label={book.title}
               style={{ '--cover': coverOf(book) } as CSSProperties}
+              data-pattern={patternOf(book)}
             >
               <span className="book-cover-title">{book.title}</span>
               <span className="book-cover-rule" aria-hidden="true" />
@@ -135,6 +148,16 @@ export function Dashboard() {
               </span>
               <span className="book-cover-date">{lastChanged(book.updatedAt)}</span>
             </Link>
+            <button
+              type="button"
+              className={isStarred(book) ? 'book-star-button starred' : 'book-star-button'}
+              aria-label={`${book.title} mit Stern markieren`}
+              aria-pressed={isStarred(book)}
+              title={isStarred(book) ? 'Stern entfernen' : 'Mit Stern markieren: steht dann vorn'}
+              onClick={() => void reshelve(() => setStarred(book.id, !isStarred(book)))}
+            >
+              <span aria-hidden="true">{isStarred(book) ? '★' : '☆'}</span>
+            </button>
             <button
               type="button"
               className="book-menu-button"
@@ -149,6 +172,7 @@ export function Dashboard() {
                 book={book}
                 onCover={(cover) => void restyle(book.id, { cover })}
                 onHighlight={(highlight) => void restyle(book.id, { highlight })}
+                onPattern={(pattern) => void reshelve(() => setPattern(book.id, pattern))}
                 onDialect={(dialect) =>
                   void updateSpelling(book.id, (current) => ({ ...current, dialect }))
                     .catch(() => setError('Das hat nicht geklappt. Bitte versuche es noch einmal.'))

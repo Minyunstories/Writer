@@ -88,12 +88,13 @@ button.dashboard-new {
 }
 
 .book-cover {
+  --pad-x: 1.25rem;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   aspect-ratio: 2 / 3;
-  padding: 1.6rem 1.25rem;
+  padding: 1.6rem var(--pad-x);
   border-radius: 3px 10px 10px 3px;
   background: var(--cover);
   box-shadow:
@@ -144,6 +145,102 @@ button.dashboard-new {
   color: rgba(246, 238, 224, 0.66);
 }
 
+/*
+ * Cover patterns, Ton in Ton: light lines over the cover colour. Each pattern sets the
+ * image and its tile size; the cover draws it as a band at the top and bottom, the menu
+ * as a swatch.
+ */
+[data-pattern='stripes'] {
+  --pattern: repeating-linear-gradient(45deg, rgba(246, 238, 224, 0.1) 0 2px, transparent 2px 11px);
+}
+
+[data-pattern='diamonds'] {
+  --pattern: repeating-linear-gradient(45deg, rgba(246, 238, 224, 0.12) 0 1px, transparent 1px 13px),
+    repeating-linear-gradient(-45deg, rgba(246, 238, 224, 0.12) 0 1px, transparent 1px 13px);
+}
+
+[data-pattern='dots'] {
+  --pattern: radial-gradient(rgba(246, 238, 224, 0.17) 1.4px, transparent 1.9px);
+  --pattern-size: 11px 11px;
+}
+
+[data-pattern='zigzag'] {
+  --pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='9'%3E%3Cpath d='M0 7.5L7 1.5L14 7.5' fill='none' stroke='%23f6eee0' stroke-opacity='.16' stroke-width='1.3'/%3E%3C/svg%3E");
+}
+
+[data-pattern='scales'] {
+  --pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Cpath d='M0 8a8 8 0 0 1 16 0M-8 16a8 8 0 0 1 16 0M8 16a8 8 0 0 1 16 0' fill='none' stroke='%23f6eee0' stroke-opacity='.15' stroke-width='1.2'/%3E%3C/svg%3E");
+}
+
+/*
+ * The bands sit at the top and bottom, right of the spine, with the text between them.
+ * When a long title needs the room, the bands get narrower (the top one never narrower
+ * than the star and the menu); only then does the book grow taller.
+ */
+.book-cover[data-pattern] {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.book-cover[data-pattern]::before,
+.book-cover[data-pattern]::after {
+  content: '';
+  /* Grow from nothing up to 22 %: only their minimum counts when the book's height is worked out. */
+  flex: 1 1 0;
+  max-height: 22%;
+  align-self: stretch;
+  margin-left: calc(12px - var(--pad-x));
+  margin-right: calc(-1 * var(--pad-x));
+  background-image: var(--pattern);
+  background-size: var(--pattern-size, auto);
+}
+
+.book-cover[data-pattern]::before {
+  min-height: 44px;
+  margin-bottom: auto;
+  border-bottom: 1px solid rgba(246, 238, 224, 0.3);
+  border-top-right-radius: 10px;
+}
+
+.book-cover[data-pattern]::after {
+  min-height: 18px;
+  margin-top: auto;
+  border-top: 1px solid rgba(246, 238, 224, 0.3);
+  border-bottom-right-radius: 10px;
+}
+
+.book-cover[data-pattern] .book-cover-title {
+  margin-top: 0.8rem;
+}
+
+.book-cover[data-pattern] .book-cover-date {
+  margin-bottom: 0.8rem;
+}
+
+/* The star sits right of the spine, opposite the menu. */
+button.book-star-button {
+  position: absolute;
+  top: 6px;
+  left: 14px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  color: rgba(246, 238, 224, 0.45);
+  font-size: 20px;
+  line-height: 1;
+}
+
+button.book-star-button.starred {
+  color: var(--primary);
+}
+
+button.book-star-button:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.22);
+  color: var(--primary);
+}
+
 button.book-menu-button {
   position: absolute;
   top: 6px;
@@ -187,6 +284,19 @@ button.book-menu-button:hover:not(:disabled) {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8px;
+}
+
+.book-menu-patterns {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 6px;
+}
+
+/* Also on hover, where the general button style would replace the background. */
+button.book-menu-pattern,
+button.book-menu-pattern:hover:not(:disabled) {
+  background-image: var(--pattern);
+  background-size: var(--pattern-size, auto);
 }
 
 .book-menu-highlights {
@@ -293,11 +403,26 @@ button.book-new {
   }
 
   .book-cover {
-    padding: 1.2rem 0.8rem;
+    --pad-x: 0.8rem;
+    padding: 1.2rem var(--pad-x);
   }
 
   .book-cover-title {
     font-size: 1.3rem;
+  }
+
+  /* Closer lines between the bands, so two-line titles fit without a taller book. */
+  .book-cover[data-pattern] .book-cover-title {
+    margin-top: 0.4rem;
+  }
+
+  .book-cover[data-pattern] .book-cover-rule {
+    margin: 0.7rem 0 0.55rem;
+  }
+
+  .book-cover[data-pattern] .book-cover-date {
+    margin-top: 0.4rem;
+    margin-bottom: 0.4rem;
   }
 
   .book-menu {

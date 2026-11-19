@@ -33,6 +33,17 @@ export interface Book {
   vocabulary?: BookVocabulary
   /** Forms of address (address module). Missing: empty. */
   address?: BookAddress
+  /** Star and cover pattern on the shelf. Missing: neither. */
+  shelf?: BookShelf
+}
+
+/** How the book stands on the shelf. Stored in shelf.json. */
+export interface BookShelf {
+  /** Marked with a star: the book stands at the front. */
+  starred?: true
+  /** Cover pattern id. Ids from a newer app version are kept as they are (and not drawn). */
+  pattern?: string
+  extra?: Extra
 }
 
 /** Module switches of a book, by module id. Ids from a newer app version are kept as they are. */

@@ -138,3 +138,64 @@ test('the book menu switches modules on and off', async () => {
   await user.click(within(screen.getByRole('dialog', { name: 'Buchmenü für Sturmlied' })).getByRole('checkbox', { name: 'Vokabelheft' }))
   await waitFor(async () => expect((await getBook(book.id))!.modules).toBeUndefined())
 })
+
+test('a star puts a book at the front; removing it puts the book back', async () => {
+  const user = userEvent.setup()
+  const older = await createBook('Sturmlied')
+  await new Promise((resolve) => setTimeout(resolve, 5))
+  await createBook('Windlied')
+  renderDashboard()
+  await screen.findByRole('article', { name: 'Windlied' })
+  const titles = () => screen.getAllByRole('article').map((card) => card.getAttribute('aria-label'))
+  expect(titles()).toEqual(['Windlied', 'Sturmlied'])
+
+  const star = screen.getByRole('button', { name: 'Sturmlied mit Stern markieren' })
+  expect(star).toHaveAttribute('aria-pressed', 'false')
+  await user.click(star)
+  await waitFor(() => expect(titles()).toEqual(['Sturmlied', 'Windlied']))
+  expect(screen.getByRole('button', { name: 'Sturmlied mit Stern markieren' })).toHaveAttribute('aria-pressed', 'true')
+  const stored = (await getBook(older.id))!
+  expect(stored.shelf).toEqual({ starred: true })
+  expect(stored.updatedAt).toBe(older.updatedAt)
+
+  await user.click(screen.getByRole('button', { name: 'Sturmlied mit Stern markieren' }))
+  await waitFor(() => expect(titles()).toEqual(['Windlied', 'Sturmlied']))
+  expect((await getBook(older.id))!.shelf).toBeUndefined()
+})
+
+test('the book menu sets a cover pattern, drawn on the cover', async () => {
+  const user = userEvent.setup()
+  const book = await createBook('Sturmlied')
+  renderDashboard()
+  const card = await screen.findByRole('article', { name: 'Sturmlied' })
+  const cover = within(card).getByRole('link', { name: 'Sturmlied' })
+  expect(cover).not.toHaveAttribute('data-pattern')
+
+  await user.click(within(card).getByRole('button', { name: 'Buchmenü für Sturmlied' }))
+  const menu = () => screen.getByRole('dialog', { name: 'Buchmenü für Sturmlied' })
+  expect(within(menu()).getByText('Muster')).toBeInTheDocument()
+  expect(within(menu()).getByRole('button', { name: 'Ohne Muster' })).toHaveAttribute('aria-pressed', 'true')
+  await user.click(within(menu()).getByRole('button', { name: 'Muster Rauten' }))
+  await waitFor(async () => expect((await getBook(book.id))!.shelf).toEqual({ pattern: 'diamonds' }))
+  await waitFor(() => expect(cover).toHaveAttribute('data-pattern', 'diamonds'))
+  // The menu stays open so the next pattern can be tried.
+  await waitFor(() => expect(within(menu()).getByRole('button', { name: 'Muster Rauten' })).toHaveAttribute('aria-pressed', 'true'))
+  expect(within(menu()).getByRole('button', { name: 'Ohne Muster' })).toHaveAttribute('aria-pressed', 'false')
+
+  await user.click(within(menu()).getByRole('button', { name: 'Ohne Muster' }))
+  await waitFor(async () => expect((await getBook(book.id))!.shelf).toBeUndefined())
+  await waitFor(() => expect(cover).not.toHaveAttribute('data-pattern'))
+})
+
+test('every pattern is offered, in the cover colour', async () => {
+  const user = userEvent.setup()
+  await createBook('Sturmlied', { cover: '#283650' })
+  renderDashboard()
+  await user.click(await screen.findByRole('button', { name: 'Buchmenü für Sturmlied' }))
+  const menu = screen.getByRole('dialog', { name: 'Buchmenü für Sturmlied' })
+  for (const name of ['Streifen', 'Rauten', 'Punkte', 'Zickzack', 'Schuppen']) {
+    const swatch = within(menu).getByRole('button', { name: `Muster ${name}` })
+    expect(swatch.style.backgroundColor).toBe('rgb(40, 54, 80)')
+    expect(swatch).toHaveAttribute('data-pattern')
+  }
+})

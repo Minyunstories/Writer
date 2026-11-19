@@ -2,6 +2,7 @@ import { cleanDate, cleanPlace, isColor } from '../lib/bookStyle'
 import { cleanSpelling } from '../storage/spelling'
 import { isStatus } from '../lib/chapterStatus'
 import { modulesFile, parseModules } from '../modules/modulesFile'
+import { parseShelf, shelfFile } from '../shelf/shelfFile'
 import { parseVocabulary, vocabularyFile } from '../vocabulary/vocabularyFile'
 import { addressFile, parseAddress } from '../address/addressFile'
 import type { Book, BookNote, BookRelations, Relation, RelationType, Chapter, ChapterComment, ChapterGroup, ChapterStatus, ChapterVersion, FontId, WikiEntry, WikiFolder, WikiImage, WikiProperty } from '../types'
@@ -113,6 +114,8 @@ export function bundleToFiles({ book, chapters, folders, entries, images, versio
   if (graph) files.set(`${prefix}wiki/graph.json`, graph)
   const modules = book.modules && modulesFile(book.modules)
   if (modules) files.set(`${prefix}modules.json`, modules)
+  const shelf = book.shelf && shelfFile(book.shelf)
+  if (shelf) files.set(`${prefix}shelf.json`, shelf)
   // Written whether or not the module is on: switching it off only hides it.
   const vocabulary = book.vocabulary && vocabularyFile(book.vocabulary)
   if (vocabulary) files.set(`${prefix}vocabulary.json`, vocabulary)
@@ -590,6 +593,8 @@ export function filesToBundle(bookId: string, files: FileSet): BookBundle {
   if (graph && Object.keys(graph).length) book.graph = graph
   const modules = parseModules(files.get(`${prefix}modules.json`))
   if (modules && Object.keys(modules).length) book.modules = modules
+  const shelf = parseShelf(files.get(`${prefix}shelf.json`))
+  if (shelf && shelfFile(shelf)) book.shelf = shelf
   const vocabulary = parseVocabulary(files.get(`${prefix}vocabulary.json`))
   if (vocabulary && vocabularyFile(vocabulary)) book.vocabulary = vocabulary
   const address = parseAddress(files.get(`${prefix}address.json`))
@@ -677,7 +682,7 @@ export function parseVersion(bookId: string, data: FileData | undefined): Chapte
   return version
 }
 
-export type PathKind = 'book' | 'chapter' | 'outline' | 'folders' | 'entry' | 'image' | 'tags' | 'templates' | 'style' | 'dates' | 'place' | 'wikiOrder' | 'folderColors' | 'notes' | 'stars' | 'templateBlocks' | 'spelling' | 'collection' | 'version' | 'status' | 'comments' | 'relations' | 'graph' | 'groups' | 'modules' | 'vocabulary' | 'address'
+export type PathKind = 'book' | 'chapter' | 'outline' | 'folders' | 'entry' | 'image' | 'tags' | 'templates' | 'style' | 'dates' | 'place' | 'wikiOrder' | 'folderColors' | 'notes' | 'stars' | 'templateBlocks' | 'spelling' | 'collection' | 'version' | 'status' | 'comments' | 'relations' | 'graph' | 'groups' | 'modules' | 'shelf' | 'vocabulary' | 'address'
 
 /** What a repository path holds, or null for files the app does not manage. */
 export function classifyPath(path: string): { bookId: string; kind: PathKind; id: string } | null {
@@ -694,6 +699,7 @@ export function classifyPath(path: string): { bookId: string; kind: PathKind; id
   if (rest === 'status.json') return { bookId, kind: 'status', id: bookId }
   if (rest === 'groups.json') return { bookId, kind: 'groups', id: bookId }
   if (rest === 'modules.json') return { bookId, kind: 'modules', id: bookId }
+  if (rest === 'shelf.json') return { bookId, kind: 'shelf', id: bookId }
   if (rest === 'vocabulary.json') return { bookId, kind: 'vocabulary', id: bookId }
   if (rest === 'address.json') return { bookId, kind: 'address', id: bookId }
   if (rest === 'comments.json') return { bookId, kind: 'comments', id: bookId }
