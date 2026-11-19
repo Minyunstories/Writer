@@ -1002,7 +1002,7 @@ export function BookView({ renderChapter }: Props) {
                 )}
               </div>
               {wikiView === 'address' && isModuleOn(book, 'address') ? (
-                <RanksPage book={book} folders={folders} onChanged={() => void reload()} />
+                <RanksPage book={book} folders={folders} entries={entries} onChanged={() => void reload()} />
               ) : wikiView === 'graph' ? (
                 <div className="wiki-graph-page">
                   <RelationGraph book={book} entries={entries} folders={folders} onOpenEntry={openPanel} onChanged={() => void reload()} />

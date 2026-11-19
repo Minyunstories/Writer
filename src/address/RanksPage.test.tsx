@@ -4,8 +4,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { beforeEach, expect, test } from 'vitest'
 import { addRank } from '../storage/address'
 import { createBook, getBook, resetDatabaseForTests } from '../storage/db'
-import { createFolder, listFolders } from '../storage/wiki'
-import type { Book, WikiFolder } from '../types'
+import { createEntry, createFolder, listEntries, listFolders } from '../storage/wiki'
+import type { Book, WikiEntry, WikiFolder } from '../types'
 import { RanksPage } from './RanksPage'
 
 beforeEach(async () => {
@@ -13,15 +13,15 @@ beforeEach(async () => {
 })
 
 function Harness({ bookId }: { bookId: string }) {
-  const [state, setState] = useState<{ book: Book; folders: WikiFolder[] }>()
+  const [state, setState] = useState<{ book: Book; folders: WikiFolder[]; entries: WikiEntry[] }>()
   const load = useCallback(async () => {
-    const [book, folders] = await Promise.all([getBook(bookId), listFolders(bookId)])
-    setState({ book: book!, folders })
+    const [book, folders, entries] = await Promise.all([getBook(bookId), listFolders(bookId), listEntries(bookId)])
+    setState({ book: book!, folders, entries })
   }, [bookId])
   useEffect(() => {
     void load()
   }, [load])
-  return state ? <RanksPage book={state.book} folders={state.folders} onChanged={() => void load()} /> : null
+  return state ? <RanksPage book={state.book} folders={state.folders} entries={state.entries} onChanged={() => void load()} /> : null
 }
 
 const ranksOf = async (bookId: string) => (await getBook(bookId))!.address?.ranks ?? []
@@ -90,4 +90,60 @@ test('the placeholder hint is shown', async () => {
   const book = await createBook('B')
   render(<Harness bookId={book.id} />)
   expect(await screen.findByText('{Vorname} und {Nachname} werden mit den Namen der Figur gefüllt.')).toBeInTheDocument()
+})
+
+const importText = JSON.stringify({
+  writer: 'address-import',
+  version: 1,
+  ranks: [
+    { name: 'Knight', public: 'Sir {Vorname}' },
+    { name: 'Duchess', public: 'Your Grace' },
+  ],
+  people: [
+    { name: 'Mira', rank: 'Knight' },
+    { name: 'Pascal', rank: 'Knight' },
+  ],
+  forms: [{ from: 'Mira', to: 'Lea', public: 'My Lady' }],
+})
+
+async function bookWithFigures() {
+  const book = await createBook('B')
+  const chars = await createFolder(book.id, 'Characters')
+  await createEntry(book.id, 'Mira Hale', chars.id)
+  await createEntry(book.id, 'Lea', chars.id)
+  return book
+}
+
+test('Anreden einlesen: asks first, then replaces the address data and reports what it took over', async () => {
+  const user = userEvent.setup()
+  const book = await bookWithFigures()
+  await addRank(book.id, 'Herzogin')
+  render(<Harness bookId={book.id} />)
+  await user.upload(await screen.findByLabelText('Anreden einlesen'), new File([importText], 'anreden.json', { type: 'application/json' }))
+  const dialog = await screen.findByRole('alertdialog', { name: 'Anreden einlesen?' })
+  expect(dialog).toHaveTextContent('Das ersetzt alle Ränge, Angaben zu Figuren und Abweichungen, die bisher unter „Anreden“ stehen.')
+  await user.click(within(dialog).getByRole('button', { name: 'Einlesen' }))
+  expect(await screen.findByText('Eingelesen: 2 Ränge, 1 Figur, 1 Abweichung. Nicht gefunden: Pascal.')).toHaveAttribute('role', 'status')
+  expect((await ranksOf(book.id)).map((rank) => rank.name)).toEqual(['Knight', 'Duchess'])
+  expect(await screen.findByRole('group', { name: 'Knight' })).toBeInTheDocument()
+})
+
+test('Anreden einlesen: cancelling the question changes nothing', async () => {
+  const user = userEvent.setup()
+  const book = await bookWithFigures()
+  render(<Harness bookId={book.id} />)
+  await user.upload(await screen.findByLabelText('Anreden einlesen'), new File([importText], 'anreden.json', { type: 'application/json' }))
+  await user.click(within(await screen.findByRole('alertdialog', { name: 'Anreden einlesen?' })).getByRole('button', { name: 'Abbrechen' }))
+  expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+  expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  expect(await ranksOf(book.id)).toEqual([])
+})
+
+test('Anreden einlesen: a file Writer cannot read says so', async () => {
+  const user = userEvent.setup()
+  const book = await bookWithFigures()
+  render(<Harness bookId={book.id} />)
+  await user.upload(await screen.findByLabelText('Anreden einlesen'), new File(['{"writer":"other"}'], 'x.json', { type: 'application/json' }))
+  expect(await screen.findByRole('status')).toHaveTextContent('Diese Datei kann Writer nicht als Anreden einlesen.')
+  expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
 })

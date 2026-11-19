@@ -1,4 +1,5 @@
-import type { AddressChange, AddressForm, AddressPerson, AddressPersonChange, AddressRank, BookAddress } from '../types'
+import { planAddressImport, type AddressImport, type ImportReport } from '../address/importFile'
+import type { AddressChange, AddressForm, AddressPerson, AddressPersonChange, AddressRank, BookAddress, WikiEntry } from '../types'
 import { announceChange, db, newId } from './connection'
 
 const empty = (): BookAddress => ({ ranks: [], people: [], forms: [] })
@@ -161,4 +162,15 @@ export async function deleteForm(bookId: string, from: string, to: string): Prom
     if (!gone.length) return null
     return { ...address, forms: address.forms.filter((form) => !gone.includes(form)), deleted: forget(address, gone.map((form) => form.id)) }
   })
+}
+
+/** Replaces the book's ranks, figure details and exceptions with an import file's (see importFile.ts). */
+export async function importAddress(bookId: string, data: AddressImport, figures: WikiEntry[]): Promise<ImportReport> {
+  let report: ImportReport = { ranks: 0, people: 0, forms: 0, missing: [] }
+  await change(bookId, (address) => {
+    const planned = planAddressImport(address, data, figures, { id: newId, now: Date.now() })
+    report = planned.report
+    return planned.address
+  })
+  return report
 }

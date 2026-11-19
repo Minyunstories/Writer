@@ -1,5 +1,7 @@
 import { beforeEach, expect, test } from 'vitest'
-import { addRank, deleteForm, deleteRank, moveRank, saveForm, setFigureFolder, setPerson, updateRank } from './address'
+import { addRank, deleteForm, deleteRank, importAddress, moveRank, saveForm, setFigureFolder, setPerson, updateRank } from './address'
+import { CHANGED_EVENT } from './connection'
+import type { WikiEntry } from '../types'
 import { createBook, getBook, resetDatabaseForTests } from './db'
 
 beforeEach(async () => {
@@ -125,4 +127,41 @@ test('setFigureFolder stores the choice', async () => {
   expect((await addressOf(book.id)).folder).toBe('*')
   await setFigureFolder(book.id, 'f1')
   expect((await addressOf(book.id)).folder).toBe('f1')
+})
+
+const figure = (id: string, name: string): WikiEntry => ({ id, bookId: 'b', folderId: null, name, aliases: [], properties: [], imageIds: [], body: '', autoLink: true, createdAt: 0, updatedAt: 0 })
+
+test('importAddress replaces ranks, figures and exceptions in one go and announces the change', async () => {
+  const book = await createBook('B')
+  const old = await addRank(book.id, 'Herzogin')
+  await saveForm(book.id, { from: 'mira', to: 'lea', public: 'Lea', changes: [] }, order)
+  const oldForm = (await addressOf(book.id)).forms[0].id
+  let announced = 0
+  const listener = () => announced++
+  window.addEventListener(CHANGED_EVENT, listener)
+  try {
+    const report = await importAddress(
+      book.id,
+      {
+        ranks: [{ name: 'Knight', public: 'Sir {Vorname}' }],
+        people: [{ name: 'Mira', rank: 'Knight' }],
+        forms: [{ from: 'Mira', to: 'Lea', public: 'My Lady', changes: [{ label: 'Later', private: 'Lea' }] }],
+      },
+      [figure('mira', 'Mira Hale'), figure('lea', 'Lea')],
+    )
+    expect(report).toEqual({ ranks: 1, people: 1, forms: 1, missing: [] })
+  } finally {
+    window.removeEventListener(CHANGED_EVENT, listener)
+  }
+  expect(announced).toBe(1)
+  const address = await addressOf(book.id)
+  expect(address.ranks.map((rank) => rank.name)).toEqual(['Knight'])
+  expect(address.people).toEqual([expect.objectContaining({ entryId: 'mira', rankId: address.ranks[0].id })])
+  expect(address.forms).toEqual([expect.objectContaining({ from: 'mira', to: 'lea', public: 'My Lady' })])
+  expect(address.forms[0].changes[0].chapterId).toBeUndefined()
+  expect(address.deleted).toEqual(expect.arrayContaining([old.id, oldForm]))
+})
+
+test('importAddress on a missing book writes nothing', async () => {
+  expect(await importAddress('nope', { ranks: [], people: [], forms: [] }, [])).toEqual({ ranks: 0, people: 0, forms: 0, missing: [] })
 })

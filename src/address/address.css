@@ -360,3 +360,27 @@
   clip: rect(0 0 0 0);
   white-space: nowrap;
 }
+
+.ranks-import {
+  position: relative;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-muted);
+  padding: 0.35rem 0.5rem;
+}
+
+.ranks-import:hover {
+  color: var(--text);
+}
+
+.ranks-import input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.ranks-report {
+  margin: 0.6rem 0;
+  color: var(--text);
+}
