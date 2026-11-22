@@ -18,7 +18,7 @@ export const SHORTCUT_GROUPS: { title: string; items: Shortcut[] }[] = [
   {
     title: 'Nachschlagen und sammeln',
     items: [
-      { keys: 'Strg+Umschalt+S', what: 'Synonyme für das Wort am Cursor' },
+      { keys: 'Strg+Umschalt+S', what: 'Synonyme für das Wort am Cursor (zuerst die Gruppen der Sammlung)' },
       { keys: 'Strg+Umschalt+K', what: 'markierten Text in die Sammlung' },
       { keys: 'Strg+Umschalt+L', what: 'markiertes Wort ins Vokabelheft (wenn das Modul an ist)' },
       { keys: '[[', what: 'Wiki-Vorschläge' },

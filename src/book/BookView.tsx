@@ -63,6 +63,7 @@ import { FEATHER } from '../dashboard/Dashboard'
 import { highlightOf } from '../lib/bookStyle'
 import { AddToCollectionDialog } from '../collection/AddToCollectionDialog'
 import { collectionCompletionSource } from '../collection/collectionComplete'
+import { synonymCollection } from '../synonyms/synonymBox'
 import { parseCatalogue } from '../collection/collectionFile'
 import { CollectionPanel } from '../collection/CollectionPanel'
 import { CommentsPanel } from '../comments/CommentsPanel'
@@ -477,6 +478,7 @@ export function BookView({ renderChapter }: Props) {
         },
         [collectionCompletionSource(() => collectionRef.current.items)],
       ),
+      synonymCollection(() => collectionRef.current.items),
     ],
     // One set per book; the lists are read through refs.
     // eslint-disable-next-line react-hooks/exhaustive-deps

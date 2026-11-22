@@ -23,7 +23,8 @@ export function formsOf(word: string): string[] {
   return baseForms(word.replace(/’/g, "'")).filter((form) => form.length >= 3)
 }
 
-const groupKey = (item: CollectionItem) => `${item.category}\u0000${item.group}`
+/** A group is its name within its category. */
+export const groupKey = (item: CollectionItem) => `${item.category}\u0000${item.group}`
 const add = (index: Map<string, Set<string>>, word: string, key: string) => {
   const keys = index.get(word) ?? new Set<string>()
   keys.add(key)
