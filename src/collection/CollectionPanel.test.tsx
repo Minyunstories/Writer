@@ -9,6 +9,7 @@ const collection: Collection = {
   guide: { title: 'Reaction-Beat-Katalog', rules: ['**Cut** before you swap.'], selfcheck: ['Can I cut it?'], notes: { '1. Nod': 'the nod family' } },
   items: [
     { id: '1', text: 'She set down the cup.', category: '1. Nod', group: 'Cut', createdAt: 1, updatedAt: 1 },
+    { id: '3', text: 'She dipped her head.', category: '1. Nod', createdAt: 3, updatedAt: 3 },
     { id: '2', text: 'He grinned.', category: '2. Smile', note: 'sparsam', createdAt: 2, updatedAt: 2, source: { bookId: 'b', bookTitle: 'Buch', chapterId: 'c', offset: 3 } },
   ],
 }
@@ -19,6 +20,7 @@ function setup() {
     onInsert: vi.fn(),
     onAddSelection: vi.fn(),
     onDelete: vi.fn(),
+    onDeleteCategory: vi.fn(),
     onImport: vi.fn(async () => ({ added: 3, known: 1 })),
     onOpenSource: vi.fn(),
     onClose: vi.fn(),
@@ -38,10 +40,10 @@ test('items are shown by category and group; a click puts one at the cursor, the
   expect(within(panel).getByText('Cut', { selector: '.collection-group-label' })).toBeInTheDocument()
   await user.click(within(panel).getByRole('button', { name: 'She set down the cup.' }))
   expect(props.onInsert).toHaveBeenCalledWith('She set down the cup.')
-  await user.click(within(panel).getAllByRole('button', { name: 'Kopieren' })[1])
+  await user.click(within(panel).getAllByRole('button', { name: 'Kopieren' })[2])
   expect(writeText).toHaveBeenCalledWith('He grinned.')
   await user.click(within(panel).getByRole('button', { name: 'aus: Buch' }))
-  expect(props.onOpenSource).toHaveBeenCalledWith(collection.items[1].source)
+  expect(props.onOpenSource).toHaveBeenCalledWith(collection.items[2].source)
 })
 
 test('the search narrows the list; the rules can be folded away', async () => {
@@ -80,4 +82,30 @@ test('the dialog takes edited text, an existing or a new category, a group and a
   await user.type(within(dialog).getByLabelText('Neue Kategorie'), 'Blicke')
   await user.click(within(dialog).getByRole('button', { name: 'Aufnehmen' }))
   expect(onSave).toHaveBeenLastCalledWith(expect.objectContaining({ category: 'Blicke' }))
+})
+
+test('a whole category can be deleted after asking in its heading; cancel keeps it', async () => {
+  const user = userEvent.setup()
+  const props = setup()
+  await user.click(screen.getByRole('button', { name: 'Bereich „1. Nod“ löschen' }))
+  // The question names the whole category, even when the search shows only part of it.
+  expect(screen.getByText('Alle 2 Einträge löschen?')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Abbrechen' })).toHaveFocus()
+  await user.click(screen.getByRole('button', { name: 'Abbrechen' }))
+  expect(props.onDeleteCategory).not.toHaveBeenCalled()
+  expect(screen.queryByText('Alle 2 Einträge löschen?')).not.toBeInTheDocument()
+
+  await user.type(screen.getByRole('searchbox', { name: 'Sammlung durchsuchen' }), 'cup')
+  await user.click(screen.getByRole('button', { name: 'Bereich „1. Nod“ löschen' }))
+  expect(screen.getByText('Alle 2 Einträge löschen?')).toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: 'Ja, löschen' }))
+  expect(props.onDeleteCategory).toHaveBeenCalledWith('1. Nod')
+  expect(screen.queryByText('Alle 2 Einträge löschen?')).not.toBeInTheDocument()
+})
+
+test('a category with a single entry asks in the singular', async () => {
+  const user = userEvent.setup()
+  setup()
+  await user.click(screen.getByRole('button', { name: 'Bereich „2. Smile“ löschen' }))
+  expect(screen.getByText('Den einen Eintrag löschen?')).toBeInTheDocument()
 })

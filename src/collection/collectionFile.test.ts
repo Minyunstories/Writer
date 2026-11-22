@@ -32,6 +32,15 @@ test('merging keeps the newer version of each item and honours deletions from bo
   expect(merged.deleted).toEqual(['b', 'c'])
 })
 
+test('a category deleted on one device while the other adds to it: only the new entry survives', () => {
+  const before: Collection = { items: [item('a', 'sweltering'), item('b', 'chilly'), item('c', 'He nodded.', 1, { category: '1. Nod' })] }
+  const mine: Collection = { items: [before.items[2]], deleted: ['a', 'b'] }
+  const theirs: Collection = { items: [...before.items, item('d', 'scorching', 2)] }
+  const merged = mergeCollections(mine, theirs)
+  expect(merged.items.map((i) => i.text)).toEqual(['He nodded.', 'scorching'])
+  expect(merged.deleted).toEqual(['a', 'b'])
+})
+
 test('the beat catalogue becomes items with its rules as a guide', () => {
   const html = `<script>const DATA = {
   "rules": ["**Cut** first."],

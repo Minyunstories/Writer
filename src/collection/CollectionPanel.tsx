@@ -10,6 +10,8 @@ interface Props {
   onInsert: (text: string) => void
   onAddSelection: () => void
   onDelete: (id: string) => void
+  /** Deletes every entry of a category (after asking in its heading). */
+  onDeleteCategory?: (category: string) => void
   onImport: (source: string) => Promise<{ added: number; known: number } | null>
   onOpenSource: (source: NonNullable<CollectionItem['source']>) => void
   onClose: () => void
@@ -37,11 +39,12 @@ function arrange(items: CollectionItem[]) {
 }
 
 /** Phrases, beats and words shared by all books: put in at the cursor or copied. */
-export function CollectionPanel({ collection, tabs, onInsert, onAddSelection, onDelete, onImport, onOpenSource, onClose }: Props) {
+export function CollectionPanel({ collection, tabs, onInsert, onAddSelection, onDelete, onDeleteCategory, onImport, onOpenSource, onClose }: Props) {
   const [query, setQuery] = useState('')
   const [guideOpen, setGuideOpen] = useState(readGuideOpen)
   const [report, setReport] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
+  const [asking, setAsking] = useState<string | null>(null)
 
   const shown = useMemo(() => {
     const words = query.trim().toLowerCase()
@@ -76,6 +79,9 @@ export function CollectionPanel({ collection, tabs, onInsert, onAddSelection, on
     const result = await onImport(await file.text())
     setReport(result ? `${result.added} neu, ${result.known} schon vorhanden.` : 'Diese Datei ist kein Katalog, den Writer lesen kann.')
   }
+
+  // The question always counts the whole category, not only what the search shows.
+  const sizeOf = (category: string) => collection.items.filter((item) => item.category === category).length
 
   const guide = collection.guide
   return (
@@ -148,7 +154,41 @@ export function CollectionPanel({ collection, tabs, onInsert, onAddSelection, on
         ) : (
           shown.map(([category, groups]) => (
             <section key={category} className="collection-category">
-              <h3>{category}</h3>
+              <div className="collection-category-head">
+                <h3>{category}</h3>
+                {onDeleteCategory &&
+                  (asking === category ? (
+                    <div className="collection-category-asking">
+                      <span className="collection-category-question">
+                        {sizeOf(category) === 1 ? 'Den einen Eintrag löschen?' : `Alle ${sizeOf(category)} Einträge löschen?`}
+                      </span>
+                      <span className="collection-category-choices">
+                        <button type="button" className="ghost" onClick={() => setAsking(null)} autoFocus>
+                          Abbrechen
+                        </button>
+                        <button
+                          type="button"
+                          className="danger"
+                          onClick={() => {
+                            setAsking(null)
+                            onDeleteCategory(category)
+                          }}
+                        >
+                          Ja, löschen
+                        </button>
+                      </span>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className="ghost collection-category-delete"
+                      aria-label={`Bereich „${category}“ löschen`}
+                      onClick={() => setAsking(category)}
+                    >
+                      Bereich löschen
+                    </button>
+                  ))}
+              </div>
               {guide?.notes?.[category] && <p className="muted collection-category-note">{guide.notes[category]}</p>}
               {[...groups].map(([group, items]) => (
                 <div key={group} className="collection-group">

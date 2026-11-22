@@ -71,8 +71,45 @@
   font-weight: 600;
 }
 
-.collection-category h3 {
+.collection-category-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.2rem 0.6rem;
   margin: 0 0 0.25rem;
+}
+
+.collection-category-delete {
+  padding: 0.2rem 0.4rem;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.collection-category-delete:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.collection-category-asking {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 13px;
+}
+
+.collection-category-choices {
+  display: inline-flex;
+  gap: 0.4rem;
+}
+
+.collection-category-asking button {
+  padding: 0.25rem 0.6rem;
+  font-size: 13px;
+}
+
+.collection-category h3 {
+  margin: 0;
   font-family: var(--font-display);
   font-size: 1.05rem;
 }

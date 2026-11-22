@@ -81,6 +81,24 @@ export async function deleteCollectionItem(id: string): Promise<void> {
   }))
 }
 
+/** Deletes every item of one category; their ids are remembered for the sync. Returns how many. */
+export async function deleteCollectionCategory(category: string): Promise<number> {
+  const current = await getCollection()
+  const ids = current.items.filter((item) => item.category === category).map((item) => item.id)
+  if (ids.length === 0) return 0
+  let removed = 0
+  await changeCollection((collection) => {
+    const gone = collection.items.filter((item) => item.category === category).map((item) => item.id)
+    removed = gone.length
+    return {
+      ...collection,
+      items: collection.items.filter((item) => item.category !== category),
+      deleted: [...new Set([...(collection.deleted ?? []), ...gone])],
+    }
+  })
+  return removed
+}
+
 const sameKey = (item: { text: string; category: string }) => `${item.category.trim().toLowerCase()}\u0000${item.text.trim().toLowerCase()}`
 
 /** Adds a catalogue: only what is not there yet. The catalogue's rules become the guide. */

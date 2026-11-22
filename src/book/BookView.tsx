@@ -68,7 +68,7 @@ import { CollectionPanel } from '../collection/CollectionPanel'
 import { CommentsPanel } from '../comments/CommentsPanel'
 import { useCollection } from '../collection/useCollection'
 import { splitScenes, type Scene } from '../lib/scenes'
-import { addToCollection, deleteCollectionItem, importIntoCollection } from '../storage/collection'
+import { addToCollection, deleteCollectionCategory, deleteCollectionItem, importIntoCollection } from '../storage/collection'
 import { EditorView, keymap, ViewPlugin } from '@codemirror/view'
 import { Prec } from '@codemirror/state'
 import './book.css'
@@ -1169,6 +1169,7 @@ export function BookView({ renderChapter }: Props) {
               else setCollecting({ text: '' })
             }}
             onDelete={(id) => void attempt(() => deleteCollectionItem(id))}
+            onDeleteCategory={(category) => void attempt(async () => void (await deleteCollectionCategory(category)))}
             onImport={async (source) => {
               const catalogue = parseCatalogue(source)
               if (!catalogue) return null

@@ -1,6 +1,6 @@
 import { beforeEach, expect, test } from 'vitest'
 import { resetDatabaseForTests } from './db'
-import { addToCollection, deleteCollectionItem, getCollection, importIntoCollection, updateCollectionItem } from './collection'
+import { addToCollection, deleteCollectionCategory, deleteCollectionItem, getCollection, importIntoCollection, updateCollectionItem } from './collection'
 
 beforeEach(async () => {
   await resetDatabaseForTests()
@@ -32,4 +32,24 @@ test('importing twice adds nothing twice, and keeps what the writer already had'
   const collection = await getCollection()
   expect(collection.items.map((i) => i.text)).toEqual(['He nodded.', 'She set down the cup.'])
   expect(collection.guide?.rules).toEqual(['Cut first.'])
+})
+
+test('a whole category is deleted at once; its ids are remembered, other categories stay', async () => {
+  await importIntoCollection({
+    items: [
+      { text: 'sweltering', category: 'Temperature', group: 'hot' },
+      { text: 'He nodded.', category: '1. Nod' },
+      { text: 'chilly', category: 'Temperature', group: 'cold' },
+    ],
+  })
+  const ids = (await getCollection()).items.filter((i) => i.category === 'Temperature').map((i) => i.id)
+  expect(await deleteCollectionCategory('Temperature')).toBe(2)
+  const collection = await getCollection()
+  expect(collection.items.map((i) => i.text)).toEqual(['He nodded.'])
+  expect([...collection.deleted!].sort()).toEqual([...ids].sort())
+  // Nothing there: nothing changes, not even the deleted list.
+  expect(await deleteCollectionCategory('Temperature')).toBe(0)
+  expect((await getCollection()).deleted).toHaveLength(2)
+  // Importing the same words again brings them back as new entries.
+  expect(await importIntoCollection({ items: [{ text: 'chilly', category: 'Temperature', group: 'cold' }] })).toEqual({ added: 1, known: 0 })
 })
