@@ -1,8 +1,10 @@
-import { CompletionContext } from '@codemirror/autocomplete'
+import { CompletionContext, type Completion } from '@codemirror/autocomplete'
 import { EditorState } from '@codemirror/state'
+import { EditorView } from '@codemirror/view'
 import { expect, test } from 'vitest'
 import type { CollectionItem } from '../types'
 import { collectionCompletionSource } from './collectionComplete'
+import { favoriteKey } from './favoritesFile'
 
 const items: CollectionItem[] = [
   { id: '1', text: 'She looked away.', category: 'Blicke', group: 'Ausweichen', createdAt: 1, updatedAt: 1 },
@@ -123,4 +125,29 @@ test('only the names before the brackets lead to a group, as a whole: "thin" is 
   // The beat group only matches as a group name, after the real groups.
   expect(labels(list, '//light')).toEqual(['featherlight', 'airy', 'He hid his face.'])
   expect(labels(list, '//large')).toEqual(['vast'])
+})
+
+test('within a group: favourites first, then recently used (newest first), then the rest in its order', () => {
+  const group: CollectionItem[] = ['swift', 'rapid', 'speedy', 'brisk', 'hasty'].map((text, n) => ({
+    id: `g${n}`, text, category: 'Speed', group: 'fast', createdAt: n, updatedAt: n,
+  }))
+  const prefs = () => ({
+    favorites: new Set([favoriteKey('Speed', 'brisk')]),
+    recent: new Map([[favoriteKey('Speed', 'rapid'), 1], [favoriteKey('Speed', 'hasty'), 2]]),
+  })
+  const source = collectionCompletionSource(() => group, prefs)
+  const result = source(new CompletionContext(EditorState.create({ doc: '//fast' }), 6, false))!
+  expect(result.options.map((o) => o.label)).toEqual(['brisk', 'hasty', 'rapid', 'swift', 'speedy'])
+})
+
+test('picking a suggestion puts it in place and tells which word was used', () => {
+  const used: string[] = []
+  const source = collectionCompletionSource(() => bank, undefined, (item) => used.push(item.text))
+  const view = new EditorView({ state: EditorState.create({ doc: 'He was //swift' }), parent: document.body })
+  const result = source(new CompletionContext(view.state, view.state.doc.length, false))!
+  const rapid = result.options.find((o) => o.label === 'rapid')!
+  ;(rapid.apply as (view: EditorView, completion: Completion, from: number, to: number) => void)(view, rapid, result.from, view.state.doc.length)
+  expect(view.state.doc.toString()).toBe('He was rapid')
+  expect(used).toEqual(['rapid'])
+  view.destroy()
 })

@@ -1,6 +1,7 @@
 import { EditorState, Facet, Prec, StateEffect, StateField, type Extension } from '@codemirror/state'
 import { EditorView, keymap, showTooltip, type Tooltip } from '@codemirror/view'
-import { countIn, groupKey, groupsFor } from '../collection/collectionComplete'
+import { countIn, groupKey, groupsFor, preferred, type Preferences } from '../collection/collectionComplete'
+import { favoriteKey } from '../collection/favoritesFile'
 import type { CollectionItem } from '../types'
 import { loadThesaurus, matchCase, synonymGroups, type SynonymGroup, type Thesaurus } from './thesaurus'
 
@@ -8,18 +9,28 @@ import { loadThesaurus, matchCase, synonymGroups, type SynonymGroup, type Thesau
 interface BankWord {
   text: string
   used: number
+  /** Only for words of the collection: the entry, and whether it is a favourite. */
+  item?: CollectionItem
+  favorite?: boolean
 }
 interface BankGroup {
   title: string
   words: BankWord[]
 }
 
-/** Where the box finds the collection (given by the book view). */
-const collectionFacet = Facet.define<() => CollectionItem[], (() => CollectionItem[]) | null>({
+/** What the box needs from the collection (given by the book view). */
+export interface SynonymCollection {
+  items: () => CollectionItem[]
+  preferences?: () => Preferences
+  onToggleFavorite?: (item: CollectionItem, on: boolean) => void
+  onUse?: (item: CollectionItem) => void
+}
+const collectionFacet = Facet.define<SynonymCollection, SynonymCollection | null>({
   combine: (values) => values[0] ?? null,
 })
 /** Lets the synonym box offer the groups of the collection first. */
-export const synonymCollection = (items: () => CollectionItem[]): Extension => collectionFacet.of(items)
+export const synonymCollection = (options: SynonymCollection | (() => CollectionItem[])): Extension =>
+  collectionFacet.of(typeof options === 'function' ? { items: options } : options)
 
 interface Lookup {
   from: number
@@ -28,6 +39,8 @@ interface Lookup {
   groups: SynonymGroup[] | null
   failed?: boolean
   bank: BankGroup[]
+  /** Stars clicked while this box is open, so redrawing it (thesaurus loaded late) keeps them. */
+  stars: Map<string, boolean>
 }
 
 const setLookup = StateEffect.define<Lookup | null>()
@@ -51,13 +64,23 @@ const MARKUP = /\*\*|__|==|[*_]/g
 
 /** The collection's groups for the word (named after it or holding it, also inflected), without the word itself. */
 function bankGroups(state: EditorState, word: string, from: number, to: number): BankGroup[] {
-  const items = state.facet(collectionFacet)?.() ?? []
+  const source = state.facet(collectionFacet)
+  const items = source?.items() ?? []
+  const prefs = source?.preferences?.()
   const query = word.replace(/’/g, "'").toLowerCase()
   const keys = items.length ? groupsFor(items, query) : new Set<string>()
   if (keys.size === 0) return []
   const chapter = (state.sliceDoc(0, from) + state.sliceDoc(to)).toLowerCase()
   const groups = new Map<string, BankGroup>()
-  for (const item of items) {
+  // Only the matching groups, in collection order; within a group favourites first, then recently used.
+  const matching = items.filter((item) => item.group && keys.has(groupKey(item)))
+  const order = new Map(matching.map((item, index) => [item, index]))
+  const firstOfGroup = new Map<string, number>()
+  matching.forEach((item, index) => firstOfGroup.has(groupKey(item)) || firstOfGroup.set(groupKey(item), index))
+  const sorted = [...matching].sort(
+    (a, b) => firstOfGroup.get(groupKey(a))! - firstOfGroup.get(groupKey(b))! || preferred(a, b, prefs) || order.get(a)! - order.get(b)!,
+  )
+  for (const item of sorted) {
     const key = groupKey(item)
     if (!item.group || !keys.has(key) || item.text.replace(MARKUP, '').trim().toLowerCase() === query) continue
     let group = groups.get(key)
@@ -66,7 +89,7 @@ function bankGroups(state: EditorState, word: string, from: number, to: number):
       group = { title: `Sammlung · ${item.category} · ${item.group}`, words: [] }
       groups.set(key, group)
     }
-    group.words.push({ text: item.text, used: countIn(chapter, item.text) })
+    group.words.push({ text: item.text, used: countIn(chapter, item.text), item, favorite: prefs?.favorites.has(favoriteKey(item.category, item.text)) ?? false })
   }
   return [...groups.values()]
 }
@@ -96,6 +119,7 @@ function tooltip(lookup: Lookup): Tooltip {
         })
         view.focus()
       }
+      const source = view.state.facet(collectionFacet)
       const section = (heading: string, words: BankWord[]) => {
         const group = document.createElement('div')
         group.className = 'cm-mw-synonyms-group'
@@ -120,8 +144,38 @@ function tooltip(lookup: Lookup): Tooltip {
             button.append(count)
           }
           button.addEventListener('mousedown', (event) => event.preventDefault())
-          button.addEventListener('click', () => replaceWith(word.text))
-          row.append(button)
+          button.addEventListener('click', () => {
+            replaceWith(word.text)
+            if (word.item) source?.onUse?.(word.item)
+          })
+          const item = word.item
+          if (item && source?.onToggleFavorite) {
+            // A word of the collection carries its star right next to it.
+            const pair = document.createElement('span')
+            pair.className = 'cm-mw-synonyms-pair'
+            const star = document.createElement('button')
+            star.type = 'button'
+            star.className = 'cm-mw-synonyms-star'
+            const show = (on: boolean) => {
+              star.textContent = on ? '★' : '☆'
+              star.setAttribute('aria-pressed', String(on))
+              star.setAttribute('aria-label', `„${button.dataset.word}“ als Favorit`)
+              star.title = on ? 'Favorit – zum Entfernen klicken' : 'Als Favorit markieren'
+            }
+            // Clicked in this box wins; otherwise the favourites as they are now (not when the box opened).
+            const key = favoriteKey(item.category, item.text)
+            let on = lookup.stars.get(key) ?? source.preferences?.().favorites.has(key) ?? word.favorite ?? false
+            show(on)
+            star.addEventListener('mousedown', (event) => event.preventDefault())
+            star.addEventListener('click', () => {
+              on = !on
+              lookup.stars.set(key, on)
+              show(on)
+              source.onToggleFavorite?.(item, on)
+            })
+            pair.append(button, star)
+            row.append(pair)
+          } else row.append(button)
         }
         group.append(row)
         dom.append(group)
@@ -148,7 +202,7 @@ export function showSynonyms(view: EditorView): boolean {
   if (!range) return false
   const word = view.state.sliceDoc(range.from, range.to).trim()
   if (!/^[\p{L}'’-]+$/u.test(word)) return false
-  const lookup: Lookup = { from: range.from, to: range.to, word, groups: null, bank: bankGroups(view.state, word, range.from, range.to) }
+  const lookup: Lookup = { from: range.from, to: range.to, word, groups: null, bank: bankGroups(view.state, word, range.from, range.to), stars: new Map() }
   view.dispatch({ effects: setLookup.of(lookup) })
   const still = () => view.state.field(lookupField, false)?.from === lookup.from
   loader().then(
@@ -195,6 +249,14 @@ export function synonyms(options: { load?: () => Promise<Thesaurus> } = {}): Ext
       '.cm-mw-synonyms-words': { display: 'flex', flexWrap: 'wrap', gap: '4px' },
       '.cm-mw-synonyms-words button.cm-mw-synonyms-used': { opacity: 0.55 },
       '.cm-mw-synonyms-count': { marginLeft: '4px', fontSize: '11px' },
+      '.cm-mw-synonyms-pair': { display: 'inline-flex', alignItems: 'center' },
+      '.cm-mw-synonyms-words button.cm-mw-synonyms-star': {
+        padding: '2px 6px',
+        marginLeft: '-2px',
+        background: 'transparent',
+        border: 'none',
+        color: 'var(--accent)',
+      },
       '.cm-mw-synonyms-words button': {
         font: 'inherit',
         padding: '2px 8px',

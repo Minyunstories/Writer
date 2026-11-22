@@ -1,5 +1,5 @@
 import { deleteDB, openDB, type DBSchema, type IDBPDatabase } from 'idb'
-import type { Book, Chapter, ChapterVersion, Collection, TrashItem, WikiEntry, WikiFolder, WikiImage } from '../types'
+import type { Book, Chapter, ChapterVersion, Collection, Favorites, TrashItem, WikiEntry, WikiFolder, WikiImage } from '../types'
 
 let DB_NAME = 'minyunwriter'
 const DB_VERSION = 6
@@ -13,8 +13,8 @@ export interface Schema extends DBSchema {
   wikiImages: { key: string; value: WikiImage; indexes: { bookId: string; entryId: string } }
   /** What was last synchronised: path to Git blob hash. A single record with id 'state'. */
   syncState: { key: string; value: { id: string; repository?: string; base: Record<string, string> } }
-  /** Data shared by all books, one record per kind; for now only the collection (id 'collection'). */
-  shared: { key: string; value: Collection & { id: string } }
+  /** Data shared by all books, one record per kind: the collection (id 'collection') and the favourites (id 'favorites'). */
+  shared: { key: string; value: (Collection | Favorites) & { id: string } }
   versions: { key: string; value: ChapterVersion; indexes: { bookId: string; chapterId: string } }
   /** Deleted chapters and wiki entries, kept for 30 days. */
   trash: { key: string; value: TrashItem; indexes: { bookId: string } }

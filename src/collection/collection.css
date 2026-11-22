@@ -268,3 +268,11 @@ button.panel-close {
     font-size: 12px;
   }
 }
+
+.collection-star {
+  color: var(--text-muted);
+}
+
+.collection-star.on {
+  color: var(--accent);
+}

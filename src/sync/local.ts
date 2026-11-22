@@ -1,4 +1,6 @@
 import { collectionFile, hasCollection, mergeCollections, parseCollection } from '../collection/collectionFile'
+import { favoritesFile, mergeFavorites, parseFavorites } from '../collection/favoritesFile'
+import { FAVORITES_ID } from '../storage/favorites'
 import { modulesFile, parseModules } from '../modules/modulesFile'
 import { parseShelf, shelfFile } from '../shelf/shelfFile'
 import { mergeVocabulary, parseVocabulary, vocabularyFile } from '../vocabulary/vocabularyFile'
@@ -8,11 +10,12 @@ import type { IDBPTransaction } from 'idb'
 import { cleanPlace } from '../lib/bookStyle'
 import { cleanSpelling } from '../storage/spelling'
 import { cleanList, db, newId, type Schema } from '../storage/connection'
-import type { Book, Chapter, ChapterComment, Collection, FontId, WikiEntry, WikiFolder, WikiImage } from '../types'
+import type { Book, Chapter, ChapterComment, Collection, Favorites, FontId, WikiEntry, WikiFolder, WikiImage } from '../types'
 import {
   bundleToFiles,
   classifyPath,
   COLLECTION_PATH,
+  FAVORITES_PATH,
   colorsFile as colorsText,
   parseTemplateBlocks,
   templateBlocksFile as templateBlocksText,
@@ -75,18 +78,21 @@ export interface RemoteChange {
 /** Everything stored on this device, as repository files. */
 export async function readLocalFiles(): Promise<FileSet> {
   const database = await db()
-  const [books, chapters, folders, entries, images, collection, versions, trash] = await Promise.all([
+  const [books, chapters, folders, entries, images, collection, favorites, versions, trash] = await Promise.all([
     database.getAll('books'),
     database.getAll('chapters'),
     database.getAll('wikiFolders'),
     database.getAll('wikiEntries'),
     database.getAll('wikiImages'),
     database.get('shared', COLLECTION_ID),
+    database.get('shared', FAVORITES_ID),
     database.getAll('versions'),
     database.getAll('trash'),
   ])
   const files: FileSet = new Map()
-  if (collection && hasCollection(collection)) files.set(COLLECTION_PATH, collectionFile(collection))
+  if (collection && 'items' in collection && hasCollection(collection)) files.set(COLLECTION_PATH, collectionFile(collection))
+  const favoritesText = favorites && 'marks' in favorites ? favoritesFile(favorites) : undefined
+  if (favoritesText) files.set(FAVORITES_PATH, favoritesText)
   for (const book of books) {
     const own = <T extends { bookId: string }>(list: T[]) => list.filter((item) => item.bookId === book.id)
     const bundle = bundleToFiles({
@@ -103,7 +109,7 @@ export async function readLocalFiles(): Promise<FileSet> {
   return files
 }
 
-const KIND_ORDER = ['book', 'style', 'modules', 'shelf', 'place', 'folders', 'templates', 'templateBlocks', 'chapter', 'outline', 'tags', 'dates', 'status', 'groups', 'comments', 'entry', 'wikiOrder', 'folderColors', 'notes', 'relations', 'vocabulary', 'address', 'graph', 'stars', 'spelling', 'collection', 'version', 'trash', 'image']
+const KIND_ORDER = ['book', 'style', 'modules', 'shelf', 'place', 'folders', 'templates', 'templateBlocks', 'chapter', 'outline', 'tags', 'dates', 'status', 'groups', 'comments', 'entry', 'wikiOrder', 'folderColors', 'notes', 'relations', 'vocabulary', 'address', 'graph', 'stars', 'spelling', 'collection', 'favorites', 'version', 'trash', 'image']
 
 /**
  * Applies changes from the repository to this device, file by file, in one transaction.
@@ -444,11 +450,28 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
       return
     }
     const stored = await shared.get(COLLECTION_ID)
-    const local: Collection = stored ? { items: stored.items, deleted: stored.deleted, guide: stored.guide } : { items: [] }
+    const local: Collection = stored && 'items' in stored ? { items: stored.items, deleted: stored.deleted, guide: stored.guide } : { items: [] }
     const localText = hasCollection(local) ? collectionFile(local) : ''
     if (!conflict && (snapshotText(path) ?? '') !== localText) return
     const next = conflict ? mergeCollections(local, remote) : remote
     await shared.put({ ...next, id: COLLECTION_ID })
+  }
+
+  /** Favourites: the repository's, unless changed here after the run was planned; on conflict merged per word. */
+  async function writeFavorites(path: string, data: FileData | undefined, conflict: boolean) {
+    const remote = parseFavorites(data)
+    if (!remote) {
+      skipped.push(path)
+      return
+    }
+    const stored = await shared.get(FAVORITES_ID)
+    const local: Favorites = stored && 'marks' in stored ? { marks: stored.marks, ...(stored.extra ? { extra: stored.extra } : {}) } : { marks: [] }
+    // Changed here during the run: unlike a whole-file kind, favourites merge safely word by word.
+    const changedHere = (snapshotText(path) ?? '') !== (favoritesFile(local) ?? '')
+    const next = conflict || changedHere ? mergeFavorites(local, remote) : remote
+    await shared.put({ ...next, id: FAVORITES_ID })
+    // A file without marks is never written back by this device; remove it instead of fetching it forever.
+    if (next.marks.length === 0) obsolete.push(path)
   }
 
   /** Relationships: the repository's, unless changed here since the run was planned; on conflict merged. */
@@ -899,6 +922,7 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
       else if (info.kind === 'spelling') await writeSpelling(path, info.bookId, data, conflict)
       else if (info.kind === 'templates') await writeTemplates(path, info.bookId, data, conflict)
       else if (info.kind === 'collection') await writeCollection(path, data, conflict)
+      else if (info.kind === 'favorites') await writeFavorites(path, data, conflict)
       else if (info.kind === 'version') await writeVersion(path, info.bookId, data)
       else if (info.kind === 'trash') await writeTrash(path, info.bookId, info.id, data)
       else await writeImage(path, info.bookId, info.id, data)
@@ -938,6 +962,7 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
       else if (info.kind === 'spelling') await writeSpelling(item.path, info.bookId, '{}', false)
       else if (info.kind === 'templates') await writeTemplates(item.path, info.bookId, '{}', false)
       else if (info.kind === 'collection') await writeCollection(item.path, '{"items":[]}', false)
+      else if (info.kind === 'favorites') await writeFavorites(item.path, '{"marks":[]}', false)
       else if (info.kind === 'version') await versions.delete(info.id)
       else if (info.kind === 'trash') await trash.delete(info.id)
       else if (info.kind === 'folders') {

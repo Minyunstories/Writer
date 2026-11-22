@@ -1,11 +1,27 @@
-import type { Completion, CompletionContext, CompletionResult } from '@codemirror/autocomplete'
+import { insertCompletionText, pickedCompletion, type Completion, type CompletionContext, type CompletionResult } from '@codemirror/autocomplete'
 import { baseForms } from '../synonyms/thesaurus'
 import type { CollectionItem } from '../types'
+import { favoriteKey } from './favoritesFile'
 
 /** "//" at a word start, then the search word. Not after ":" or "/" (web addresses). */
 const TRIGGER = /(?:^|[^:/\p{L}\p{N}])(\/\/([\p{L}\p{N}'’ -]{1,40}))$/u
 const MAX_OPTIONS = 30
 const LETTER = /[\p{L}\p{N}]/u
+
+/** Favourites (all devices) and recently used words (this device), by favourite key. */
+export interface Preferences {
+  favorites: Set<string>
+  recent: Map<string, number>
+}
+
+/** Within a group: favourites first, then recently used (newest first), then the rest as it stands. */
+export function preferred(a: CollectionItem, b: CollectionItem, prefs: Preferences | undefined): number {
+  if (!prefs) return 0
+  const keyA = favoriteKey(a.category, a.text)
+  const keyB = favoriteKey(b.category, b.text)
+  const favorite = Number(prefs.favorites.has(keyB)) - Number(prefs.favorites.has(keyA))
+  return favorite || (prefs.recent.get(keyB) ?? 0) - (prefs.recent.get(keyA) ?? 0)
+}
 
 /** A suggestion; `used` marks one that already stands in the chapter. */
 export type CollectionCompletion = Completion & { used?: boolean }
@@ -99,7 +115,11 @@ function fieldsOf(items: CollectionItem[]) {
  * Only word starts match. First come the groups for the word (named after it, also inflected,
  * or holding it as an entry), then entries whose text matches, then category and tag matches.
  */
-export function collectionCompletionSource(items: () => CollectionItem[]) {
+export function collectionCompletionSource(
+  items: () => CollectionItem[],
+  preferences?: () => Preferences,
+  onUse?: (item: CollectionItem) => void,
+) {
   return (context: CompletionContext): CompletionResult | null => {
     const line = context.state.doc.lineAt(context.pos)
     const before = line.text.slice(0, context.pos - line.from)
@@ -119,7 +139,8 @@ export function collectionCompletionSource(items: () => CollectionItem[]) {
       else if (fields[i].other.some((field) => startsWord(field, query))) ranked[2].push(item)
     })
     // Within the first step the groups stay together, in the order they first appear.
-    ranked[0].sort((a, b) => groupOrder.indexOf(groupKey(a)) - groupOrder.indexOf(groupKey(b)))
+    const prefs = preferences?.()
+    ranked[0].sort((a, b) => groupOrder.indexOf(groupKey(a)) - groupOrder.indexOf(groupKey(b)) || preferred(a, b, prefs))
     const chapter = (context.state.doc.sliceString(0, from) + context.state.doc.sliceString(context.pos)).toLowerCase()
     const options: CollectionCompletion[] = ranked
       .flat()
@@ -132,7 +153,10 @@ export function collectionCompletionSource(items: () => CollectionItem[]) {
           label: item.text.replace(/\*\*|__|==|[*_]/g, ''),
           detail: times ? `${times}× im Kapitel · ${where}` : where,
           type: 'text',
-          apply: item.text,
+          apply: (view, completion, start, end) => {
+            view.dispatch({ ...insertCompletionText(view.state, item.text, start, end), annotations: pickedCompletion.of(completion) })
+            onUse?.(item)
+          },
           ...(times ? { used: true } : {}),
         }
       })

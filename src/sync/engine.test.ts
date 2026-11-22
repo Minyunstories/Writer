@@ -496,3 +496,23 @@ test('trash files of a book that no longer exists are cleared from the repositor
   expect([...(await repo.files()).keys()].filter((path) => path.startsWith(prefix))).toEqual([])
   expect((await sync(B)).pulled).toBe(0)
 })
+
+test('favourites marked on two devices meet; unmarking on one wins over the older mark on the other', async () => {
+  const { toggleFavorite, getFavorites } = await import('../storage/favorites')
+  const { favoriteKeys, favoriteKey } = await import('../collection/favoritesFile')
+  await seedA()
+  await toggleFavorite('Speed', 'swift')
+  await sync(A)
+  await sync(B)
+  await toggleFavorite('Speed', 'rapid')
+  await on(A)
+  await new Promise((resolve) => setTimeout(resolve, 5))
+  await toggleFavorite('Speed', 'swift')
+  await sync(A)
+  await sync(B)
+  await sync(A)
+  for (const device of [A, B]) {
+    await on(device)
+    expect([...favoriteKeys(await getFavorites())]).toEqual([favoriteKey('Speed', 'rapid')])
+  }
+})

@@ -9,7 +9,7 @@ const cleanOptional = (value: string | undefined) => value?.trim() || undefined
 /** The collection shared by all books. */
 export async function getCollection(): Promise<Collection> {
   const stored = await (await db()).get('shared', COLLECTION_ID)
-  if (!stored) return { items: [] }
+  if (!stored || !('items' in stored)) return { items: [] }
   const { id: _id, ...collection } = stored
   return collection
 }
@@ -18,7 +18,7 @@ export async function getCollection(): Promise<Collection> {
 async function changeCollection(change: (collection: Collection) => Collection): Promise<void> {
   const tx = (await db()).transaction('shared', 'readwrite')
   const stored = await tx.store.get(COLLECTION_ID)
-  const { id: _id, ...current } = stored ?? { id: COLLECTION_ID, items: [] }
+  const { id: _id, ...current } = stored && 'items' in stored ? stored : { id: COLLECTION_ID, items: [] }
   await tx.store.put({ ...change(current), id: COLLECTION_ID })
   await tx.done
   announceChange()

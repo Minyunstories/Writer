@@ -3,6 +3,7 @@ import { EditorView } from '@codemirror/view'
 import { afterEach, expect, test } from 'vitest'
 import type { CollectionItem } from '../types'
 import { showSynonyms, synonymCollection, synonyms } from './synonymBox'
+import { favoriteKey } from '../collection/favoritesFile'
 import type { Thesaurus } from './thesaurus'
 
 let view: EditorView | null = null
@@ -106,4 +107,70 @@ test('an inflected word finds its group; without the thesaurus the collection st
   expect(box.querySelector('.cm-mw-synonyms-meaning')!.textContent).toBe('Sammlung · Verbs · walked (slowly)')
   expect(buttons().map((b) => b.textContent)).toEqual(['strolled', 'ambled'])
   expect(box.textContent).toContain('konnten nicht geladen werden')
+})
+
+test('favourites come first in a collection group; the star marks and unmarks, a used word is reported', async () => {
+  const toggled: string[] = []
+  const used: string[] = []
+  let favorites = new Set([favoriteKey('Speed', 'like the wind')])
+  view = new EditorView({
+    state: EditorState.create({
+      doc: 'A quick look.',
+      selection: EditorSelection.single(4),
+      extensions: [
+        synonyms({ load: async () => thesaurus }),
+        synonymCollection({
+          items: () => bank,
+          preferences: () => ({ favorites, recent: new Map([[favoriteKey('Speed', 'rapid'), 5]]) }),
+          onToggleFavorite: (item, on) => {
+            toggled.push(`${item.text} ${on}`)
+            favorites = new Set([...favorites, favoriteKey(item.category, item.text)])
+          },
+          onUse: (item) => used.push(item.text),
+        }),
+      ],
+    }),
+    parent: document.body,
+  })
+  showSynonyms(view)
+  await wait()
+  const group = document.querySelector('.cm-mw-synonyms-group')!
+  expect([...group.querySelectorAll<HTMLButtonElement>('button[data-word]')].map((b) => b.dataset.word)).toEqual(['like the wind', 'rapid', 'swift'])
+  const stars = [...group.querySelectorAll<HTMLButtonElement>('.cm-mw-synonyms-star')]
+  expect(stars.map((b) => [b.textContent, b.getAttribute('aria-pressed')])).toEqual([['★', 'true'], ['☆', 'false'], ['☆', 'false']])
+  expect(stars[2].getAttribute('aria-label')).toBe('„swift“ als Favorit')
+  stars[2].click()
+  expect(toggled).toEqual(['swift true'])
+  expect(stars[2].textContent).toBe('★')
+  // The box stays open after a star; a word still replaces.
+  ;[...group.querySelectorAll<HTMLButtonElement>('button[data-word]')][1].click()
+  expect(view.state.doc.toString()).toBe('A rapid look.')
+  expect(used).toEqual(['rapid'])
+})
+
+test('a star clicked before the thesaurus arrives keeps its state when the box is drawn again', async () => {
+  let release: (value: Thesaurus) => void = () => {}
+  const toggled: string[] = []
+  view = new EditorView({
+    state: EditorState.create({
+      doc: 'A quick look.',
+      selection: EditorSelection.single(4),
+      extensions: [
+        synonyms({ load: () => new Promise<Thesaurus>((resolve) => (release = resolve)) }),
+        // The stored favourites do not know about the click yet (as while the panel reloads).
+        synonymCollection({ items: () => bank, preferences: () => ({ favorites: new Set(), recent: new Map() }), onToggleFavorite: (item, on) => toggled.push(`${item.text} ${on}`) }),
+      ],
+    }),
+    parent: document.body,
+  })
+  showSynonyms(view)
+  await wait()
+  const star = () => document.querySelector<HTMLButtonElement>('.cm-mw-synonyms-group .cm-mw-synonyms-star')!
+  star().click()
+  release(thesaurus)
+  await wait()
+  expect(star().textContent).toBe('★')
+  expect(star().getAttribute('aria-pressed')).toBe('true')
+  star().click()
+  expect(toggled).toEqual(['swift true', 'swift false'])
 })

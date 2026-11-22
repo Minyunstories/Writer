@@ -4,6 +4,7 @@ import { expect, test, vi } from 'vitest'
 import type { Collection } from '../types'
 import { AddToCollectionDialog } from './AddToCollectionDialog'
 import { CollectionPanel } from './CollectionPanel'
+import { favoriteKey } from './favoritesFile'
 
 const collection: Collection = {
   guide: { title: 'Reaction-Beat-Katalog', rules: ['**Cut** before you swap.'], selfcheck: ['Can I cut it?'], notes: { '1. Nod': 'the nod family' } },
@@ -14,7 +15,7 @@ const collection: Collection = {
   ],
 }
 
-function setup() {
+function setup(extra: Partial<React.ComponentProps<typeof CollectionPanel>> = {}) {
   const props = {
     collection,
     onInsert: vi.fn(),
@@ -24,6 +25,7 @@ function setup() {
     onImport: vi.fn(async () => ({ added: 3, known: 1 })),
     onOpenSource: vi.fn(),
     onClose: vi.fn(),
+    ...extra,
   }
   render(<CollectionPanel {...props} />)
   return props
@@ -108,4 +110,18 @@ test('a category with a single entry asks in the singular', async () => {
   setup()
   await user.click(screen.getByRole('button', { name: 'Bereich „2. Smile“ löschen' }))
   expect(screen.getByText('Den einen Eintrag löschen?')).toBeInTheDocument()
+})
+
+test('each entry has a star: marked words show ★, a click toggles', async () => {
+  const user = userEvent.setup()
+  const onToggleFavorite = vi.fn()
+  const props = setup({ favorites: new Set([favoriteKey('1. Nod', 'She set down the cup.')]), onToggleFavorite })
+  void props
+  const marked = screen.getByRole('button', { name: '„She set down the cup.“ als Favorit' })
+  expect(marked).toHaveTextContent('★')
+  expect(marked).toHaveAttribute('aria-pressed', 'true')
+  const plain = screen.getByRole('button', { name: '„He grinned.“ als Favorit' })
+  expect(plain).toHaveTextContent('☆')
+  await user.click(plain)
+  expect(onToggleFavorite).toHaveBeenCalledWith(expect.objectContaining({ text: 'He grinned.' }), true)
 })

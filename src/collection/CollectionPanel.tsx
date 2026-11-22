@@ -1,5 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import type { Collection, CollectionItem } from '../types'
+import { favoriteKey } from './favoritesFile'
 import { inlineMarkdown } from './inlineMarkdown'
 import './collection.css'
 
@@ -12,6 +13,9 @@ interface Props {
   onDelete: (id: string) => void
   /** Deletes every entry of a category (after asking in its heading). */
   onDeleteCategory?: (category: string) => void
+  /** Favourite keys (category + text); with a handler every entry gets a star. */
+  favorites?: Set<string>
+  onToggleFavorite?: (item: CollectionItem, on: boolean) => void
   onImport: (source: string) => Promise<{ added: number; known: number } | null>
   onOpenSource: (source: NonNullable<CollectionItem['source']>) => void
   onClose: () => void
@@ -39,7 +43,19 @@ function arrange(items: CollectionItem[]) {
 }
 
 /** Phrases, beats and words shared by all books: put in at the cursor or copied. */
-export function CollectionPanel({ collection, tabs, onInsert, onAddSelection, onDelete, onDeleteCategory, onImport, onOpenSource, onClose }: Props) {
+export function CollectionPanel({
+  collection,
+  tabs,
+  onInsert,
+  onAddSelection,
+  onDelete,
+  onDeleteCategory,
+  favorites,
+  onToggleFavorite,
+  onImport,
+  onOpenSource,
+  onClose,
+}: Props) {
   const [query, setQuery] = useState('')
   const [guideOpen, setGuideOpen] = useState(readGuideOpen)
   const [report, setReport] = useState<string | null>(null)
@@ -200,6 +216,21 @@ export function CollectionPanel({ collection, tabs, onInsert, onAddSelection, on
                           {item.text}
                         </button>
                         <span className="collection-item-actions">
+                          {onToggleFavorite &&
+                            (() => {
+                              const on = favorites?.has(favoriteKey(item.category, item.text)) ?? false
+                              return (
+                                <button
+                                  className={on ? 'ghost collection-star on' : 'ghost collection-star'}
+                                  aria-label={`„${item.text}“ als Favorit`}
+                                  aria-pressed={on}
+                                  title={on ? 'Favorit – zum Entfernen klicken' : 'Als Favorit markieren'}
+                                  onClick={() => onToggleFavorite(item, !on)}
+                                >
+                                  {on ? '★' : '☆'}
+                                </button>
+                              )
+                            })()}
                           <button className="ghost" aria-label="Kopieren" title="Kopieren" onClick={() => copy(item)}>
                             {copied === item.id ? '✓' : '⧉'}
                           </button>

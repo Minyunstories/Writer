@@ -752,3 +752,37 @@ test('a trash file for a book that is not here is not kept, and the repository s
   expect(result.obsolete).toEqual([path])
   expect(await (await db()).getAll('trash')).toEqual([])
 })
+
+test('favourites travel in their own file next to the collection, merged per word when both sides changed them', async () => {
+  const { toggleFavorite, getFavorites } = await import('../storage/favorites')
+  const { favoriteKeys, favoriteKey } = await import('../collection/favoritesFile')
+  expect((await readLocalFiles()).has('collection/favorites.json')).toBe(false)
+  await toggleFavorite('Speed', 'swift')
+  const files = await readLocalFiles()
+  expect(JSON.parse(files.get('collection/favorites.json') as string).marks.map((m: { text: string }) => m.text)).toEqual(['swift'])
+  // Favourites never end up in the collection file.
+  expect(files.has('collection/collection.json')).toBe(false)
+
+  const remote = { marks: [{ category: 'Speed', text: 'rapid', on: true, updatedAt: 1 }] }
+  await applyFull({ conflicts: [{ path: 'collection/favorites.json', remote: JSON.stringify(remote) }], snapshot: files })
+  expect([...favoriteKeys(await getFavorites())].sort()).toEqual([favoriteKey('Speed', 'rapid'), favoriteKey('Speed', 'swift')])
+
+  // A plain pull replaces; if the favourites changed here during the run, both sides are merged per word.
+  const planned = await readLocalFiles()
+  await toggleFavorite('Speed', 'brisk')
+  const fromOther = { marks: [{ category: 'Speed', text: 'rapid', on: true, updatedAt: 1 }, { category: 'Speed', text: 'fleet', on: true, updatedAt: 2 }] }
+  await apply({ write: new Map([['collection/favorites.json', JSON.stringify(fromOther)]]), snapshot: planned })
+  expect(favoriteKeys(await getFavorites()).size).toBe(4)
+  await apply({ write: new Map([['collection/favorites.json', JSON.stringify(remote)]]), snapshot: await readLocalFiles() })
+  expect([...favoriteKeys(await getFavorites())]).toEqual([favoriteKey('Speed', 'rapid')])
+
+  await apply({ remove: ['collection/favorites.json'], snapshot: await readLocalFiles() })
+  expect((await getFavorites()).marks).toEqual([])
+})
+
+test('a favourites file without any marks is taken and then removed from the repository, not fetched forever', async () => {
+  const { getFavorites } = await import('../storage/favorites')
+  const result = await applyFull({ write: new Map([['collection/favorites.json', '{"marks":[{"text":"no category"}],"later":1}']]), snapshot: new Map() })
+  expect((await getFavorites()).marks).toEqual([])
+  expect(result.obsolete).toEqual(['collection/favorites.json'])
+})

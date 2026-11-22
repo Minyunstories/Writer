@@ -266,6 +266,7 @@ test('switched-off check rules travel with the spelling settings', () => {
 
 test('the collection file is managed by the app but belongs to no book', () => {
   expect(classifyPath('collection/collection.json')).toEqual({ bookId: '', kind: 'collection', id: 'collection' })
+  expect(classifyPath('collection/favorites.json')).toEqual({ bookId: '', kind: 'favorites', id: 'favorites' })
   expect(classifyPath('collection/other.json')).toBeNull()
 })
 

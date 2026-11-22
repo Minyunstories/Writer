@@ -26,6 +26,8 @@ export interface BookBundle {
 const ROOT = 'books/'
 /** The collection shared by all books: outside books/, so older app versions leave it alone. */
 export const COLLECTION_PATH = 'collection/collection.json'
+/** Favourites of the collection: a file of their own, so older versions cannot drop them. */
+export const FAVORITES_PATH = 'collection/favorites.json'
 const FONTS: FontId[] = ['literata', 'inter', 'courier-prime']
 const EXTENSIONS: Record<string, string> = { 'image/webp': 'webp', 'image/jpeg': 'jpg', 'image/png': 'png', 'image/gif': 'gif' }
 const HEADER_START = '---\n'
@@ -707,11 +709,12 @@ export function parseVersion(bookId: string, data: FileData | undefined): Chapte
   return version
 }
 
-export type PathKind = 'book' | 'chapter' | 'outline' | 'folders' | 'entry' | 'image' | 'tags' | 'templates' | 'style' | 'dates' | 'place' | 'wikiOrder' | 'folderColors' | 'notes' | 'stars' | 'templateBlocks' | 'spelling' | 'collection' | 'version' | 'status' | 'comments' | 'relations' | 'graph' | 'groups' | 'modules' | 'shelf' | 'vocabulary' | 'address' | 'trash'
+export type PathKind = 'book' | 'chapter' | 'outline' | 'folders' | 'entry' | 'image' | 'tags' | 'templates' | 'style' | 'dates' | 'place' | 'wikiOrder' | 'folderColors' | 'notes' | 'stars' | 'templateBlocks' | 'spelling' | 'collection' | 'favorites' | 'version' | 'status' | 'comments' | 'relations' | 'graph' | 'groups' | 'modules' | 'shelf' | 'vocabulary' | 'address' | 'trash'
 
 /** What a repository path holds, or null for files the app does not manage. */
 export function classifyPath(path: string): { bookId: string; kind: PathKind; id: string } | null {
   if (path === COLLECTION_PATH) return { bookId: '', kind: 'collection', id: 'collection' }
+  if (path === FAVORITES_PATH) return { bookId: '', kind: 'favorites', id: 'favorites' }
   const bookId = bookIdOf(path)
   if (!bookId) return null
   const rest = path.slice(bookPrefix(bookId).length)

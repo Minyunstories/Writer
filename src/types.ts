@@ -245,6 +245,21 @@ export interface CollectionItem {
   updatedAt: number
 }
 
+/** A word of the collection marked (or unmarked) as a favourite; kept by category and text, not by id. */
+export interface FavoriteMark {
+  category: string
+  text: string
+  on: boolean
+  updatedAt: number
+  extra?: Record<string, unknown>
+}
+
+/** collection/favorites.json: favourites shared by all books and devices. */
+export interface Favorites {
+  marks: FavoriteMark[]
+  extra?: Record<string, unknown>
+}
+
 export interface CollectionGuide {
   title: string
   rules: string[]

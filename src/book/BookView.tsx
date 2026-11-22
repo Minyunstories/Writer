@@ -4,7 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { CHANGED_EVENT, SYNCED_EVENT } from '../storage/connection'
 import { createChapter, getBook, getChapter, listChapters, updateChapter } from '../storage/db'
 import { createEntry, createFolder, deleteFolder, getImage, listEntries, listFolders, moveWikiItem, renameFolder, setFolderColor, stepWikiItem } from '../storage/wiki'
-import type { Book, Chapter, ChapterGroup, WikiEntry, WikiFolder } from '../types'
+import type { Book, Chapter, ChapterGroup, CollectionItem, WikiEntry, WikiFolder } from '../types'
 import { Outline } from '../outline/Outline'
 import { SyncStatus } from '../sync/SyncStatus'
 import type { JumpTarget } from '../editor/Editor'
@@ -64,6 +64,10 @@ import { highlightOf } from '../lib/bookStyle'
 import { AddToCollectionDialog } from '../collection/AddToCollectionDialog'
 import { collectionCompletionSource } from '../collection/collectionComplete'
 import { synonymCollection } from '../synonyms/synonymBox'
+import { favoriteKeys } from '../collection/favoritesFile'
+import { recentUses, recordUse } from '../collection/recent'
+import { useFavorites } from '../collection/useFavorites'
+import { setFavorite } from '../storage/favorites'
 import { parseCatalogue } from '../collection/collectionFile'
 import { CollectionPanel } from '../collection/CollectionPanel'
 import { CommentsPanel } from '../comments/CommentsPanel'
@@ -163,6 +167,13 @@ export function BookView({ renderChapter }: Props) {
   const collection = useCollection()
   const collectionRef = useRef(collection)
   collectionRef.current = collection
+  const favorites = useFavorites()
+  const favoriteSet = useMemo(() => favoriteKeys(favorites), [favorites])
+  const favoritesRef = useRef(favoriteSet)
+  favoritesRef.current = favoriteSet
+  // Favourites (all devices) and recently used words (this device) order the words within a group.
+  const preferencesRef = useRef(() => ({ favorites: favoritesRef.current, recent: recentUses() }))
+  const useWord = useRef((item: CollectionItem) => recordUse(item.category, item.text))
   /** Text on its way into the collection, with where it came from. */
   const [collecting, setCollecting] = useState<{ text: string; source?: { chapterId: string; offset: number } } | null>(null)
   /** The chapter editor, for putting collection items in at the cursor. */
@@ -476,9 +487,14 @@ export function BookView({ renderChapter }: Props) {
           await reloadWiki()
         },
         },
-        [collectionCompletionSource(() => collectionRef.current.items)],
+        [collectionCompletionSource(() => collectionRef.current.items, preferencesRef.current, useWord.current)],
       ),
-      synonymCollection(() => collectionRef.current.items),
+      synonymCollection({
+        items: () => collectionRef.current.items,
+        preferences: preferencesRef.current,
+        onToggleFavorite: (item, on) => void attempt(() => setFavorite(item.category, item.text, on)),
+        onUse: useWord.current,
+      }),
     ],
     // One set per book; the lists are read through refs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1172,6 +1188,8 @@ export function BookView({ renderChapter }: Props) {
             }}
             onDelete={(id) => void attempt(() => deleteCollectionItem(id))}
             onDeleteCategory={(category) => void attempt(async () => void (await deleteCollectionCategory(category)))}
+            favorites={favoriteSet}
+            onToggleFavorite={(item, on) => void attempt(() => setFavorite(item.category, item.text, on))}
             onImport={async (source) => {
               const catalogue = parseCatalogue(source)
               if (!catalogue) return null
