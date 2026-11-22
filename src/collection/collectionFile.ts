@@ -114,16 +114,28 @@ export interface CatalogueItem {
   category: string
   group?: string
   tags?: string[]
+  /** A short hint (e.g. a German gloss) that comes with the entry. */
+  note?: string
 }
 
 interface CatalogueData {
   rules?: unknown
   selfcheck?: unknown
-  categories?: { num?: unknown; title?: unknown; target?: unknown; part?: unknown; note?: unknown; groups?: { label?: unknown; items?: unknown }[] }[]
+  /** Only fill hints and markers of entries that exist; add nothing (so deleted words stay deleted). */
+  fillOnly?: unknown
+  categories?: unknown
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value)
+
+/** Tags without repeats; spellings that differ only in case count as one (the first stays). */
+export function uniqueTags(tags: string[]): string[] {
+  const seen = new Set<string>()
+  return tags.map((tag) => tag.trim()).filter((tag) => tag && !seen.has(tag.toLowerCase()) && seen.add(tag.toLowerCase()))
 }
 
 /** The Reaction-Beat catalogue (its HTML page, or the data alone as JSON) as collection items. */
-export function parseCatalogue(source: string): { guide: CollectionGuide; items: CatalogueItem[] } | null {
+export function parseCatalogue(source: string): { guide: CollectionGuide; items: CatalogueItem[]; fillOnly?: boolean } | null {
   const match = /const DATA = (\{[\s\S]*?\n\});/.exec(source)
   let data: CatalogueData
   try {
@@ -135,20 +147,26 @@ export function parseCatalogue(source: string): { guide: CollectionGuide; items:
   const items: CatalogueItem[] = []
   const notes: Record<string, string> = {}
   for (const category of data.categories) {
-    if (!isText(category.title)) continue
+    if (!isRecord(category) || !isText(category.title)) continue
     const name = category.num !== undefined ? `${String(category.num)}. ${category.title}` : category.title
     const note = [category.target, category.note].filter(isText).join(' — ')
     if (note) notes[name] = note
-    for (const group of category.groups ?? []) {
-      for (const entry of texts(group.items)) {
-        const item: CatalogueItem = { text: entry.trim(), category: name }
+    for (const group of Array.isArray(category.groups) ? category.groups : []) {
+      if (!isRecord(group)) continue
+      // An entry is its text, or an object with text, hint and markers.
+      for (const entry of Array.isArray(group.items) ? (group.items as unknown[]) : []) {
+        const raw = isRecord(entry) ? entry : { text: entry }
+        if (!isText(raw.text)) continue
+        const item: CatalogueItem = { text: raw.text.trim(), category: name }
         if (isText(group.label)) item.group = group.label
-        if (isText(category.part)) item.tags = [category.part]
+        const tags = uniqueTags([...(isText(category.part) ? [category.part] : []), ...texts(raw.tags)])
+        if (tags.length) item.tags = tags
+        if (isText(raw.note)) item.note = raw.note.trim()
         items.push(item)
       }
     }
   }
   const guide: CollectionGuide = { title: 'Reaction-Beat-Katalog', rules: texts(data.rules), selfcheck: texts(data.selfcheck) }
   if (Object.keys(notes).length) guide.notes = notes
-  return { guide, items }
+  return { guide, items, ...(data.fillOnly === true ? { fillOnly: true } : {}) }
 }

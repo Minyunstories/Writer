@@ -1,5 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import type { Collection, CollectionItem } from '../types'
+import { markersOf } from './collectionComplete'
 import { favoriteKey } from './favoritesFile'
 import { inlineMarkdown } from './inlineMarkdown'
 import './collection.css'
@@ -16,7 +17,7 @@ interface Props {
   /** Favourite keys (category + text); with a handler every entry gets a star. */
   favorites?: Set<string>
   onToggleFavorite?: (item: CollectionItem, on: boolean) => void
-  onImport: (source: string) => Promise<{ added: number; known: number } | null>
+  onImport: (source: string) => Promise<{ added: number; known: number; updated?: number } | null>
   onOpenSource: (source: NonNullable<CollectionItem['source']>) => void
   onClose: () => void
 }
@@ -93,7 +94,11 @@ export function CollectionPanel({
   const importFile = async (file: File | undefined) => {
     if (!file) return
     const result = await onImport(await file.text())
-    setReport(result ? `${result.added} neu, ${result.known} schon vorhanden.` : 'Diese Datei ist kein Katalog, den Writer lesen kann.')
+    setReport(
+      result
+        ? `${result.added} neu, ${result.known} schon vorhanden${result.updated ? `, ${result.updated} ergänzt` : ''}.`
+        : 'Diese Datei ist kein Katalog, den Writer lesen kann.',
+    )
   }
 
   // The question always counts the whole category, not only what the search shows.
@@ -238,7 +243,13 @@ export function CollectionPanel({
                             ×
                           </button>
                         </span>
-                        {item.note && <p className="muted collection-item-note">{item.note}</p>}
+                        {(item.note || markersOf(item).length > 0) && (
+                          <p className="muted collection-item-note">
+                            {item.note}
+                            {item.note && markersOf(item).length > 0 && ' '}
+                            {markersOf(item).length > 0 && <span className="collection-markers">{markersOf(item).join(' · ')}</span>}
+                          </p>
+                        )}
                         {item.source && (
                           <button className="note-origin" onClick={() => onOpenSource(item.source!)}>
                             aus: {item.source.bookTitle || 'Buch'}

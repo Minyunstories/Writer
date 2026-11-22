@@ -174,3 +174,18 @@ test('a star clicked before the thesaurus arrives keeps its state when the box i
   star().click()
   expect(toggled).toEqual(['swift true', 'swift false'])
 })
+
+test('a collection word shows its hint and markers when pointed at', async () => {
+  const items: CollectionItem[] = [
+    { id: 'a', text: 'swift', category: 'Speed', group: 'fast', createdAt: 1, updatedAt: 1 },
+    { id: 'b', text: 'fleet', category: 'Speed', group: 'fast', note: 'flink', tags: ['Word Bank', 'literary'], createdAt: 2, updatedAt: 2 },
+  ]
+  view = new EditorView({
+    state: EditorState.create({ doc: 'swift', selection: EditorSelection.single(2), extensions: [synonyms({ load: async () => thesaurus }), synonymCollection(() => items)] }),
+    parent: document.body,
+  })
+  showSynonyms(view)
+  await wait()
+  const fleet = document.querySelector<HTMLButtonElement>('button[data-word="fleet"]')!
+  expect(fleet.title).toBe('flink · literary')
+})

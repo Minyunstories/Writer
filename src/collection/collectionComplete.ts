@@ -8,6 +8,17 @@ const TRIGGER = /(?:^|[^:/\p{L}\p{N}])(\/\/([\p{L}\p{N}'’ -]{1,40}))$/u
 const MAX_OPTIONS = 30
 const LETTER = /[\p{L}\p{N}]/u
 
+/** Markers the word bank uses (register, region); other tags such as the catalogue part are not shown. */
+export const MARKERS = ['informal', 'slang', 'old-fashioned', 'literary', 'formal', 'British', 'Scottish', 'American', 'modern', 'archaic', 'regional', 'dated', 'rare']
+const MARKER_KEYS = new Set(MARKERS.map((marker) => marker.toLowerCase()))
+export const markersOf = (item: CollectionItem) => (item.tags ?? []).filter((tag) => MARKER_KEYS.has(tag.trim().toLowerCase()))
+
+/** What a suggestion says about itself: hint and markers, then where it comes from. */
+export function describe(item: CollectionItem): string {
+  const where = item.group ? `${item.category} · ${item.group}` : item.category
+  return [item.note?.trim(), markersOf(item).join(', '), where].filter(Boolean).join(' · ')
+}
+
 /** Favourites (all devices) and recently used words (this device), by favourite key. */
 export interface Preferences {
   favorites: Set<string>
@@ -146,7 +157,7 @@ export function collectionCompletionSource(
       .flat()
       .slice(0, MAX_OPTIONS)
       .map((item) => {
-        const where = item.group ? `${item.category} · ${item.group}` : item.category
+        const where = describe(item)
         const times = countIn(chapter, item.text)
         return {
           // Shown without markup; the text itself goes in as written.

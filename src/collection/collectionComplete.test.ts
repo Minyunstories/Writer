@@ -151,3 +151,13 @@ test('picking a suggestion puts it in place and tells which word was used', () =
   expect(used).toEqual(['rapid'])
   view.destroy()
 })
+
+test('a hint and markers come first in the line under a suggestion', () => {
+  const list: CollectionItem[] = [
+    { id: 'h1', text: 'close', category: 'Temperature', group: 'hot (air)', note: 'schwül, stickig', tags: ['Word Bank', 'British'], createdAt: 1, updatedAt: 1 },
+    { id: 'h2', text: 'baking', category: 'Temperature', group: 'hot (air)', tags: ['Word Bank'], createdAt: 2, updatedAt: 2 },
+  ]
+  const options = completeIn(list, 'It was close. //hot')!.options
+  expect(options[0].detail).toBe('1× im Kapitel · schwül, stickig · British · Temperature · hot (air)')
+  expect(options[1].detail).toBe('Temperature · hot (air)')
+})

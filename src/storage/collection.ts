@@ -1,4 +1,4 @@
-import { DEFAULT_CATEGORY, type CatalogueItem } from '../collection/collectionFile'
+import { DEFAULT_CATEGORY, uniqueTags, type CatalogueItem } from '../collection/collectionFile'
 import type { Collection, CollectionGuide, CollectionItem } from '../types'
 import { announceChange, db, newId } from './connection'
 
@@ -102,26 +102,47 @@ export async function deleteCollectionCategory(category: string): Promise<number
 const sameKey = (item: { text: string; category: string }) => `${item.category.trim().toLowerCase()}\u0000${item.text.trim().toLowerCase()}`
 
 /** Adds a catalogue: only what is not there yet. The catalogue's rules become the guide. */
-export async function importIntoCollection(catalogue: { guide?: CollectionGuide; items: CatalogueItem[] }): Promise<{ added: number; known: number }> {
+export async function importIntoCollection(catalogue: {
+  guide?: CollectionGuide
+  items: CatalogueItem[]
+  fillOnly?: boolean
+}): Promise<{ added: number; known: number; updated: number }> {
   let added = 0
   let known = 0
+  let updated = 0
   await changeCollection((collection) => {
-    const keys = new Set(collection.items.map(sameKey))
     const now = Date.now()
     const items = [...collection.items]
+    const at = new Map(items.map((item, index) => [sameKey(item), index]))
+    const addedNow = new Set<string>()
     for (const entry of catalogue.items) {
       const key = sameKey(entry)
-      if (keys.has(key)) {
+      // The same word twice in one file counts once.
+      if (addedNow.has(key)) continue
+      const index = at.get(key)
+      if (index !== undefined) {
         known++
+        // Known already: fill an empty hint and add missing markers, never replace anything.
+        const item = items[index]
+        const note = !item.note?.trim() && entry.note?.trim() ? entry.note.trim() : undefined
+        const tags = uniqueTags([...(item.tags ?? []), ...(entry.tags ?? [])])
+        const moreTags = tags.length > uniqueTags(item.tags ?? []).length
+        if (note || moreTags) {
+          // Only one step later: an edit on the other device (made at its real time) still wins the merge.
+          items[index] = { ...item, ...(note ? { note } : {}), ...(moreTags ? { tags } : {}), updatedAt: item.updatedAt + 1 }
+          updated++
+        }
         continue
       }
-      const item = makeItem(entry, now + added)
+      if (catalogue.fillOnly) continue
+      const item = makeItem({ ...entry, tags: uniqueTags(entry.tags ?? []) }, now + added)
       if (!item) continue
-      keys.add(key)
+      at.set(key, items.length)
+      addedNow.add(key)
       items.push(item)
       added++
     }
     return { ...collection, items, ...(catalogue.guide ? { guide: catalogue.guide } : {}) }
   })
-  return { added, known }
+  return { added, known, updated }
 }

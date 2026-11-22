@@ -58,3 +58,22 @@ test('the beat catalogue becomes items with its rules as a guide', () => {
   ])
   expect(parseCatalogue('<p>nothing</p>')).toBeNull()
 })
+
+test('catalogue entries may bring a hint and markers; the category part stays the first tag', () => {
+  const source = JSON.stringify({
+    categories: [
+      { title: 'Temperature', part: 'Word Bank', groups: [{ label: 'hot', items: ['baking', { text: 'close', note: 'schwül, stickig', tags: ['British'] }, { note: 'no text' }] }] },
+    ],
+  })
+  expect(parseCatalogue(source)!.items).toEqual([
+    { text: 'baking', category: 'Temperature', group: 'hot', tags: ['Word Bank'] },
+    { text: 'close', category: 'Temperature', group: 'hot', tags: ['Word Bank', 'British'], note: 'schwül, stickig' },
+  ])
+})
+
+test('odd catalogues do not break the import; "fillOnly" and repeated tags are read', () => {
+  expect(parseCatalogue(JSON.stringify({ categories: [null, { title: 'A', groups: [null, 3, { items: [null, 2, ['x'], 'ok'] }] }, { title: 'B', groups: {} }] }))!.items).toEqual([{ text: 'ok', category: 'A' }])
+  const parsed = parseCatalogue(JSON.stringify({ fillOnly: true, categories: [{ title: 'A', part: 'Word Bank', groups: [{ items: [{ text: 'x', tags: ['word bank', 'British', 'british'] }] }] }] }))!
+  expect(parsed.fillOnly).toBe(true)
+  expect(parsed.items[0].tags).toEqual(['Word Bank', 'British'])
+})

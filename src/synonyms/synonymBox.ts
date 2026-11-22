@@ -1,6 +1,6 @@
 import { EditorState, Facet, Prec, StateEffect, StateField, type Extension } from '@codemirror/state'
 import { EditorView, keymap, showTooltip, type Tooltip } from '@codemirror/view'
-import { countIn, groupKey, groupsFor, preferred, type Preferences } from '../collection/collectionComplete'
+import { countIn, groupKey, groupsFor, markersOf, preferred, type Preferences } from '../collection/collectionComplete'
 import { favoriteKey } from '../collection/favoritesFile'
 import type { CollectionItem } from '../types'
 import { loadThesaurus, matchCase, synonymGroups, type SynonymGroup, type Thesaurus } from './thesaurus'
@@ -134,10 +134,13 @@ function tooltip(lookup: Lookup): Tooltip {
           button.type = 'button'
           button.textContent = word.text.replace(MARKUP, '')
           button.dataset.word = button.textContent
+          // Pointing at a word of the collection shows its hint and markers.
+          const about = word.item ? [word.item.note?.trim(), ...markersOf(word.item)].filter(Boolean).join(' · ') : ''
+          if (about) button.title = about
           if (word.used) {
             // Already in the chapter: paler, with how often.
             button.classList.add('cm-mw-synonyms-used')
-            button.title = `${word.used}× im Kapitel`
+            button.title = [`${word.used}× im Kapitel`, about].filter(Boolean).join(' · ')
             const count = document.createElement('span')
             count.className = 'cm-mw-synonyms-count'
             count.textContent = `${word.used}×`

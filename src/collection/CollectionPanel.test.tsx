@@ -125,3 +125,78 @@ test('each entry has a star: marked words show ★, a click toggles', async () =
   await user.click(plain)
   expect(onToggleFavorite).toHaveBeenCalledWith(expect.objectContaining({ text: 'He grinned.' }), true)
 })
+
+test('the import report names how many entries got a hint or marker', async () => {
+  const user = userEvent.setup()
+  setup({ onImport: vi.fn(async () => ({ added: 0, known: 5, updated: 2 })) })
+  const input = document.querySelector<HTMLInputElement>('.collection-import input')!
+  await user.upload(input, new File(['{}'], 'bank.json', { type: 'application/json' }))
+  expect(await screen.findByText('0 neu, 5 schon vorhanden, 2 ergänzt.')).toBeInTheDocument()
+})
+
+test('markers show next to the hint of an entry', () => {
+  render(
+    <CollectionPanel
+      collection={{ items: [{ id: 'm', text: 'close', category: 'Temperature', group: 'hot', note: 'schwül, stickig', tags: ['Word Bank', 'British', 'informal'], createdAt: 1, updatedAt: 1 }] }}
+      onInsert={vi.fn()}
+      onAddSelection={vi.fn()}
+      onDelete={vi.fn()}
+      onImport={vi.fn(async () => null)}
+      onOpenSource={vi.fn()}
+      onClose={vi.fn()}
+    />,
+  )
+  expect(screen.getByText('schwül, stickig')).toBeInTheDocument()
+  expect(screen.getByText('British · informal')).toBeInTheDocument()
+})
+
+const bank: Collection = {
+  items: [
+    { id: 'b1', text: 'swift', category: 'Speed', group: 'fast / quick', createdAt: 1, updatedAt: 1 },
+    { id: 'b2', text: 'rapid', category: 'Speed', group: 'fast / quick', createdAt: 2, updatedAt: 2 },
+    { id: 'b3', text: 'chilly', category: 'Temperature', group: 'cold (air)', createdAt: 3, updatedAt: 3 },
+    { id: 'b4', text: 'He nodded.', category: '1. Nod', createdAt: 4, updatedAt: 4 },
+  ],
+}
+const thesaurus = { s: [['a', 'moving fast', 'quick', 'rapid', 'speedy']], w: { quick: [0], rapid: [0], speedy: [0] } }
+
+test('fitting groups are suggested from the word itself and its synonyms; one click sets category and group', async () => {
+  const user = userEvent.setup()
+  const onSave = vi.fn()
+  render(<AddToCollectionDialog initialText="Speedy" collection={bank} onSave={onSave} onCancel={() => {}} loadSynonyms={async () => thesaurus} />)
+  const dialog = screen.getByRole('dialog', { name: 'In die Sammlung' })
+  // "speedy" is no entry, but its synonym "rapid" is.
+  const chip = await within(dialog).findByRole('button', { name: 'fast / quick · Speed' })
+  await user.click(chip)
+  expect(within(dialog).getByLabelText('Kategorie')).toHaveValue('Speed')
+  expect(within(dialog).getByLabelText('Gruppe')).toHaveValue('fast / quick')
+  await user.click(within(dialog).getByRole('button', { name: 'Aufnehmen' }))
+  expect(onSave).toHaveBeenCalledWith({ text: 'Speedy', category: 'Speed', group: 'fast / quick', note: '' })
+})
+
+test('the group field offers the groups of all categories; picking one sets its category too', async () => {
+  // The dialog remembers the last category; start from the first one.
+  localStorage.clear()
+  const user = userEvent.setup()
+  render(<AddToCollectionDialog initialText="nippy" collection={bank} onSave={() => {}} onCancel={() => {}} loadSynonyms={() => Promise.reject(new Error('offline'))} />)
+  const dialog = screen.getByRole('dialog', { name: 'In die Sammlung' })
+  const options = [...dialog.querySelectorAll('datalist option')].map((option) => option.getAttribute('value'))
+  expect(options).toEqual(expect.arrayContaining(['fast / quick — Speed', 'cold (air) — Temperature']))
+  await user.type(within(dialog).getByLabelText('Gruppe'), 'cold (air) — Temperature')
+  expect(within(dialog).getByLabelText('Kategorie')).toHaveValue('Temperature')
+  expect(within(dialog).getByLabelText('Gruppe')).toHaveValue('cold (air)')
+  // Without synonyms and without a fitting entry, no suggestions are shown.
+  expect(within(dialog).queryByRole('group', { name: 'Passende Gruppen' })).toBeNull()
+})
+
+test('a fitting group chosen while a new category is being typed switches back to that group’s category', async () => {
+  localStorage.clear()
+  const user = userEvent.setup()
+  render(<AddToCollectionDialog initialText="swift" collection={bank} onSave={() => {}} onCancel={() => {}} loadSynonyms={() => Promise.reject(new Error('offline'))} />)
+  const dialog = screen.getByRole('dialog', { name: 'In die Sammlung' })
+  await user.selectOptions(within(dialog).getByLabelText('Kategorie'), '__new')
+  const suggestions = within(dialog).getByRole('group', { name: 'Passende Gruppen' })
+  await user.click(within(suggestions).getByRole('button', { name: 'fast / quick · Speed' }))
+  expect(within(dialog).getByLabelText('Kategorie')).toHaveValue('Speed')
+  expect(within(dialog).queryByLabelText('Neue Kategorie')).toBeNull()
+})
