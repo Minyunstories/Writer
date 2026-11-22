@@ -55,6 +55,7 @@ export const editorTheme = EditorView.theme(
     '.cm-tooltip.cm-tooltip-autocomplete > ul > li:last-child': { borderBottom: 'none' },
     '.cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected]': { backgroundColor: 'var(--accent-soft)', color: 'var(--text)' },
     '.cm-completionLabel': { whiteSpace: 'normal', fontFamily: 'var(--font-text)', fontSize: '15px' },
+    '.cm-tooltip.cm-tooltip-autocomplete > ul > li.cm-mw-used .cm-completionLabel': { opacity: 0.5 },
     '.cm-completionDetail': {
       marginLeft: '0',
       fontStyle: 'normal',

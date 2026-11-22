@@ -102,7 +102,14 @@ export function closeWikiBrackets(view: EditorView, from: number, to: number, te
 export function wikiCompletion(options: WikiCompletionOptions, moreSources: CompletionSource[] = []): Extension {
   return [
     // Nothing is picked until the writer picks it, so Enter after an unclosed "[[" keeps writing.
-    autocompletion({ override: [wikiCompletionSource(options), ...moreSources], icons: false, activateOnTyping: true, selectOnOpen: false }),
+    autocompletion({
+      override: [wikiCompletionSource(options), ...moreSources],
+      icons: false,
+      activateOnTyping: true,
+      selectOnOpen: false,
+      // Collection suggestions that already stand in the chapter are drawn paler.
+      optionClass: (completion) => ((completion as { used?: boolean }).used ? 'cm-mw-used' : ''),
+    }),
     EditorView.inputHandler.of((view, from, to, text) => closeWikiBrackets(view, from, to, text, options)),
   ]
 }

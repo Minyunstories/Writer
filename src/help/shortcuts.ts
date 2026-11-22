@@ -22,7 +22,7 @@ export const SHORTCUT_GROUPS: { title: string; items: Shortcut[] }[] = [
       { keys: 'Strg+Umschalt+K', what: 'markierten Text in die Sammlung' },
       { keys: 'Strg+Umschalt+L', what: 'markiertes Wort ins Vokabelheft (wenn das Modul an ist)' },
       { keys: '[[', what: 'Wiki-Vorschläge' },
-      { keys: '//', what: 'Vorschläge aus der Sammlung (ist das Wort selbst ein Eintrag, auch seine Gruppe)' },
+      { keys: '//', what: 'Vorschläge aus der Sammlung (zuerst die Gruppen zum Wort, auch gebeugt)' },
     ],
   },
   {
