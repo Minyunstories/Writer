@@ -78,7 +78,8 @@ import { parseCatalogue } from '../collection/collectionFile'
 import { CollectionPanel } from '../collection/CollectionPanel'
 import { CommentsPanel } from '../comments/CommentsPanel'
 import { useCollection } from '../collection/useCollection'
-import { splitScenes, type Scene } from '../lib/scenes'
+import { maskSceneNames } from '../lib/sceneBreak'
+import { renameScene, splitScenes, type Scene } from '../lib/scenes'
 import { addToCollection, deleteCollectionCategory, deleteCollectionItem, importIntoCollection } from '../storage/collection'
 import { EditorView, keymap, ViewPlugin } from '@codemirror/view'
 import { Prec } from '@codemirror/state'
@@ -481,7 +482,8 @@ export function BookView({ renderChapter }: Props) {
           const spelling = bookRef.current?.spelling
           const current = bookRef.current
           const names = current ? spellingNames(current, entriesRef.current) : entriesRef.current.flatMap((entry) => [entry.name, ...entry.aliases])
-          return checkText(text, spelling, knownWords(spelling, names))
+          // Scene names (after ***) are labels, often German: not checked.
+          return checkText(maskSceneNames(text), spelling, knownWords(spelling, names))
         },
         onAddWord: (word) =>
           void attempt(async () => {
@@ -1002,6 +1004,17 @@ export function BookView({ renderChapter }: Props) {
               view.dispatch({ selection: { anchor: scene.from }, effects: EditorView.scrollIntoView(scene.from, { y: 'start', yMargin: 80 }) })
               view.focus()
               closeSidebarOnPhone()
+            }}
+            onRenameScene={(index, name) => {
+              const view = editorViewRef.current
+              if (!view) return
+              const change = renameScene(view.state.doc.toString(), index, name)
+              if (change) {
+                const changes = view.state.changes(change)
+                // The cursor stays with its text, also when the name line goes in right where it is.
+                view.dispatch({ changes, selection: view.state.selection.map(changes, 1), userEvent: 'scene-name' })
+              }
+              setScenes(splitScenes(view.state.doc.toString()))
             }}
             outline={
               chapters.length === 0 ? (

@@ -730,24 +730,35 @@ a.sidebar-manuscript.active {
 
 .scene-list {
   flex-basis: 100%;
+  /* Never wider than the chapter card, also with the name field open. */
+  min-width: 0;
   list-style: none;
   margin: 0 0 0.4rem;
   padding: 0 0.5rem 0 2.35rem;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 0.1rem;
 }
 
 .chapter-list .scene-list li {
   counter-increment: none;
-  display: block;
+  display: flex;
+  align-items: flex-start;
+  min-width: 0;
   background: none;
 }
 
+/* Number, then the name (or "Szene 2") with the first words small below. */
 .scene-link {
+  flex: 1;
+  min-width: 0;
   width: 100%;
   display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 0.5rem;
+  grid-template-columns: 1.1rem minmax(0, 1fr);
+  grid-template-areas:
+    'number title'
+    '. preview';
+  column-gap: 0.4rem;
   align-items: baseline;
   text-align: left;
   border: none;
@@ -765,15 +776,79 @@ a.sidebar-manuscript.active {
 }
 
 .scene-number {
+  grid-area: number;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+  opacity: 0.7;
+}
+
+.scene-title {
+  grid-area: title;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scene-link.named .scene-title {
+  color: var(--text);
 }
 
 .scene-preview {
+  grid-area: preview;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-family: var(--font-text);
+  font-size: 11px;
+  opacity: 0.85;
+}
+
+/* The pencil appears on hover (always on touch screens, see below). */
+.chapter-list li.active .scene-list button.icon.scene-rename {
+  flex: none;
+  width: 1.7rem;
+  height: 1.7rem;
+  font-size: 12px;
+  opacity: 0;
+}
+
+.chapter-list li.active .scene-list li:hover button.icon.scene-rename,
+.chapter-list li.active .scene-list button.icon.scene-rename:focus-visible {
+  opacity: 1;
+}
+
+.chapter-list .scene-list li.editing {
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.1rem 0.4rem;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.chapter-list .scene-name-input {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+  padding: 0.25rem 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+
+/* Touch screens: the pencil always visible and large enough; 16 px so the phone does not zoom in. */
+@media (hover: none) {
+  .chapter-list li.active .scene-list button.icon.scene-rename {
+    opacity: 1;
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+
+  .chapter-list .scene-name-input {
+    font-size: 16px;
+  }
 }
 
 /* Chapter groups: a heading over the chapters that belong together. */

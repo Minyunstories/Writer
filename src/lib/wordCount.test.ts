@@ -17,3 +17,8 @@ test('unspaced dashes and ellipses separate words', () => {
   expect(countWords('pages 3–4')).toBe(3)
   expect(countWords('well-known')).toBe(1)
 })
+
+test('scene names after *** are not counted', () => {
+  expect(countWords('The storm came.\n\n*** Ankunft am Hafen\n\nMorning came.')).toBe(5)
+  expect(countWords('*** Abschied\nRain fell.')).toBe(2)
+})

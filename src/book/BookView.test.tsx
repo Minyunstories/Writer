@@ -814,6 +814,70 @@ test('scenes of the open chapter are listed under it and jump to their start', a
   })
 })
 
+test('named scenes show their name with the first words below; unnamed ones keep their number', async () => {
+  const book = await createBook('Sturmlied')
+  const chapter = await createChapter(book.id, 'Anfang', 'The storm came.\n\n*** Ankunft am Hafen\n\nMorning came.')
+  renderAt(`/book/${book.id}/chapters/${chapter.id}`, true)
+  const list = await within(await screen.findByRole('navigation', { name: 'Buchnavigation' })).findByRole('list', { name: 'Szenen' })
+  const rows = within(list).getAllByRole('listitem')
+  expect(within(rows[0]).getByRole('button', { name: /Szene 1.*The storm came\./ })).toBeInTheDocument()
+  const second = within(rows[1]).getByRole('button', { name: /Ankunft am Hafen.*Morning came\./ })
+  expect(second.textContent).not.toMatch(/Szene/)
+})
+
+test('the pencil names a scene: the name goes into the text after its stars, or in a line at the top', async () => {
+  const user = userEvent.setup()
+  const book = await createBook('Sturmlied')
+  const chapter = await createChapter(book.id, 'Anfang', 'The storm came.\n\n***\n\nMorning came.')
+  renderAt(`/book/${book.id}/chapters/${chapter.id}`, true)
+  const nav = await screen.findByRole('navigation', { name: 'Buchnavigation' })
+  const text = () => EditorView.findFromDOM(document.querySelector<HTMLElement>('.cm-editor')!)!.state.doc.toString()
+
+  await user.click(await within(nav).findByRole('button', { name: 'Szene 2 benennen' }))
+  const field = within(nav).getByRole('textbox', { name: 'Name von Szene 2' })
+  await user.type(field, 'Ankunft{Enter}')
+  expect(text()).toBe('The storm came.\n\n*** Ankunft\n\nMorning came.')
+  expect(await within(nav).findByRole('button', { name: /Ankunft.*Morning came\./ })).toBeInTheDocument()
+
+  await user.click(within(nav).getByRole('button', { name: 'Szene 1 benennen' }))
+  await user.type(within(nav).getByRole('textbox', { name: 'Name von Szene 1' }), 'Abschied{Enter}')
+  expect(text()).toBe('*** Abschied\n\nThe storm came.\n\n*** Ankunft\n\nMorning came.')
+  await waitFor(async () => expect((await getChapter(chapter.id))!.content).toBe(text()), { timeout: 4000 })
+
+  // Esc keeps the old name; an empty field takes it away.
+  await user.click(within(nav).getByRole('button', { name: 'Ankunft benennen' }))
+  const again = within(nav).getByRole('textbox', { name: 'Name von Szene 2' })
+  expect(again).toHaveValue('Ankunft')
+  await user.clear(again)
+  await user.type(again, 'Anders{Escape}')
+  expect(text()).toContain('*** Ankunft')
+  await user.click(within(nav).getByRole('button', { name: 'Ankunft benennen' }))
+  await user.clear(within(nav).getByRole('textbox', { name: 'Name von Szene 2' }))
+  await user.keyboard('{Enter}')
+  expect(text()).toBe('*** Abschied\n\nThe storm came.\n\n***\n\nMorning came.')
+})
+
+test('a click elsewhere saves the scene name; leaving the window does not', async () => {
+  const user = userEvent.setup()
+  const book = await createBook('Sturmlied')
+  const chapter = await createChapter(book.id, 'Anfang', 'The storm came.\n\n***\n\nMorning came.')
+  renderAt(`/book/${book.id}/chapters/${chapter.id}`, true)
+  const nav = await screen.findByRole('navigation', { name: 'Buchnavigation' })
+  const text = () => EditorView.findFromDOM(document.querySelector<HTMLElement>('.cm-editor')!)!.state.doc.toString()
+  await user.click(await within(nav).findByRole('button', { name: 'Szene 2 benennen' }))
+  const field = within(nav).getByRole('textbox', { name: 'Name von Szene 2' })
+  await user.type(field, 'Ankunft')
+  // Another window in front (e.g. to copy a word): the field stays open as it is.
+  const hasFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(false)
+  fireEvent.blur(field)
+  hasFocus.mockRestore()
+  expect(within(nav).getByRole('textbox', { name: 'Name von Szene 2' })).toBe(field)
+  expect(text()).not.toContain('Ankunft')
+  await user.click(screen.getByRole('heading', { name: 'Sturmlied' }))
+  expect(text()).toContain('*** Ankunft')
+  expect(within(nav).queryByRole('textbox')).toBeNull()
+})
+
 test('wiki: the relationship network is a second view of the start page; a tap opens the entry beside it', async () => {
   const { addRelation, addRelationType } = await import('../storage/relations')
   const user = userEvent.setup()

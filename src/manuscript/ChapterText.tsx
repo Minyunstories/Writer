@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { SEPARATOR } from '../editor/livePreview'
+import { parseSceneBreak } from '../lib/sceneBreak'
 
 const INLINE = /(\*\*[^*\n]+\*\*|==[^=\n]+==|\*[^*\n]+\*|_[^_\n]+_)/g
 
@@ -19,19 +19,26 @@ interface Props {
   onOpenAt?: (offset: number) => void
 }
 
-/** A chapter's text to read: paragraphs, subheadings, scene breaks, bold, italic and highlights. */
+/** A chapter's text to read: paragraphs, subheadings, scene breaks (without their names), bold, italic and highlights. */
 export function ChapterText({ content, onOpenAt }: Props) {
   let offset = 0
+  let written = false
   const blocks = content.split('\n').flatMap((line) => {
     const start = offset
     offset += line.length + 1
     if (!line.trim()) return []
-    if (SEPARATOR.test(line))
+    const scene = line.includes('*') ? parseSceneBreak(line) : null
+    const first = !written
+    written = true
+    if (scene) {
+      // Scene names are only for writing. A name line at the very top is no break at all.
+      if (first && scene.name) return []
       return [
         <div key={start} className="manuscript-separator" aria-hidden="true">
           ***
         </div>,
       ]
+    }
     const heading = /^(#{1,6})\s+(.*)$/.exec(line)
     const open = onOpenAt ? () => onOpenAt(start) : undefined
     if (heading)

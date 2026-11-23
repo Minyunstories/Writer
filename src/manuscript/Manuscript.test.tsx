@@ -37,3 +37,16 @@ test('separators are centred; the text size can be changed and is kept', async (
   render(<Manuscript title="T" chapters={[]} onOpen={() => {}} />)
   expect(screen.getByRole('article').style.fontSize).toBe(after)
 })
+
+test('scene names stay out of the manuscript: a named break shows only its stars, the name line at the top nothing', () => {
+  render(
+    <Manuscript
+      title="T"
+      chapters={[chapter('a', 'A', '*** Abschied\n\nEins.\n\n*** Ankunft am Hafen\n\nZwei.'), chapter('b', 'B', '***\n\nDrei.')]}
+      onOpen={() => {}}
+    />,
+  )
+  expect([...document.querySelectorAll('.manuscript-separator')].map((node) => node.textContent)).toEqual(['***', '***'])
+  expect(document.body.textContent).not.toMatch(/Abschied|Ankunft/)
+  expect(screen.getByText('Eins.')).toBeInTheDocument()
+})

@@ -229,6 +229,17 @@ test('move buttons are locked while a move is running, and screen and storage ag
   expect(stored).toEqual(['Sturm', 'Anfang', 'Ende'])
 })
 
+test('named scenes show their name in the outline, the first words below it', async () => {
+  const { chapters, refresh } = await setup(['Anfang'])
+  await updateChapter(chapters[0].id, { content: '*** Abschied\n\nThe storm came.\n\n*** Ankunft am Hafen\n\nMorning came.' })
+  await refresh()
+  const scenes = await screen.findByRole('list', { name: 'Szenen in „Anfang“' })
+  expect(within(scenes).getAllByRole('listitem').map((item) => item.textContent)).toEqual([
+    '1AbschiedThe storm came.3 Wörter',
+    '2Ankunft am HafenMorning came.2 Wörter',
+  ])
+})
+
 test('a chapter with scene breaks shows its scenes', async () => {
   const { chapters, refresh } = await setup(['Anfang'])
   await updateChapter(chapters[0].id, { content: 'The storm came.\n\n***\n\nMorning came.' })

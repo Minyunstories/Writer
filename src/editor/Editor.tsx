@@ -20,6 +20,7 @@ import { editorTheme } from './editorTheme'
 import { CheckMenu } from '../grammar/CheckMenu'
 import { isModuleOn } from '../modules/modules'
 import { toggleHighlight, typewriter, writingMarkdown } from './markdownSetup'
+import { sceneNames } from './sceneNames'
 import { pasteParagraphs } from './paragraphs'
 import { ChapterSaver, type SaveState } from './saver'
 import { minimalChanges } from './minimalChanges'
@@ -250,6 +251,14 @@ export function Editor({ book, chapter, onChanged, extraExtensions, jumpTo, onJu
           extensions: [
             history(),
             writingMarkdown(),
+            sceneNames({
+              // A jump into a scene name (search, mentions) shows the line as text, so the mark is visible.
+              reveal: (state) => {
+                const found: { from: number; to: number }[] = []
+                state.field(flashField).between(0, state.doc.length, (from, to) => void found.push({ from, to }))
+                return found
+              },
+            }),
             pasteParagraphs,
             synonyms(),
             currentParagraph,

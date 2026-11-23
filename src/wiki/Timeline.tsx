@@ -47,7 +47,7 @@ export function Timeline({ name, chapters, mentions, onOpen }: Props) {
         const { chapter, index } = row
         const mention = byChapter.get(chapter.id)!
         const scenes = splitScenes(chapter.content)
-        const sceneOf = (offset: number) => scenes.filter((scene) => scene.from <= offset).length
+        const sceneOf = (offset: number) => scenes.filter((scene) => scene.start <= offset).length
         const status = statusLabel(chapter.status)
         return (
           <li key={chapter.id} className="wiki-timeline-item">

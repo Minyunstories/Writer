@@ -2,7 +2,7 @@ import { isObject, str, type Raw } from '../lib/fileFields'
 import type { AddressChange, AddressForm, AddressPerson, AddressRank, BookAddress, WikiEntry } from '../types'
 
 /**
- * A one-time import of forms of address (Christina's tables, transcribed into a file). Reading the file
+ * A one-time import of forms of address (the author's own tables, transcribed into a file). Reading the file
  * replaces the book's ranks, the figures' rank and names, and all exceptions; the figure folder stays.
  */
 export interface ImportRank {

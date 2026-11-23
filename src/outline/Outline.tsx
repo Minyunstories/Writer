@@ -323,8 +323,9 @@ function OutlineCard({
         {scenes.length > 1 && (
           <ol className="outline-scenes" aria-label={`Szenen in „${chapter.title}“`}>
             {scenes.map((scene, sceneIndex) => (
-              <li key={sceneIndex}>
+              <li key={sceneIndex} className={scene.name ? 'named' : undefined}>
                 <span className="outline-scene-number">{sceneIndex + 1}</span>
+                {scene.name && <span className="outline-scene-name">{scene.name}</span>}
                 <span className="outline-scene-preview">{scene.preview || '(leer)'}</span>
                 <span className="muted outline-scene-words">{formatWordCount(scene.words)}</span>
               </li>

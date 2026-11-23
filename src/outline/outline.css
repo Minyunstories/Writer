@@ -446,6 +446,37 @@ input.outline-tag-input:focus {
   font-family: var(--font-text);
 }
 
+/* A named scene: the name in the row, its first words small below. */
+.outline-scenes li.named {
+  grid-template-areas:
+    'number name words'
+    '. preview preview';
+  row-gap: 0;
+}
+
+.outline-scenes li.named .outline-scene-number {
+  grid-area: number;
+}
+
+.outline-scenes li.named .outline-scene-words {
+  grid-area: words;
+}
+
+.outline-scene-name {
+  grid-area: name;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.outline-scenes li.named .outline-scene-preview {
+  grid-area: preview;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
 .outline-group-head {
   list-style: none;
   margin: 1.2rem 0 0.2rem;

@@ -1,5 +1,6 @@
 import { StateEffect, StateField, type Extension } from '@codemirror/state'
 import { Decoration, EditorView, ViewPlugin, type DecorationSet, type ViewUpdate } from '@codemirror/view'
+import { maskSceneNames } from '../lib/sceneBreak'
 import { findRepeats, type Repeat } from './repeats'
 
 export interface RepeatOptions {
@@ -75,7 +76,8 @@ export function repeatMarks(options: RepeatOptions): Extension {
         this.timer = setTimeout(() => this.run(), wait)
       }
       run() {
-        const repeats = options.enabled() ? findRepeats(this.view.state.doc.toString(), options.names()) : []
+        // Scene names (after ***) are labels, not text.
+        const repeats = options.enabled() ? findRepeats(maskSceneNames(this.view.state.doc.toString()), options.names()) : []
         if (repeats.length === 0 && this.view.state.field(repeatsField).length === 0) return
         this.view.dispatch({ effects: setRepeats.of(repeats) })
       }

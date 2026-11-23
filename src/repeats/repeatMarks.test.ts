@@ -85,3 +85,8 @@ test('names are never marked', async () => {
   const { view } = setup('Mira ran home. Mira ran back.', { names: ['Mira'] })
   await waitFor(() => expect(marked(view)).toEqual(['ran', 'ran']))
 })
+
+test('scene names are no part of the text: a word there is no repeat of the same word in the story', async () => {
+  const { view } = setup('The harbour was quiet.\n\n*** Harbour\n\nThe door creaked. The door opened.')
+  await waitFor(() => expect(marked(view)).toEqual(['door', 'door']))
+})

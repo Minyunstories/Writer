@@ -1,6 +1,6 @@
 import { statusLabel } from '../lib/chapterStatus'
 import type { Scene } from '../lib/scenes'
-import { Fragment, useState, type ReactNode } from 'react'
+import { Fragment, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import type { Book, Chapter, ChapterGroup } from '../types'
 
@@ -33,6 +33,82 @@ interface Props {
   /** Scenes of the open chapter (shown when there are at least two). */
   scenes?: Scene[]
   onOpenScene?: (index: number) => void
+  /** Gives a scene of the open chapter a name (an empty one takes it away). */
+  onRenameScene?: (index: number, name: string) => void
+}
+
+/** One scene under the open chapter: its name (or number) with the first words below, and a pencil to name it. */
+function SceneItem({ scene, index, onOpen, onRename }: { scene: Scene; index: number; onOpen: () => void; onRename?: (name: string) => void }) {
+  const [editing, setEditing] = useState(false)
+  const linkRef = useRef<HTMLButtonElement>(null)
+  /** The field was closed already (Enter or Esc); the blur that follows changes nothing. */
+  const closed = useRef(false)
+  const title = scene.name ?? `Szene ${index + 1}`
+  const finish = (name: string | null, keyboard: boolean) => {
+    if (closed.current) return
+    closed.current = true
+    setEditing(false)
+    if (name !== null) onRename?.(name)
+    // With the keyboard, back to the scene, so it stays in the list (a click elsewhere keeps its own focus).
+    if (keyboard) requestAnimationFrame(() => linkRef.current?.focus({ preventScroll: true }))
+  }
+  if (editing)
+    return (
+      <li className="scene-item editing">
+        <span className="scene-number">{index + 1}</span>
+        <input
+          className="scene-name-input"
+          aria-label={`Name von Szene ${index + 1}`}
+          placeholder="Name der Szene"
+          defaultValue={scene.name ?? ''}
+          ref={(input) => {
+            // Without scrolling: the sidebar would otherwise jump sideways.
+            if (input && document.activeElement !== input) {
+              input.focus({ preventScroll: true })
+              input.select()
+            }
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault()
+              finish(event.currentTarget.value, true)
+            } else if (event.key === 'Escape') {
+              // Esc here only cancels; it does not end the focus mode as well.
+              event.preventDefault()
+              event.stopPropagation()
+              finish(null, true)
+            }
+          }}
+          onBlur={(event) => {
+            // Only another window in front (to copy a word, say): the field stays open as it is.
+            if (!document.hasFocus()) return
+            finish(event.currentTarget.value, false)
+          }}
+        />
+      </li>
+    )
+  return (
+    <li className="scene-item">
+      <button ref={linkRef} className={scene.name ? 'scene-link named' : 'scene-link'} onClick={onOpen}>
+        <span className="scene-number">{index + 1}</span>
+        <span className="scene-title">{title}</span>
+        <span className="scene-preview">{scene.preview || '(leer)'}</span>
+      </button>
+      {onRename && (
+        <button
+          className="ghost icon scene-rename"
+          aria-label={`${title} benennen`}
+          title="Szene benennen"
+          onClick={() => {
+            closed.current = false
+            setEditing(true)
+          }}
+        >
+          ✎
+        </button>
+      )}
+    </li>
+  )
 }
 
 const COLLAPSED_KEY = 'mw:collapsed-groups'
@@ -59,6 +135,7 @@ export function Sidebar({
   onRenameChapter,
   scenes = [],
   onOpenScene,
+  onRenameScene,
   onRenameGroup,
   onDeleteGroup,
   onDeleteChapter,
@@ -168,12 +245,13 @@ export function Sidebar({
                     {active && scenes.length > 1 && (
                       <ol className="scene-list" aria-label="Szenen">
                         {scenes.map((scene, index) => (
-                          <li key={index}>
-                            <button className="scene-link" onClick={() => onOpenScene?.(index)}>
-                              <span className="scene-number">Szene {index + 1}</span>
-                              <span className="scene-preview">{scene.preview || '(leer)'}</span>
-                            </button>
-                          </li>
+                          <SceneItem
+                            key={index}
+                            scene={scene}
+                            index={index}
+                            onOpen={() => onOpenScene?.(index)}
+                            onRename={onRenameScene && ((name) => onRenameScene(index, name))}
+                          />
                         ))}
                       </ol>
                     )}

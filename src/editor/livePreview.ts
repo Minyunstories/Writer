@@ -1,6 +1,7 @@
 import { ensureSyntaxTree, syntaxTree } from '@codemirror/language'
 import type { EditorState, Extension, Range } from '@codemirror/state'
 import { Decoration, type DecorationSet, type EditorView, ViewPlugin, type ViewUpdate } from '@codemirror/view'
+import { isSceneBreak } from '../lib/sceneBreak'
 
 const headingLine = [1, 2, 3].map((level) => Decoration.line({ class: `cm-mw-h${level}` }))
 const bold = Decoration.mark({ class: 'cm-mw-bold' })
@@ -10,12 +11,10 @@ const highlight = Decoration.mark({ class: 'cm-mw-highlight' })
 const blankLine = Decoration.line({ class: 'cm-mw-blank' })
 const separatorLine = Decoration.line({ class: 'cm-mw-separator' })
 
-/** A line of only *** (or * * *): a scene break. */
-export const SEPARATOR = /^\s*(?:\*\s*){3,}$/
 
 const HEADING = /^(?:ATXHeading|SetextHeading)(\d)$/
 
-/** Decorations for headings, bold, italic and empty lines inside the given ranges. */
+/** Decorations for headings, bold, italic, scene breaks (*** with or without a name) and empty lines inside the given ranges. */
 export function buildDecorations(
   state: EditorState,
   ranges: readonly { from: number; to: number }[],
@@ -29,7 +28,7 @@ export function buildDecorations(
     for (let pos = from; pos <= to; ) {
       const line = state.doc.lineAt(pos)
       if (line.length === 0) found.push(blankLine.range(line.from))
-      else if (SEPARATOR.test(line.text)) found.push(separatorLine.range(line.from))
+      else if (line.text.includes('*') && isSceneBreak(line.text)) found.push(separatorLine.range(line.from))
       pos = line.to + 1
     }
     tree.iterate({

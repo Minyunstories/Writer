@@ -83,6 +83,22 @@ export const editorTheme = EditorView.theme(
       color: 'var(--text-muted)',
       letterSpacing: '0.4em',
     },
+    // A scene's name ("*** Arrival"): small and quiet under the stars; the top line shows only the name.
+    '.cm-mw-scene': {
+      display: 'inline-flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      verticalAlign: 'top',
+      lineHeight: '1.45',
+      cursor: 'text',
+    },
+    '.cm-mw-scene-name': {
+      fontFamily: 'var(--font-ui)',
+      fontSize: '0.72em',
+      letterSpacing: '0.03em',
+      color: 'var(--text-muted)',
+    },
+    '.cm-mw-scene-name-raw': { letterSpacing: 'normal' },
     '.cm-mw-mark': { color: 'var(--text-muted)', opacity: '0.45', fontWeight: '400', fontStyle: 'normal' },
   },
   { dark: true },
