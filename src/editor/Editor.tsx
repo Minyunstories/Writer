@@ -20,6 +20,7 @@ import { editorTheme } from './editorTheme'
 import { CheckMenu } from '../grammar/CheckMenu'
 import { isModuleOn } from '../modules/modules'
 import { toggleHighlight, typewriter, writingMarkdown } from './markdownSetup'
+import { pasteParagraphs } from './paragraphs'
 import { ChapterSaver, type SaveState } from './saver'
 import { minimalChanges } from './minimalChanges'
 import { StatusBar } from './StatusBar'
@@ -249,6 +250,7 @@ export function Editor({ book, chapter, onChanged, extraExtensions, jumpTo, onJu
           extensions: [
             history(),
             writingMarkdown(),
+            pasteParagraphs,
             synonyms(),
             currentParagraph,
             commentMarks(

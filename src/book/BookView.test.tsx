@@ -721,6 +721,85 @@ test('typography for the whole book changes the chapters and keeps a version fir
   expect((await listVersions(first.id))[0].label).toBe('Vor der Typografie')
 })
 
+test('splitting paragraphs for the whole book keeps a version and the comments’ places', async () => {
+  const { listVersions } = await import('../storage/versions')
+  const { addComment } = await import('../storage/comments')
+  const user = userEvent.setup()
+  const book = await createBook('Sturmlied')
+  const text = 'The storm came.\nRain fell.\nMira ran.'
+  const open = await createChapter(book.id, 'Anfang', text)
+  const closed = await createChapter(book.id, 'Zweites', text)
+  for (const chapter of [open, closed]) {
+    await addComment(chapter.id, { from: 10, to: 20, quote: 'came.\nRain', text: 'x' })
+    await addComment(chapter.id, { from: 21, to: 25, quote: 'fell', text: 'y' })
+  }
+  renderAt(`/book/${book.id}/chapters/${open.id}`)
+  await screen.findByRole('link', { name: 'Anfang' })
+  fireEvent.keyDown(window, { key: 'F', ctrlKey: true, shiftKey: true })
+  const panel = await screen.findByRole('complementary', { name: 'Suchen und Ersetzen' })
+  await user.click(within(panel).getByRole('button', { name: 'Absätze trennen' }))
+  await user.click(within(panel).getByRole('button', { name: 'Ja, trennen' }))
+  await within(panel).findByText('2 Kapitel geändert.')
+  for (const chapter of [open, closed]) {
+    const stored = (await db.getChapter(chapter.id))!
+    expect(stored.content).toBe('The storm came.\n\nRain fell.\n\nMira ran.')
+    expect((await listVersions(chapter.id)).map((version) => [version.label, version.content])).toContainEqual(['Vor dem Trennen der Absätze', text])
+    expect(stored.comments!.map((comment) => [comment.quote, stored.content.slice(comment.from, comment.to)])).toEqual([
+      ['came.\n\nRain', 'came.\n\nRain'],
+      ['fell', 'fell'],
+    ])
+  }
+})
+
+test('splitting paragraphs finds comments by their words when their stored places are out of date', async () => {
+  const { addComment } = await import('../storage/comments')
+  const user = userEvent.setup()
+  const book = await createBook('Sturmlied')
+  const open = await createChapter(book.id, 'Anfang', 'Hello.')
+  const closed = await createChapter(book.id, 'Zweites', 'The storm came.\nRain fell.\nMira ran.')
+  await addComment(closed.id, { from: 21, to: 25, quote: 'fell', text: 'y' })
+  // Like „Alle ersetzen“: the text changes, the comment keeps its old place and finds itself by its words.
+  await updateChapter(closed.id, { content: 'The thunderstorm came.\nRain fell.\nMira ran.' })
+  renderAt(`/book/${book.id}/chapters/${open.id}`)
+  await screen.findByRole('link', { name: 'Anfang' })
+  fireEvent.keyDown(window, { key: 'F', ctrlKey: true, shiftKey: true })
+  const panel = await screen.findByRole('complementary', { name: 'Suchen und Ersetzen' })
+  await user.click(within(panel).getByRole('button', { name: 'Absätze trennen' }))
+  await user.click(within(panel).getByRole('button', { name: 'Ja, trennen' }))
+  await within(panel).findByText('1 Kapitel geändert.')
+  const stored = (await db.getChapter(closed.id))!
+  expect(stored.content).toBe('The thunderstorm came.\n\nRain fell.\n\nMira ran.')
+  expect(stored.comments!.map((comment) => [comment.quote, stored.content.slice(comment.from, comment.to)])).toEqual([['fell', 'fell']])
+})
+
+test('splitting paragraphs keeps the comments of the chapter open in the editor on their words', async () => {
+  const { addComment } = await import('../storage/comments')
+  const user = userEvent.setup()
+  const book = await createBook('Sturmlied')
+  const open = await createChapter(book.id, 'Anfang', 'The storm came.\nRain fell.\nMira ran.')
+  await addComment(open.id, { from: 10, to: 20, quote: 'came.\nRain', text: 'x' })
+  await addComment(open.id, { from: 21, to: 25, quote: 'fell', text: 'y' })
+  await addComment(open.id, { from: 10, to: 16, quote: 'came.\n', text: 'z' })
+  renderAt(`/book/${book.id}/chapters/${open.id}`, true)
+  await screen.findByRole('link', { name: 'Anfang' })
+  await waitFor(() => expect(document.querySelector('.cm-content')?.textContent).toContain('Mira ran.'))
+  fireEvent.keyDown(window, { key: 'F', ctrlKey: true, shiftKey: true })
+  const panel = await screen.findByRole('complementary', { name: 'Suchen und Ersetzen' })
+  await user.click(within(panel).getByRole('button', { name: 'Absätze trennen' }))
+  await user.click(within(panel).getByRole('button', { name: 'Ja, trennen' }))
+  await within(panel).findByText('1 Kapitel geändert.')
+  const view = EditorView.findFromDOM(document.querySelector<HTMLElement>('.cm-editor')!)!
+  await waitFor(() => expect(view.state.doc.toString()).toBe('The storm came.\n\nRain fell.\n\nMira ran.'))
+  // The editor stores comment places 1.5 s after a change; afterwards storage still has them on their words.
+  await new Promise((resolve) => setTimeout(resolve, 1800))
+  const stored = (await db.getChapter(open.id))!
+  expect(stored.comments!.map((comment) => [comment.quote, stored.content.slice(comment.from, comment.to)]).sort()).toEqual([
+    ['came.\n\n', 'came.\n\n'],
+    ['came.\n\nRain', 'came.\n\nRain'],
+    ['fell', 'fell'],
+  ])
+})
+
 test('scenes of the open chapter are listed under it and jump to their start', async () => {
   const user = userEvent.setup()
   const book = await createBook('Sturmlied')

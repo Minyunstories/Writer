@@ -250,3 +250,56 @@ test('comments: added on the selection, stored, and shown again when the chapter
   await waitFor(async () => expect((await getChapter(chapter.id))!.comments).toEqual([expect.objectContaining({ from: 4, to: 9, quote: 'storm', text: 'Zu laut?' })]))
   expect(view.dom.querySelector('.cm-mw-comment')?.textContent).toBe('storm')
 })
+
+function paste(view: EditorView, text: string) {
+  const event = new Event('paste', { bubbles: true, cancelable: true })
+  Object.defineProperty(event, 'clipboardData', { value: { getData: (type: string) => (type === 'text/plain' ? text : '') } })
+  view.contentDOM.dispatchEvent(event)
+}
+
+test('pasting separates the paragraphs of the pasted text', async () => {
+  const { view } = await setup('Start.')
+  view.dispatch({ selection: { anchor: view.state.doc.length } })
+  paste(view, '\r\nOne.\r\nTwo.')
+  expect(view.state.doc.toString()).toBe('Start.\n\nOne.\n\nTwo.')
+})
+
+test('a line break the pasted text ends with also gets its blank line', async () => {
+  const { view } = await setup('Mira ran.')
+  view.dispatch({ selection: { anchor: 0 } })
+  paste(view, 'Rain fell.\n')
+  expect(view.state.doc.toString()).toBe('Rain fell.\n\nMira ran.')
+})
+
+test('pasting into a paragraph leaves its edges alone', async () => {
+  const { view } = await setup('Mira ran.')
+  view.dispatch({ selection: { anchor: 5 } })
+  paste(view, 'fast\nTom')
+  expect(view.state.doc.toString()).toBe('Mira fast\n\nTomran.')
+})
+
+test('one undo takes back the paste with its blank lines', async () => {
+  const { undo } = await import('@codemirror/commands')
+  const { view } = await setup('Mira ran.')
+  view.dispatch({ selection: { anchor: 9 } })
+  paste(view, '\nRain fell.\nTom came.')
+  expect(view.state.doc.toString()).toBe('Mira ran.\n\nRain fell.\n\nTom came.')
+  undo(view)
+  expect(view.state.doc.toString()).toBe('Mira ran.')
+})
+
+test('pasting on the blank line between two paragraphs keeps them apart', async () => {
+  const { view } = await setup('Mira ran.\n\nTom came.')
+  view.dispatch({ selection: { anchor: 10 } })
+  paste(view, 'Rain fell.\nIt was cold.')
+  expect(view.state.doc.toString()).toBe('Mira ran.\n\nRain fell.\n\nIt was cold.\n\nTom came.')
+  // The cursor stays right after the pasted text, ready to write on.
+  expect(view.state.selection.main.head).toBe('Mira ran.\n\nRain fell.\n\nIt was cold.'.length)
+})
+
+test('pasting on an empty line right after a paragraph gets its blank line', async () => {
+  const { view } = await setup('Mira ran.\n')
+  view.dispatch({ selection: { anchor: 10 } })
+  paste(view, 'Tom came.')
+  expect(view.state.doc.toString()).toBe('Mira ran.\n\nTom came.')
+})

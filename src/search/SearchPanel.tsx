@@ -1,3 +1,4 @@
+import { separateParagraphs } from '../editor/paragraphs'
 import { typographic } from '../editor/typography'
 import { useMemo, useState } from 'react'
 import type { Chapter } from '../types'
@@ -11,13 +12,15 @@ interface Props {
   onReplaceAll: (query: string, replacement: string, options: FindOptions) => Promise<number>
   /** Curly quotes and dashes in every chapter; resolves to the number of changed chapters. */
   onTypography?: () => Promise<number>
+  /** A blank line between paragraphs in every chapter; resolves to the number of changed chapters. */
+  onParagraphs?: () => Promise<number>
   onClose: () => void
 }
 
 const CONTEXT = 40
 
 /** Search through every chapter of the book, and replace everywhere at once. */
-export function SearchPanel({ chapters, onOpen, onReplaceAll, onTypography, onClose }: Props) {
+export function SearchPanel({ chapters, onOpen, onReplaceAll, onTypography, onParagraphs, onClose }: Props) {
   const [query, setQuery] = useState('')
   const [replacement, setReplacement] = useState('')
   const [caseSensitive, setCaseSensitive] = useState(false)
@@ -27,6 +30,9 @@ export function SearchPanel({ chapters, onOpen, onReplaceAll, onTypography, onCl
   const [typoConfirm, setTypoConfirm] = useState(false)
   const [typoDone, setTypoDone] = useState<number | null>(null)
   const typoCount = useMemo(() => (typoConfirm ? chapters.filter((chapter) => typographic(chapter.content) !== chapter.content).length : 0), [chapters, typoConfirm])
+  const [paraConfirm, setParaConfirm] = useState(false)
+  const [paraDone, setParaDone] = useState<number | null>(null)
+  const paraCount = useMemo(() => (paraConfirm ? chapters.filter((chapter) => separateParagraphs(chapter.content).text !== chapter.content).length : 0), [chapters, paraConfirm])
   const options = { caseSensitive, wholeWord }
 
   const groups = useMemo(
@@ -162,6 +168,44 @@ export function SearchPanel({ chapters, onOpen, onReplaceAll, onTypography, onCl
               </button>
             )}
             {typoDone !== null && <p className="search-summary">{typoDone} Kapitel umgewandelt.</p>}
+          </section>
+        )}
+
+        {onParagraphs && !query && (
+          <section className="search-typography">
+            <h3>Absätze</h3>
+            <p className="muted">Wo zwei Textzeilen direkt untereinander stehen, kommt eine Leerzeile dazwischen.</p>
+            {paraConfirm ? (
+              paraCount === 0 ? (
+                <p className="search-summary">Alles schon getrennt.</p>
+              ) : (
+                <div className="search-confirm">
+                  <span>{paraCount} Kapitel ändern? Vorher wird jeweils eine Fassung gesichert.</span>
+                  <button
+                    className="primary"
+                    onClick={async () => {
+                      setParaConfirm(false)
+                      setParaDone(await onParagraphs())
+                    }}
+                  >
+                    Ja, trennen
+                  </button>
+                  <button className="ghost" autoFocus onClick={() => setParaConfirm(false)}>
+                    Abbrechen
+                  </button>
+                </div>
+              )
+            ) : (
+              <button
+                onClick={() => {
+                  setParaDone(null)
+                  setParaConfirm(true)
+                }}
+              >
+                Absätze trennen
+              </button>
+            )}
+            {paraDone !== null && <p className="search-summary">{paraDone} Kapitel geändert.</p>}
           </section>
         )}
       </div>

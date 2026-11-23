@@ -54,6 +54,8 @@ import { SearchPanel } from '../search/SearchPanel'
 import { updateSpelling } from '../storage/spelling'
 import { autoVersion } from '../storage/versions'
 import { typographic } from '../editor/typography'
+import { mapPosition, separateParagraphs } from '../editor/paragraphs'
+import { placeComments, resolveAnchor } from '../storage/comments'
 import { addNote, deleteNote, moveNoteToChapter, moveNoteToEntry, setEntryStar, updateNote } from '../storage/notes'
 import { WikiHome } from '../wiki/WikiHome'
 import { RelationsSection } from '../wiki/RelationsSection'
@@ -661,6 +663,37 @@ export function BookView({ renderChapter }: Props) {
     window.dispatchEvent(new Event(SYNCED_EVENT))
     return count
   }
+  /** A blank line between paragraphs in every chapter, each against its stored text; comments keep their words. */
+  const paragraphsEverywhere = async () => {
+    window.dispatchEvent(new Event('pagehide'))
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    let count = 0
+    try {
+      for (const chapter of await listChapters(bookId)) {
+        const { text, added } = separateParagraphs(chapter.content)
+        if (text === chapter.content) continue
+        await autoVersion(chapter, chapter.content, { label: 'Vor dem Trennen der Absätze', always: true })
+        await updateChapter(chapter.id, { content: text }, { expectedContent: chapter.content })
+        if (chapter.comments?.length)
+          await placeComments(
+            chapter.id,
+            chapter.comments.map((comment) => {
+              // Stored places can be out of date (Ersetzen, Typografie); the quote finds them first.
+              const at = resolveAnchor(chapter.content, comment)
+              const from = mapPosition(added, at.from)
+              const to = mapPosition(added, at.to)
+              return { id: comment.id, from, to, quote: text.slice(from, to) }
+            }),
+          )
+        count++
+      }
+    } catch {
+      setActionError(true)
+    }
+    await reload()
+    window.dispatchEvent(new Event(SYNCED_EVENT))
+    return count
+  }
   const toggleNotesRef = useRef(toggleNotes)
   toggleNotesRef.current = toggleNotes
 
@@ -1216,6 +1249,7 @@ export function BookView({ renderChapter }: Props) {
             onOpen={(chapterId, range) => openChapterAt(chapterId, range)}
             onReplaceAll={replaceEverywhere}
             onTypography={typographyEverywhere}
+            onParagraphs={paragraphsEverywhere}
             onClose={() => setSearchOpen(false)}
           />
         )}
