@@ -25,7 +25,11 @@ import { buildMatcher } from '../wiki/linker'
 import { entriesIn } from '../wiki/mentions'
 import { ModuleDrawer } from '../modules/ModuleDrawer'
 import { useDrawerHeight, useStored } from '../modules/drawerState'
-import { activeModules, isModuleOn, MODULES, type ModuleId } from '../modules/modules'
+import { drawerModules, isModuleOn, MODULES, type ModuleId } from '../modules/modules'
+import { SketchesPanel } from '../sketches/SketchesPanel'
+import { SketchesPage } from '../sketches/SketchesPage'
+import { SketchLinks } from '../sketches/SketchLinks'
+import { useStamps } from '../sketches/useStamps'
 import { VocabularyPanel } from '../vocabulary/VocabularyPanel'
 import { PersonSection } from '../address/PersonSection'
 import { RanksPage } from '../address/RanksPage'
@@ -121,6 +125,8 @@ function canHover(): boolean {
   return typeof window.matchMedia === 'function' && window.matchMedia('(hover: hover)').matches
 }
 
+type WikiView = 'home' | 'graph' | 'address' | 'sketches'
+
 function isNarrow(): boolean {
   return typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 720px)').matches
 }
@@ -147,15 +153,15 @@ export function BookView({ renderChapter }: Props) {
   const [sidebarWidth, setSidebarWidth] = useSidebarWidth()
   const [panelWidth, setPanelWidth] = usePanelWidth()
   const [notesOpen, setNotesOpen] = useState(false)
-  const [wikiView, setWikiView] = useState<'home' | 'graph' | 'address'>(() => {
+  const [wikiView, setWikiView] = useState<WikiView>(() => {
     try {
       const stored = localStorage.getItem('mw:wiki-view')
-      return stored === 'graph' || stored === 'address' ? stored : 'home'
+      return stored === 'graph' || stored === 'address' || stored === 'sketches' ? stored : 'home'
     } catch {
       return 'home'
     }
   })
-  const switchWikiView = (next: 'home' | 'graph' | 'address') => {
+  const switchWikiView = (next: WikiView) => {
     setWikiView(next)
     try {
       localStorage.setItem('mw:wiki-view', next)
@@ -163,7 +169,12 @@ export function BookView({ renderChapter }: Props) {
       // Only a convenience.
     }
   }
-  const [notesTab, setNotesTab] = useState<'notes' | 'collection' | 'comments' | 'reader'>('notes')
+  const [notesTab, setNotesTab] = useState<'notes' | 'collection' | 'comments' | 'reader' | 'sketches'>('notes')
+  /** Sketches: the one chosen (remembered on this device), the panel laid over the book, a point to show. */
+  const [sketchId, setSketchId] = useStored<string>(`mw:sketch:${bookId}`, '')
+  const [sketchesWide, setSketchesWide] = useState(false)
+  const [sketchFocus, setSketchFocus] = useState<{ x: number; y: number } | null>(null)
+  const stamps = useStamps()
   const collection = useCollection()
   const collectionRef = useRef(collection)
   collectionRef.current = collection
@@ -202,6 +213,15 @@ export function BookView({ renderChapter }: Props) {
       const [loadedFolders, loadedEntries] = await Promise.all([listFolders(bookId), listEntries(bookId)])
       setFolders(loadedFolders)
       setEntries(loadedEntries)
+    } catch {
+      setActionError(true)
+    }
+  }, [bookId])
+
+  /** Only the book (sketches change it at every stroke; chapters and wiki stay as they are). */
+  const reloadBook = useCallback(async () => {
+    try {
+      setBook((await getBook(bookId)) ?? null)
     } catch {
       setActionError(true)
     }
@@ -536,7 +556,7 @@ export function BookView({ renderChapter }: Props) {
     }
   }, [book, section, rawSection, activeChapter, chapters, itemId, navigate])
 
-  const modules = book ? activeModules(book) : []
+  const modules = book ? drawerModules(book) : []
   const drawerAvailable = section === 'chapters' && !!activeChapter && modules.length > 0
   const drawerShown = drawerAvailable && drawerFlag === '1'
   const drawerTabShown = modules.includes(drawerTab) ? drawerTab : modules[0]
@@ -771,26 +791,45 @@ export function BookView({ renderChapter }: Props) {
 
   const activeEntry = section === 'wiki' ? entries.find((entry) => entry.id === itemId) : undefined
   // In the wiki the entry is the page itself; only the network shows entries beside it.
-  const besideNetwork = section === 'wiki' && !itemId && wikiView === 'graph'
+  const sketchesOn = !!book && isModuleOn(book, 'sketches')
+  /** The panel tab shown: sketches only while the module is on. */
+  const shownTab = notesTab === 'sketches' && !sketchesOn ? 'notes' : notesTab
+  const besideNetwork = section === 'wiki' && !itemId && (wikiView === 'graph' || (wikiView === 'sketches' && sketchesOn))
   const panelEntry = section !== 'wiki' || besideNetwork ? entries.find((entry) => entry.id === panelEntryId) : undefined
 
   /** Opens a chapter and marks a place in it. */
   const panelTabs = (
     <span className="panel-tabs" role="tablist" aria-label="Seitenleiste">
-      <button role="tab" aria-selected={notesTab === 'notes'} onClick={() => setNotesTab('notes')}>
+      <button role="tab" aria-selected={shownTab === 'notes'} onClick={() => setNotesTab('notes')}>
         Notizen
       </button>
-      <button role="tab" aria-selected={notesTab === 'collection'} onClick={() => setNotesTab('collection')}>
+      <button role="tab" aria-selected={shownTab === 'collection'} onClick={() => setNotesTab('collection')}>
         Sammlung
       </button>
-      <button role="tab" aria-selected={notesTab === 'comments'} onClick={() => setNotesTab('comments')}>
+      <button role="tab" aria-selected={shownTab === 'comments'} onClick={() => setNotesTab('comments')}>
         Kommentare
       </button>
-      <button role="tab" aria-selected={notesTab === 'reader'} onClick={() => setNotesTab('reader')}>
+      <button role="tab" aria-selected={shownTab === 'reader'} onClick={() => setNotesTab('reader')}>
         Kapitel
       </button>
+      {sketchesOn && (
+        <button role="tab" aria-selected={shownTab === 'sketches'} onClick={() => setNotesTab('sketches')}>
+          Skizzen
+        </button>
+      )}
     </span>
   )
+
+  /** „Auf Skizzen“ in a wiki entry: the sketch on the wiki page, with the stamp in the middle. */
+  const openSketch = (id: string, point: { x: number; y: number }) => {
+    if (!book) return
+    setSketchId(id)
+    setSketchFocus({ ...point })
+    switchWikiView('sketches')
+    setPanelStack([])
+    navigate(`/book/${book.id}/wiki`)
+  }
+  const sketchLinks = (entryId: string) => book && <SketchLinks book={book} entryId={entryId} onOpen={(sketch, stamp) => openSketch(sketch.id, stamp)} />
 
   const openChapterAt = (chapterId: string, range: { from: number; to: number }) => {
     if (!book) return
@@ -1023,6 +1062,7 @@ export function BookView({ renderChapter }: Props) {
                   <RelationsSection book={book} entryId={activeEntry.id} entries={entries} onOpenEntry={(entryId) => navigate(`/book/${book.id}/wiki/${entryId}`)} onChanged={() => void reload()} />
                 }
                 address={<PersonSection book={book} entry={activeEntry} entries={entries} folders={folders} chapters={chapters} chapterId={null} onChanged={() => void reload()} />}
+                sketches={sketchLinks(activeEntry.id)}
                 onOpenChapter={openChapterAt}
                 onReplaceName={replaceName}
                 focusName={activeEntry.id === freshEntryId}
@@ -1036,9 +1076,13 @@ export function BookView({ renderChapter }: Props) {
             </div>
           )}
           {section === 'wiki' && !activeEntry && entries.length > 0 && (
-            <div className={wikiView === 'graph' ? 'book-scroll graph-mode' : 'book-scroll'}>
+            <div className={wikiView === 'graph' || (wikiView === 'sketches' && sketchesOn) ? 'book-scroll graph-mode' : 'book-scroll'}>
               <div className="wiki-view-tabs" role="tablist" aria-label="Wiki-Ansicht">
-                <button role="tab" aria-selected={wikiView === 'home' || (wikiView === 'address' && !isModuleOn(book, 'address'))} onClick={() => switchWikiView('home')}>
+                <button
+                  role="tab"
+                  aria-selected={wikiView === 'home' || (wikiView === 'address' && !isModuleOn(book, 'address')) || (wikiView === 'sketches' && !sketchesOn)}
+                  onClick={() => switchWikiView('home')}
+                >
                   Übersicht
                 </button>
                 <button role="tab" aria-selected={wikiView === 'graph'} onClick={() => switchWikiView('graph')}>
@@ -1049,8 +1093,28 @@ export function BookView({ renderChapter }: Props) {
                     Anreden
                   </button>
                 )}
+                {sketchesOn && (
+                  <button role="tab" aria-selected={wikiView === 'sketches'} onClick={() => switchWikiView('sketches')}>
+                    Skizzen
+                  </button>
+                )}
               </div>
-              {wikiView === 'address' && isModuleOn(book, 'address') ? (
+              {wikiView === 'sketches' && sketchesOn ? (
+                <SketchesPage
+                  book={book}
+                  entries={entries}
+                  stamps={stamps}
+                  editable={!isNarrow()}
+                  sketchId={sketchId}
+                  onSketch={(id) => {
+                    setSketchFocus(null)
+                    setSketchId(id)
+                  }}
+                  focus={sketchFocus}
+                  onOpenEntry={openPanel}
+                  onChanged={() => void reloadBook()}
+                />
+              ) : wikiView === 'address' && isModuleOn(book, 'address') ? (
                 <RanksPage book={book} folders={folders} entries={entries} onChanged={() => void reload()} />
               ) : wikiView === 'graph' ? (
                 <div className="wiki-graph-page">
@@ -1145,7 +1209,7 @@ export function BookView({ renderChapter }: Props) {
           )}
         </main>
 
-        {(searchOpen || notesOpen || panelEntry) && book && <PanelHandle width={panelWidth} onWidth={setPanelWidth} />}
+        {(searchOpen || notesOpen || panelEntry) && book && !(notesOpen && shownTab === 'sketches' && sketchesWide) && <PanelHandle width={panelWidth} onWidth={setPanelWidth} />}
         {searchOpen && book && (
           <SearchPanel
             chapters={chapters}
@@ -1155,7 +1219,23 @@ export function BookView({ renderChapter }: Props) {
             onClose={() => setSearchOpen(false)}
           />
         )}
-        {notesOpen && book && notesTab === 'reader' && (
+        {notesOpen && book && shownTab === 'sketches' && (
+          <SketchesPanel
+            tabs={panelTabs}
+            wide={sketchesWide}
+            onWide={setSketchesWide}
+            onClose={() => setNotesOpen(false)}
+            book={book}
+            entries={entries}
+            stamps={stamps}
+            editable={!isNarrow()}
+            sketchId={sketchId}
+            onSketch={setSketchId}
+            onOpenEntry={openPanel}
+            onChanged={() => void reloadBook()}
+          />
+        )}
+        {notesOpen && book && shownTab === 'reader' && (
           <ChapterReader
             bookId={book.id}
             chapters={chapters}
@@ -1168,10 +1248,10 @@ export function BookView({ renderChapter }: Props) {
             onClose={() => setNotesOpen(false)}
           />
         )}
-        {notesOpen && book && notesTab === 'comments' && (
+        {notesOpen && book && shownTab === 'comments' && (
           <CommentsPanel bookId={book.id} tabs={panelTabs} onOpen={(chapterId, range) => openChapterAt(chapterId, range)} onClose={() => setNotesOpen(false)} />
         )}
-        {notesOpen && book && notesTab === 'collection' && (
+        {notesOpen && book && shownTab === 'collection' && (
           <CollectionPanel
             collection={collection}
             tabs={panelTabs}
@@ -1208,7 +1288,7 @@ export function BookView({ renderChapter }: Props) {
             onClose={() => setNotesOpen(false)}
           />
         )}
-        {notesOpen && book && notesTab === 'notes' && (
+        {notesOpen && book && shownTab === 'notes' && (
           <NotesPanel
             tabs={panelTabs}
             notes={book.notes ?? []}
@@ -1267,6 +1347,7 @@ export function BookView({ renderChapter }: Props) {
                 onOpenEntry={pushPanel}
                 relations={<RelationsSection book={book} entryId={panelEntry.id} entries={entries} onOpenEntry={pushPanel} onChanged={() => void reload()} />}
                 address={<PersonSection book={book} entry={panelEntry} entries={entries} folders={folders} chapters={chapters} chapterId={activeChapter?.id ?? null} onChanged={() => void reload()} />}
+                sketches={sketchLinks(panelEntry.id)}
                 onOpenChapter={openChapterAt}
                 onReplaceName={replaceName}
                 onChanged={reloadWiki}

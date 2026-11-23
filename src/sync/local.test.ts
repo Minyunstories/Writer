@@ -786,3 +786,51 @@ test('a favourites file without any marks is taken and then removed from the rep
   expect((await getFavorites()).marks).toEqual([])
   expect(result.obsolete).toEqual(['collection/favorites.json'])
 })
+
+test('sketches: taken over, kept when drawn on here during the run, merged on conflict, removed only when unchanged here', async () => {
+  const { sketchFile } = await import('../sketches/sketchFile')
+  const { db } = await import('../storage/connection')
+  const { p, book } = await seed()
+  const stroke = (id: string, createdAt: number) => ({ id, color: '#fff', width: 2 as const, points: [0, 0, 1, 1], createdAt })
+  const remote = { id: 'sk1', name: 'Map', strokes: [stroke('a', 1)], stamps: [], createdAt: 1, updatedAt: 1 }
+  await apply({ write: new Map([[`${p}sketches/sk1.json`, sketchFile(remote)]]), snapshot: await readLocalFiles() })
+  expect((await getBook(book.id))!.sketches).toEqual([remote])
+
+  const putSketches = async (sketches: object[]) => {
+    const stored = (await getBook(book.id))!
+    await (await db()).put('books', { ...stored, sketches } as typeof stored)
+  }
+  // Drawn here while the run was under way: merged, so the stroke from there is not lost either.
+  const planned = await readLocalFiles()
+  await putSketches([{ ...remote, strokes: [stroke('a', 1), stroke('mine', 2)] }])
+  await apply({ write: new Map([[`${p}sketches/sk1.json`, sketchFile({ ...remote, strokes: [stroke('a', 1), stroke('other', 3)] })]]), snapshot: planned })
+  expect((await getBook(book.id))!.sketches![0].strokes.map((s) => s.id)).toEqual(['a', 'mine', 'other'])
+
+  // Both drew: merged, erased stays erased.
+  const theirs = { ...remote, strokes: [stroke('a', 1), stroke('theirs', 3)], deleted: ['mine', 'other'], updatedAt: 3 }
+  await applyFull({ conflicts: [{ path: `${p}sketches/sk1.json`, remote: sketchFile(theirs) }], snapshot: await readLocalFiles() })
+  expect((await getBook(book.id))!.sketches![0].strokes.map((s) => s.id)).toEqual(['a', 'theirs'])
+
+  // Deleted there while drawn on here: the drawing survives; unchanged here: it goes.
+  const before = await readLocalFiles()
+  await putSketches([{ ...(await getBook(book.id))!.sketches![0], strokes: [stroke('a', 1), stroke('theirs', 3), stroke('late', 4)], updatedAt: 4 }])
+  await apply({ remove: [`${p}sketches/sk1.json`], snapshot: before })
+  expect((await getBook(book.id))!.sketches).toHaveLength(1)
+  await apply({ remove: [`${p}sketches/sk1.json`], snapshot: await readLocalFiles() })
+  expect((await getBook(book.id))!.sketches).toBeUndefined()
+})
+
+test('own stamps travel in stamps/stamps.json for all books, merged per stamp', async () => {
+  const { stampsFile } = await import('../sketches/stampsFile')
+  const { db } = await import('../storage/connection')
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"><path d="M0 0L1 1"/></svg>'
+  expect((await readLocalFiles()).has('stamps/stamps.json')).toBe(false)
+  await apply({ write: new Map([['stamps/stamps.json', stampsFile({ stamps: [{ id: 'a', name: 'Turm', svg, updatedAt: 1 }] })!]]), snapshot: await readLocalFiles() })
+  const files = await readLocalFiles()
+  expect(JSON.parse(files.get('stamps/stamps.json') as string).stamps.map((s: { name: string }) => s.name)).toEqual(['Turm'])
+
+  await (await db()).put('shared', { id: 'stamps', stamps: [{ id: 'a', name: 'Turm', svg, updatedAt: 1 }, { id: 'b', name: 'Brunnen', svg, updatedAt: 2 }] })
+  await applyFull({ conflicts: [{ path: 'stamps/stamps.json', remote: stampsFile({ stamps: [{ id: 'c', name: 'Mühle', svg, updatedAt: 3 }], deleted: ['a'] })! }], snapshot: await readLocalFiles() })
+  const stored = await (await db()).get('shared', 'stamps')
+  expect((stored as { stamps: { name: string }[] }).stamps.map((s) => s.name)).toEqual(['Brunnen', 'Mühle'])
+})

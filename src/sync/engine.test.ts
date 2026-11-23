@@ -516,3 +516,62 @@ test('favourites marked on two devices meet; unmarking on one wins over the olde
     expect([...favoriteKeys(await getFavorites())]).toEqual([favoriteKey('Speed', 'rapid')])
   }
 })
+
+test('sketches: a stroke drawn on B while B fetches A’s stroke keeps both; an erase on A stays erased', async () => {
+  const { addStroke, createSketch, removeItems } = await import('../storage/sketches')
+  const { getBook } = await import('../storage/db')
+  const firstPoints = async (device: string) => {
+    await on(device)
+    const [book] = await listBooks()
+    return ((await getBook(book.id))!.sketches?.[0]?.strokes ?? []).map((stroke) => stroke.points[0]).sort((a, b) => a - b)
+  }
+  await on(A)
+  const book = await createBook('Sturmlied')
+  const sketch = await createSketch(book.id, 'Karte')
+  const old = await addStroke(book.id, sketch.id, { color: '#fff', width: 2, points: [5, 5, 6, 6] })
+  await sync(A)
+  await sync(B)
+  await on(A)
+  await addStroke(book.id, sketch.id, { color: '#fff', width: 2, points: [1, 1, 2, 2] })
+  await removeItems(book.id, sketch.id, [old.id])
+  await sync(A)
+  // B draws while its run fetches A's file.
+  const original = repo.getBlob.bind(repo)
+  let drawn = false
+  repo.getBlob = async (sha) => {
+    const data = await original(sha)
+    if (!drawn) {
+      drawn = true
+      await addStroke(book.id, sketch.id, { color: '#fff', width: 2, points: [9, 9, 8, 8] })
+    }
+    return data
+  }
+  await sync(B)
+  repo.getBlob = original
+  await sync(A)
+  await sync(B)
+  expect(await firstPoints(A)).toEqual([1, 9])
+  expect(await firstPoints(B)).toEqual([1, 9])
+})
+
+test('sketches: a rename on A survives a later stroke on B', async () => {
+  const { addStroke, createSketch, renameSketch } = await import('../storage/sketches')
+  const { getBook } = await import('../storage/db')
+  await on(A)
+  const book = await createBook('Sturmlied')
+  const sketch = await createSketch(book.id, 'Karte')
+  await sync(A)
+  await sync(B)
+  await on(A)
+  await renameSketch(book.id, sketch.id, 'Burg')
+  await sync(A)
+  await new Promise((done) => setTimeout(done, 5))
+  await on(B)
+  await addStroke(book.id, sketch.id, { color: '#fff', width: 2, points: [9, 9, 8, 8] })
+  await sync(B)
+  await sync(A)
+  for (const device of [A, B]) {
+    await on(device)
+    expect((await getBook(book.id))!.sketches![0]).toMatchObject({ name: 'Burg', strokes: [expect.objectContaining({ points: [9, 9, 8, 8] })] })
+  }
+})

@@ -5,6 +5,7 @@ import { modulesFile, parseModules } from '../modules/modulesFile'
 import { parseShelf, shelfFile } from '../shelf/shelfFile'
 import { parseVocabulary, vocabularyFile } from '../vocabulary/vocabularyFile'
 import { addressFile, parseAddress } from '../address/addressFile'
+import { parseSketch, sketchFile } from '../sketches/sketchFile'
 import type { Book, BookNote, BookRelations, Relation, RelationType, Chapter, ChapterComment, ChapterGroup, ChapterStatus, ChapterVersion, FontId, TrashItem, WikiEntry, WikiFolder, WikiImage, WikiProperty } from '../types'
 import type { FileData } from './hash'
 
@@ -28,6 +29,8 @@ const ROOT = 'books/'
 export const COLLECTION_PATH = 'collection/collection.json'
 /** Favourites of the collection: a file of their own, so older versions cannot drop them. */
 export const FAVORITES_PATH = 'collection/favorites.json'
+/** Own stamps of the sketches module, for all books: outside books/ like the collection. */
+export const STAMPS_PATH = 'stamps/stamps.json'
 const FONTS: FontId[] = ['literata', 'inter', 'courier-prime']
 const EXTENSIONS: Record<string, string> = { 'image/webp': 'webp', 'image/jpeg': 'jpg', 'image/png': 'png', 'image/gif': 'gif' }
 const HEADER_START = '---\n'
@@ -125,6 +128,7 @@ export function bundleToFiles({ book, chapters, folders, entries, images, versio
   if (vocabulary) files.set(`${prefix}vocabulary.json`, vocabulary)
   const address = book.address && addressFile(book.address)
   if (address) files.set(`${prefix}address.json`, address)
+  for (const sketch of book.sketches ?? []) files.set(`${prefix}sketches/${sketch.id}.json`, sketchFile(sketch))
   for (const version of versions) {
     if (!version.auto) files.set(`${prefix}versions/${version.chapterId}/${version.id}.json`, versionFile(version))
   }
@@ -605,6 +609,14 @@ export function filesToBundle(bookId: string, files: FileSet): BookBundle {
   if (vocabulary && vocabularyFile(vocabulary)) book.vocabulary = vocabulary
   const address = parseAddress(files.get(`${prefix}address.json`))
   if (address && addressFile(address)) book.address = address
+  const sketches = [...files.keys()]
+    .flatMap((path) => {
+      const match = path.startsWith(`${prefix}sketches/`) ? /^sketches\/([^/]+)\.json$/.exec(path.slice(prefix.length)) : null
+      const sketch = match ? parseSketch(files.get(path), match[1]) : null
+      return sketch ? [sketch] : []
+    })
+    .sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id))
+  if (sketches.length) book.sketches = sketches
   const stars = stringList(parseJson<unknown>(files.get(`${prefix}wiki/stars.json`)))
   if (stars.length > 0) book.wikiStars = stars
   const wikiOrder = parseOrder(files.get(`${prefix}wiki/order.json`))
@@ -709,12 +721,13 @@ export function parseVersion(bookId: string, data: FileData | undefined): Chapte
   return version
 }
 
-export type PathKind = 'book' | 'chapter' | 'outline' | 'folders' | 'entry' | 'image' | 'tags' | 'templates' | 'style' | 'dates' | 'place' | 'wikiOrder' | 'folderColors' | 'notes' | 'stars' | 'templateBlocks' | 'spelling' | 'collection' | 'favorites' | 'version' | 'status' | 'comments' | 'relations' | 'graph' | 'groups' | 'modules' | 'shelf' | 'vocabulary' | 'address' | 'trash'
+export type PathKind = 'book' | 'chapter' | 'outline' | 'folders' | 'entry' | 'image' | 'tags' | 'templates' | 'style' | 'dates' | 'place' | 'wikiOrder' | 'folderColors' | 'notes' | 'stars' | 'templateBlocks' | 'spelling' | 'collection' | 'favorites' | 'version' | 'status' | 'comments' | 'relations' | 'graph' | 'groups' | 'modules' | 'shelf' | 'vocabulary' | 'address' | 'trash' | 'sketch' | 'stamps'
 
 /** What a repository path holds, or null for files the app does not manage. */
 export function classifyPath(path: string): { bookId: string; kind: PathKind; id: string } | null {
   if (path === COLLECTION_PATH) return { bookId: '', kind: 'collection', id: 'collection' }
   if (path === FAVORITES_PATH) return { bookId: '', kind: 'favorites', id: 'favorites' }
+  if (path === STAMPS_PATH) return { bookId: '', kind: 'stamps', id: 'stamps' }
   const bookId = bookIdOf(path)
   if (!bookId) return null
   const rest = path.slice(bookPrefix(bookId).length)
@@ -741,6 +754,8 @@ export function classifyPath(path: string): { bookId: string; kind: PathKind; id
   if (rest === 'notes.json') return { bookId, kind: 'notes', id: bookId }
   if (rest === 'spelling.json') return { bookId, kind: 'spelling', id: bookId }
   if (rest === 'wiki/stars.json') return { bookId, kind: 'stars', id: bookId }
+  const sketch = /^sketches\/([^/]+)\.json$/.exec(rest)
+  if (sketch) return { bookId, kind: 'sketch', id: sketch[1] }
   const trash = /^trash\/([^/]+)\.json$/.exec(rest)
   if (trash) return { bookId, kind: 'trash', id: trash[1] }
   const version = /^versions\/[^/]+\/([^/]+)\.json$/.exec(rest)

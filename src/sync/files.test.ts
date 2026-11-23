@@ -397,3 +397,19 @@ test('trash items travel as their exact text', () => {
   expect(files.get('books/b1/trash/t1.json')).toBe(file)
   expect(filesToBundle('b1', files).trash).toEqual(bundle.trash)
 })
+
+test('sketches travel one file each under sketches/, also while the module is off', () => {
+  const sketch = {
+    id: 'sk1',
+    name: 'Map',
+    strokes: [{ id: 'st1', color: '#fff', width: 2 as const, points: [1, 2, 3, 4], createdAt: 1 }],
+    stamps: [],
+    createdAt: 1,
+    updatedAt: 2,
+  }
+  const files = bundleToFiles({ ...bundle, book: { ...book, sketches: [sketch] } })
+  expect(files.has('books/b1/sketches/sk1.json')).toBe(true)
+  expect(classifyPath('books/b1/sketches/sk1.json')).toEqual({ bookId: 'b1', kind: 'sketch', id: 'sk1' })
+  expect(classifyPath('stamps/stamps.json')).toEqual({ bookId: '', kind: 'stamps', id: 'stamps' })
+  expect(filesToBundle('b1', files).book.sketches).toEqual([sketch])
+})

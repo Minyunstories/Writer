@@ -33,6 +33,8 @@ export interface Book {
   vocabulary?: BookVocabulary
   /** Forms of address (address module). Missing: empty. */
   address?: BookAddress
+  /** Sketches (sketches module): one file each. Missing: none. */
+  sketches?: Sketch[]
   /** Star and cover pattern on the shelf. Missing: neither. */
   shelf?: BookShelf
 }
@@ -376,4 +378,58 @@ export interface TrashItem {
   title: string
   deletedAt: number
   file: string
+}
+
+/** A pen stroke of a sketch. Strokes never change; erasing puts the id into the sketch's `deleted`. */
+export interface SketchStroke {
+  id: string
+  color: string
+  /** Pen width: 1 fine, 2 medium, 3 thick. */
+  width: 1 | 2 | 3
+  /** Flat list x, y, x, y … in sketch coordinates. */
+  points: number[]
+  createdAt: number
+  extra?: Record<string, unknown>
+}
+
+/** A stamp on a sketch: a built-in symbol (`builtin:<name>`) or an own one (`custom:<id>`), maybe linked to a wiki entry. */
+export interface SketchStamp {
+  id: string
+  stamp: string
+  x: number
+  y: number
+  /** 1 small, 2 medium, 3 large. */
+  size: 1 | 2 | 3
+  color: string
+  entryId?: string
+  createdAt: number
+  updatedAt: number
+  extra?: Record<string, unknown>
+}
+
+export interface Sketch {
+  id: string
+  name: string
+  strokes: SketchStroke[]
+  stamps: SketchStamp[]
+  /** Erased strokes and removed stamps; they stay removed when devices are merged. */
+  deleted?: string[]
+  createdAt: number
+  updatedAt: number
+  extra?: Record<string, unknown>
+}
+
+/** An own stamp (all books): a cleaned SVG that takes the pen colour. */
+export interface CustomStamp {
+  id: string
+  name: string
+  svg: string
+  updatedAt: number
+  extra?: Record<string, unknown>
+}
+
+export interface StampLibrary {
+  stamps: CustomStamp[]
+  deleted?: string[]
+  extra?: Record<string, unknown>
 }

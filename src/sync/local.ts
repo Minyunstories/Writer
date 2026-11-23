@@ -5,17 +5,21 @@ import { modulesFile, parseModules } from '../modules/modulesFile'
 import { parseShelf, shelfFile } from '../shelf/shelfFile'
 import { mergeVocabulary, parseVocabulary, vocabularyFile } from '../vocabulary/vocabularyFile'
 import { addressFile, mergeAddress, parseAddress } from '../address/addressFile'
+import { mergeSketch, parseSketch, sketchFile } from '../sketches/sketchFile'
+import { mergeStamps, parseStamps, stampsFile } from '../sketches/stampsFile'
 import { COLLECTION_ID } from '../storage/collection'
+import { STAMPS_ID } from '../storage/stamps'
 import type { IDBPTransaction } from 'idb'
 import { cleanPlace } from '../lib/bookStyle'
 import { cleanSpelling } from '../storage/spelling'
 import { cleanList, db, newId, type Schema } from '../storage/connection'
-import type { Book, Chapter, ChapterComment, Collection, Favorites, FontId, WikiEntry, WikiFolder, WikiImage } from '../types'
+import type { Book, Chapter, ChapterComment, Collection, Favorites, FontId, StampLibrary, WikiEntry, WikiFolder, WikiImage } from '../types'
 import {
   bundleToFiles,
   classifyPath,
   COLLECTION_PATH,
   FAVORITES_PATH,
+  STAMPS_PATH,
   colorsFile as colorsText,
   parseTemplateBlocks,
   templateBlocksFile as templateBlocksText,
@@ -78,7 +82,7 @@ export interface RemoteChange {
 /** Everything stored on this device, as repository files. */
 export async function readLocalFiles(): Promise<FileSet> {
   const database = await db()
-  const [books, chapters, folders, entries, images, collection, favorites, versions, trash] = await Promise.all([
+  const [books, chapters, folders, entries, images, collection, favorites, versions, trash, stamps] = await Promise.all([
     database.getAll('books'),
     database.getAll('chapters'),
     database.getAll('wikiFolders'),
@@ -88,11 +92,14 @@ export async function readLocalFiles(): Promise<FileSet> {
     database.get('shared', FAVORITES_ID),
     database.getAll('versions'),
     database.getAll('trash'),
+    database.get('shared', STAMPS_ID),
   ])
   const files: FileSet = new Map()
   if (collection && 'items' in collection && hasCollection(collection)) files.set(COLLECTION_PATH, collectionFile(collection))
   const favoritesText = favorites && 'marks' in favorites ? favoritesFile(favorites) : undefined
   if (favoritesText) files.set(FAVORITES_PATH, favoritesText)
+  const stampsText = stamps && 'stamps' in stamps ? stampsFile(stamps) : null
+  if (stampsText) files.set(STAMPS_PATH, stampsText)
   for (const book of books) {
     const own = <T extends { bookId: string }>(list: T[]) => list.filter((item) => item.bookId === book.id)
     const bundle = bundleToFiles({
@@ -109,7 +116,7 @@ export async function readLocalFiles(): Promise<FileSet> {
   return files
 }
 
-const KIND_ORDER = ['book', 'style', 'modules', 'shelf', 'place', 'folders', 'templates', 'templateBlocks', 'chapter', 'outline', 'tags', 'dates', 'status', 'groups', 'comments', 'entry', 'wikiOrder', 'folderColors', 'notes', 'relations', 'vocabulary', 'address', 'graph', 'stars', 'spelling', 'collection', 'favorites', 'version', 'trash', 'image']
+const KIND_ORDER = ['book', 'style', 'modules', 'shelf', 'place', 'folders', 'templates', 'templateBlocks', 'chapter', 'outline', 'tags', 'dates', 'status', 'groups', 'comments', 'entry', 'wikiOrder', 'folderColors', 'notes', 'relations', 'vocabulary', 'address', 'sketch', 'graph', 'stars', 'spelling', 'collection', 'favorites', 'stamps', 'version', 'trash', 'image']
 
 /**
  * Applies changes from the repository to this device, file by file, in one transaction.
@@ -528,6 +535,54 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
     await books.put(updated)
   }
 
+  /**
+   * A sketch: the repository's; merged stroke by stroke when it was also drawn on here (on conflict, or since the
+   * run was planned – the run then records the repository's file as known, so keeping only ours would lose theirs).
+   */
+  async function writeSketch(path: string, bookId: string, id: string, data: FileData | undefined, conflict: boolean) {
+    const remote = parseSketch(data, id)
+    if (!remote) {
+      skipped.push(path)
+      return
+    }
+    const book = await books.get(bookId)
+    if (!book) return
+    const local = book.sketches?.find((sketch) => sketch.id === id)
+    const changedHere = (snapshotText(path) ?? '') !== (local ? sketchFile(local) : '')
+    const next = local && (conflict || changedHere) ? mergeSketch(local, remote) : remote
+    const others = (book.sketches ?? []).filter((sketch) => sketch.id !== id)
+    const sketches = [...others, next].sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id))
+    await books.put({ ...book, sketches })
+  }
+
+  /** A sketch deleted there: gone here too, unless drawn on here since the run was planned (drawing beats deleting). */
+  async function removeSketch(path: string, bookId: string, id: string) {
+    const book = await books.get(bookId)
+    const local = book?.sketches?.find((sketch) => sketch.id === id)
+    if (!book || !local) return
+    if ((snapshotText(path) ?? '') !== sketchFile(local)) return
+    const sketches = book.sketches!.filter((sketch) => sketch.id !== id)
+    const updated: Book = { ...book, sketches }
+    if (!sketches.length) delete updated.sketches
+    await books.put(updated)
+  }
+
+  /** Own stamps (all books): merged per stamp when both sides changed them, else the repository's. */
+  async function writeStamps(path: string, data: FileData | undefined, conflict: boolean) {
+    const remote = parseStamps(data)
+    if (!remote) {
+      skipped.push(path)
+      return
+    }
+    const stored = await shared.get(STAMPS_ID)
+    const local: StampLibrary = stored && 'stamps' in stored ? { stamps: stored.stamps, ...(stored.deleted ? { deleted: stored.deleted } : {}), ...(stored.extra ? { extra: stored.extra } : {}) } : { stamps: [] }
+    const changedHere = (snapshotText(path) ?? '') !== (stampsFile(local) ?? '')
+    const next = conflict || changedHere ? mergeStamps(local, remote) : remote
+    await shared.put({ ...next, id: STAMPS_ID })
+    // A file this device would not write back (nothing in it) is removed instead of fetched forever.
+    if (!stampsFile(next)) obsolete.push(path)
+  }
+
   /** Chapter groups: the repository's, unless changed here since the run was planned; on conflict joined (this device first). */
   async function writeGroups(path: string, bookId: string, data: FileData | undefined, conflict: boolean) {
     const remote = parseGroups(data)
@@ -923,6 +978,8 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
       else if (info.kind === 'templates') await writeTemplates(path, info.bookId, data, conflict)
       else if (info.kind === 'collection') await writeCollection(path, data, conflict)
       else if (info.kind === 'favorites') await writeFavorites(path, data, conflict)
+      else if (info.kind === 'stamps') await writeStamps(path, data, conflict)
+      else if (info.kind === 'sketch') await writeSketch(path, info.bookId, info.id, data, conflict)
       else if (info.kind === 'version') await writeVersion(path, info.bookId, data)
       else if (info.kind === 'trash') await writeTrash(path, info.bookId, info.id, data)
       else await writeImage(path, info.bookId, info.id, data)
@@ -963,6 +1020,8 @@ export async function applyRemoteFiles(change: RemoteChange): Promise<{ notes: C
       else if (info.kind === 'templates') await writeTemplates(item.path, info.bookId, '{}', false)
       else if (info.kind === 'collection') await writeCollection(item.path, '{"items":[]}', false)
       else if (info.kind === 'favorites') await writeFavorites(item.path, '{"marks":[]}', false)
+      else if (info.kind === 'stamps') await writeStamps(item.path, '{"stamps":[]}', false)
+      else if (info.kind === 'sketch') await removeSketch(item.path, info.bookId, info.id)
       else if (info.kind === 'version') await versions.delete(info.id)
       else if (info.kind === 'trash') await trash.delete(info.id)
       else if (info.kind === 'folders') {

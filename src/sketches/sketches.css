@@ -1,0 +1,331 @@
+/* Sketches: a drawing surface with tools above it, in the right panel and on the wiki page. */
+.sketch {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  height: 100%;
+  min-height: 0;
+  outline: none;
+}
+
+.sketch-tools,
+.sketch-palette,
+.sketch-selection {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.6rem;
+}
+
+.sketch-group {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.sketch-tools button,
+.sketch-palette button,
+.sketch-selection button {
+  padding: 0.25rem 0.5rem;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.sketch-tools button[aria-pressed='true'],
+.sketch-palette button[aria-pressed='true'],
+.sketch-selection button[aria-pressed='true'] {
+  color: var(--text);
+  background: var(--surface-2);
+  border-color: var(--border-strong);
+}
+
+.sketch-width {
+  width: 34px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.sketch-width span {
+  display: block;
+  width: 100%;
+  border-radius: 99px;
+  background: currentColor;
+}
+
+.sketch-tools button.sketch-color {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 50%;
+}
+
+.sketch-tools button.sketch-color[aria-pressed='true'] {
+  border-color: var(--text);
+}
+
+.sketch-tools button.sketch-color:hover:not(:disabled) {
+  border-color: var(--text-muted);
+}
+
+.sketch-overlays {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  right: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.3rem;
+  pointer-events: none;
+}
+
+.sketch-overlays > * {
+  pointer-events: auto;
+}
+
+.sketch-palette,
+.sketch-selection {
+  padding: 0.35rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+
+.sketch-palette {
+  gap: 0.15rem;
+  max-height: 45%;
+  overflow-y: auto;
+}
+
+.sketch-message {
+  padding: 0.25rem 0.5rem;
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.sketch-palette button.sketch-stamp-choice {
+  padding: 0.2rem;
+  line-height: 0;
+}
+
+.sketch-load {
+  position: relative;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 0.25rem 0.5rem;
+}
+
+.sketch-load:hover {
+  color: var(--text);
+}
+
+.sketch-load input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.sketch-own {
+  list-style: none;
+  margin: 0.3rem 0 0;
+  padding: 0;
+  width: 100%;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.sketch-own li {
+  display: flex;
+  gap: 0.3rem;
+  align-items: center;
+}
+
+.sketch-own input {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+}
+
+.sketch-selection select {
+  max-width: 14rem;
+  font-size: 13px;
+}
+
+.sketch-message {
+  margin: 0;
+  font-size: 12px;
+}
+
+
+.sketch-stage {
+  position: relative;
+  flex: 1;
+  min-height: 240px;
+}
+
+.sketch-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg);
+  touch-action: none;
+  user-select: none;
+}
+
+.sketch-cursor-pen {
+  cursor: crosshair;
+}
+
+.sketch-cursor-eraser {
+  cursor: cell;
+}
+
+.sketch-cursor-stamp {
+  cursor: copy;
+}
+
+.sketch-cursor-select {
+  cursor: default;
+}
+
+.sketch-cursor-grab {
+  cursor: grab;
+}
+
+.sketch-cursor-grab:active {
+  cursor: grabbing;
+}
+
+.sketch-stroke {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.sketch-stamp.linked {
+  cursor: pointer;
+}
+
+.sketch-stamp-missing {
+  fill: none;
+  stroke: var(--text-muted);
+  stroke-dasharray: 4 3;
+  opacity: 0.6;
+}
+
+.sketch-stamp-selected {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.sketch-stamp-label {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  fill: var(--text-muted);
+  paint-order: stroke;
+  stroke: var(--bg);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+
+.sketch-empty {
+  position: absolute;
+  inset: auto 0 45% 0;
+  margin: 0;
+  text-align: center;
+  font-size: 13px;
+  pointer-events: none;
+}
+
+/* The choice of sketch above the canvas (panel and wiki page). */
+.sketches {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  height: 100%;
+  min-height: 0;
+}
+
+.sketches-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.sketches-bar select {
+  max-width: 14rem;
+}
+
+.sketches-bar button {
+  padding: 0.3rem 0.6rem;
+  font-size: 13px;
+}
+
+.sketches-bar-space {
+  flex: 1;
+}
+
+.sketches-none,
+.sketches-error {
+  margin: 0.5rem 0;
+  font-size: 13px;
+}
+
+.sketches-panel-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  padding: 0.6rem 0.75rem 0.75rem;
+}
+
+/* Vergrößern: the panel covers the book (the chapter stays open underneath). */
+.book-panel.sketches-panel.wide {
+  position: absolute;
+  inset: 0;
+  width: auto;
+  height: auto;
+  z-index: 16;
+  border-left: none;
+  border-radius: 0;
+}
+
+.wiki-sketches-page {
+  flex: 1;
+  min-height: 420px;
+  display: flex;
+  flex-direction: column;
+  padding: 0.6rem 0.8rem;
+}
+
+/* With the fifth tab (Skizzen) the panel tabs get a little tighter, so all five fit from about 340 px. */
+@container panel-head (max-width: 390px) {
+  .panel-tabs:has(> :nth-child(5)) {
+    gap: 0.05rem;
+  }
+
+  .panel-tabs:has(> :nth-child(5)) button {
+    padding-inline: 0.32rem;
+    font-size: 11.5px;
+  }
+}
+
+@container panel-head (max-width: 350px) {
+  .panel-tabs:has(> :nth-child(5)) button {
+    padding-inline: 0.26rem;
+    font-size: 11px;
+  }
+}

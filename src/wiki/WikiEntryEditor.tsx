@@ -59,6 +59,8 @@ interface Props {
   relations?: ReactNode
   /** The address module's section (rank, names, who addresses whom how), below the relationships. */
   address?: ReactNode
+  /** The sketches module's „Auf Skizzen“, below the forms of address. */
+  sketches?: ReactNode
 }
 
 const TIMELINE_KEY = 'mw:wiki-timeline'
@@ -180,6 +182,7 @@ export function WikiEntryEditor({
   onStar,
   relations,
   address,
+  sketches,
   onReplaceName,
 }: Props) {
   const [entry, setEntry] = useState<WikiEntry | null | undefined>(undefined)
@@ -578,6 +581,8 @@ export function WikiEntryEditor({
       {relations}
 
       {address}
+
+      {sketches}
 
       <div className="wiki-field">
         <span className="wiki-label">Notizen</span>
