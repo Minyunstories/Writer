@@ -402,6 +402,8 @@ export interface SketchStamp {
   size: 1 | 2 | 3
   color: string
   entryId?: string
+  /** Caption under a stamp, or the words of a free text (stamp `text`). */
+  label?: string
   createdAt: number
   updatedAt: number
   extra?: Record<string, unknown>

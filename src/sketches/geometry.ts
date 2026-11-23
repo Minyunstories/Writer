@@ -4,6 +4,10 @@ import type { Sketch, SketchStamp, SketchStroke } from '../types'
 export const STROKE_WIDTHS = { 1: 1.5, 2: 3, 3: 6 } as const
 /** Stamp sizes 1–3 (S, M, L): edge length in world units. */
 export const STAMP_SIZES = { 1: 24, 2: 40, 3: 64 } as const
+/** A free text is a stamp of this kind; its words are the label. */
+export const TEXT_STAMP = 'text'
+/** Free text sizes 1–3 (S, M, L): font size in world units. */
+export const TEXT_SIZES = { 1: 13, 2: 18, 3: 26 } as const
 
 /** Six pen colours that read well on the dark canvas; the first is the text colour. */
 export const SKETCH_COLORS = [
@@ -52,6 +56,13 @@ export function strokeBox(stroke: SketchStroke): Box {
 }
 
 export function stampBox(stamp: SketchStamp): Box {
+  if (stamp.stamp === TEXT_STAMP) {
+    // No layout to measure here: about 0.55 of the font size per character (the UI font), centred on the point.
+    const size = TEXT_SIZES[stamp.size]
+    const halfWidth = Math.max(size, (stamp.label ?? '').length * size * 0.55) / 2
+    const halfHeight = (size * 1.3) / 2
+    return { left: stamp.x - halfWidth, top: stamp.y - halfHeight, right: stamp.x + halfWidth, bottom: stamp.y + halfHeight }
+  }
   const half = STAMP_SIZES[stamp.size] / 2
   return { left: stamp.x - half, top: stamp.y - half, right: stamp.x + half, bottom: stamp.y + half }
 }

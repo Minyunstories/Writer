@@ -167,6 +167,8 @@
   position: relative;
   flex: 1;
   min-height: 240px;
+  /* A field for a new text near the edge must not make the panel scroll sideways. */
+  overflow: clip;
 }
 
 .sketch-canvas {
@@ -191,6 +193,10 @@
 
 .sketch-cursor-stamp {
   cursor: copy;
+}
+
+.sketch-cursor-text {
+  cursor: text;
 }
 
 .sketch-cursor-select {
@@ -238,6 +244,36 @@
   stroke: var(--bg);
   stroke-width: 3px;
   stroke-linejoin: round;
+}
+
+/* Free text: the font of the names under linked stamps, in the pen colour, outlined against the canvas. */
+.sketch-text {
+  font-family: var(--font-ui);
+  fill: currentColor;
+  paint-order: stroke;
+  stroke: var(--bg);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+
+.sketch-new-text {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  width: 11em;
+  padding: 0.1em 0.4em;
+  outline-offset: 0;
+  font-family: var(--font-ui);
+  text-align: center;
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+}
+
+.sketch-label-field {
+  width: 12rem;
+  font-size: 13px;
+  padding: 0.25rem 0.5rem;
 }
 
 .sketch-empty {

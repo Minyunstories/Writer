@@ -5,7 +5,7 @@ import { SKETCH_COLORS } from './geometry'
 
 const TOP_KEYS = ['id', 'name', 'createdAt', 'updatedAt', 'strokes', 'stamps', 'deleted']
 const STROKE_KEYS = ['id', 'color', 'width', 'points', 'createdAt']
-const STAMP_KEYS = ['id', 'stamp', 'x', 'y', 'size', 'color', 'entry', 'createdAt', 'updatedAt']
+const STAMP_KEYS = ['id', 'stamp', 'x', 'y', 'size', 'color', 'entry', 'label', 'createdAt', 'updatedAt']
 
 /** One decimal is plenty for a sketch and keeps the file small. */
 const round = (value: number) => Math.round(value * 10) / 10
@@ -33,6 +33,8 @@ export function sketchFile(sketch: Sketch): string {
         ...(stamp.entryId ? { entry: stamp.entryId } : {}),
         createdAt: stamp.createdAt,
         updatedAt: stamp.updatedAt,
+        // After the dates: where an older version, which keeps it as an unknown field, writes it too.
+        ...(stamp.label ? { label: stamp.label } : {}),
       },
       stamp.extra,
     ),
@@ -53,6 +55,23 @@ function parseStroke(raw: unknown): SketchStroke[] {
   return [extra ? { ...stroke, extra } : stroke]
 }
 
+/** A stamp label that an older version kept as an unknown field (`extra.label`), back where it belongs. */
+export function normalizeStamp(stamp: SketchStamp): SketchStamp {
+  const kept = stamp.extra?.label
+  if (typeof kept !== 'string') return stamp
+  const { label: _label, ...rest } = stamp.extra!
+  const next: SketchStamp = { ...stamp, ...(stamp.label || !kept.trim() ? {} : { label: kept }) }
+  if (Object.keys(rest).length) next.extra = rest
+  else delete next.extra
+  return next
+}
+
+/** All stamps of a sketch normalised; the same object when nothing needed it. */
+export function normalizeSketch(sketch: Sketch): Sketch {
+  const stamps = sketch.stamps.map(normalizeStamp)
+  return stamps.some((stamp, i) => stamp !== sketch.stamps[i]) ? { ...sketch, stamps } : sketch
+}
+
 function parseStamp(raw: unknown): SketchStamp[] {
   if (!isObject(raw) || !str(raw.id) || !str(raw.stamp) || typeof raw.x !== 'number' || typeof raw.y !== 'number') return []
   const stamp: SketchStamp = {
@@ -63,6 +82,7 @@ function parseStamp(raw: unknown): SketchStamp[] {
     size: level(raw.size),
     color: str(raw.color) ? raw.color : SKETCH_COLORS[0].value,
     ...(str(raw.entry) ? { entryId: raw.entry } : {}),
+    ...(str(raw.label) && raw.label.trim() ? { label: raw.label } : {}),
     createdAt: Number(raw.createdAt) || 0,
     updatedAt: Number(raw.updatedAt) || 0,
   }

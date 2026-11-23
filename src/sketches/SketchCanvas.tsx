@@ -4,11 +4,12 @@ import { addStamp, addStroke, removeItems, restoreItems, updateStamp, type Stamp
 import type { CustomStamp, Sketch, SketchStamp, SketchStroke, WikiEntry } from '../types'
 import { ConfirmDialog } from '../ui/Dialogs'
 import { BUILTIN_STAMPS, BUILTIN_VIEWBOX, builtinStamp } from './builtinStamps'
-import { centerOn, clampScale, contentBox, fitView, hitsStroke, round, SKETCH_COLORS, stampAt, STAMP_SIZES, STROKE_WIDTHS, strokePath, type View } from './geometry'
+import { centerOn, clampScale, contentBox, fitView, hitsStroke, round, SKETCH_COLORS, stampAt, stampBox, STAMP_SIZES, STROKE_WIDTHS, strokePath, TEXT_SIZES, TEXT_STAMP, type View } from './geometry'
 import { sanitizeSvg } from './sanitizeSvg'
+import { normalizeSketch } from './sketchFile'
 import './sketches.css'
 
-type Tool = 'pen' | 'eraser' | 'stamp' | 'select' | 'hand'
+type Tool = 'pen' | 'eraser' | 'stamp' | 'text' | 'select' | 'hand'
 type Level = 1 | 2 | 3
 
 export type SketchCanvasProps = {
@@ -39,7 +40,8 @@ const TOOLS: { id: Tool; label: string; title: string }[] = [
   { id: 'pen', label: 'Stift', title: 'Stift: mit Stift oder Maus zeichnen' },
   { id: 'eraser', label: 'Radierer', title: 'Radierer: entfernt ganze Striche und Stempel' },
   { id: 'stamp', label: 'Stempel', title: 'Stempel setzen' },
-  { id: 'select', label: 'Auswählen', title: 'Stempel auswählen: verschieben, Größe, verknüpfen' },
+  { id: 'text', label: 'Text', title: 'Text: auf die Skizze klicken und schreiben' },
+  { id: 'select', label: 'Auswählen', title: 'Stempel und Texte auswählen: verschieben, Größe, beschriften, verknüpfen' },
   { id: 'hand', label: 'Hand', title: 'Verschieben; verknüpfte Stempel öffnen' },
 ]
 const WIDTHS: { level: Level; label: string }[] = [
@@ -98,10 +100,13 @@ function StampShape({ stamp, size, prepared }: { stamp: string; size: number; pr
   return <rect className="sketch-stamp-missing" x={-size / 2} y={-size / 2} width={size} height={size} rx={4} />
 }
 
-export function SketchCanvas({ bookId, sketch, entries, stamps, editable, focus, onOpenEntry, onChanged }: SketchCanvasProps) {
+export function SketchCanvas({ bookId, sketch: stored, entries, stamps, editable, focus, onOpenEntry, onChanged }: SketchCanvasProps) {
+  // Labels an older version kept as unknown fields are shown like the others.
+  const sketch = useMemo(() => normalizeSketch(stored), [stored])
   const svgRef = useRef<SVGSVGElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
   const liveRef = useRef<SVGPathElement>(null)
+  const newTextRef = useRef<HTMLInputElement>(null)
 
   // What is shown: the stored sketch plus this canvas's own changes until they are stored and reloaded.
   const [local, setLocal] = useState(sketch)
@@ -120,6 +125,14 @@ export function SketchCanvas({ bookId, sketch, entries, stamps, editable, focus,
   const [color, setColor] = useState<string>(SKETCH_COLORS[0].value)
   const [chosen, setChosen] = useState<string>(BUILTIN_STAMPS[0].id)
   const [selected, setSelected] = useState<string | null>(null)
+  /** A new text being typed at this world point (Text tool). */
+  const [writing, setWriting] = useState<{ x: number; y: number } | null>(null)
+  const writingRef = useRef(writing)
+  writingRef.current = writing
+  // The field for a new text takes the keyboard; near the edge it must not scroll the panel sideways.
+  useEffect(() => {
+    if (writing) newTextRef.current?.focus({ preventScroll: true })
+  }, [writing])
   const [erasing, setErasing] = useState<ReadonlySet<string>>(new Set())
   const [dragged, setDragged] = useState<{ id: string; x: number; y: number } | null>(null)
   const [manage, setManage] = useState(false)
@@ -239,12 +252,12 @@ export function SketchCanvas({ bookId, sketch, entries, stamps, editable, focus,
     })
   }
 
-  const addStampHere = (x: number, y: number) => {
+  const addStampHere = (x: number, y: number, kind = chosen, label?: string) => {
     const now = Date.now()
-    const temp: SketchStamp = { id: `pending:${now}:${pendingIds.current++}`, stamp: chosen, x: round(x), y: round(y), size: 2, color, createdAt: now, updatedAt: now }
+    const temp: SketchStamp = { id: `pending:${now}:${pendingIds.current++}`, stamp: kind, x: round(x), y: round(y), size: 2, color, ...(label ? { label } : {}), createdAt: now, updatedAt: now }
     setLocal((current) => ({ ...current, stamps: [...current.stamps, temp] }))
     run(async () => {
-      const saved = await addStamp(bookId, sketch.id, { stamp: temp.stamp, x: temp.x, y: temp.y, size: temp.size, color: temp.color, createdAt: temp.createdAt })
+      const saved = await addStamp(bookId, sketch.id, { stamp: temp.stamp, x: temp.x, y: temp.y, size: temp.size, color: temp.color, ...(label ? { label } : {}), createdAt: temp.createdAt })
       remap.current.set(temp.id, saved.id)
       setLocal((current) => ({ ...current, stamps: current.stamps.map((stamp) => (stamp.id === temp.id ? saved : stamp)) }))
       pushStep({ kind: 'items', present: true, strokes: [], stamps: [saved] })
@@ -273,6 +286,7 @@ export function SketchCanvas({ bookId, sketch, entries, stamps, editable, focus,
     const before: StampPatch = {}
     for (const key of Object.keys(patch) as (keyof StampPatch)[]) {
       if (key === 'entryId') before.entryId = old.entryId ?? null
+      else if (key === 'label') before.label = old.label ?? null
       else (before as Record<string, unknown>)[key] = old[key]
     }
     if (Object.keys(patch).every((key) => (before as Record<string, unknown>)[key] === (patch as Record<string, unknown>)[key])) return
@@ -280,8 +294,9 @@ export function SketchCanvas({ bookId, sketch, entries, stamps, editable, focus,
       ...current,
       stamps: current.stamps.map((stamp) => {
         if (stamp.id !== id) return stamp
-        const next = { ...stamp, ...patch } as SketchStamp & { entryId?: string | null }
+        const next = { ...stamp, ...patch } as SketchStamp & { entryId?: string | null; label?: string | null }
         if (next.entryId === null) delete next.entryId
+        if (next.label === null) delete next.label
         return next as SketchStamp
       }),
     }))
@@ -289,6 +304,27 @@ export function SketchCanvas({ bookId, sketch, entries, stamps, editable, focus,
       await updateStamp(bookId, sketch.id, resolve(id), patch)
       pushStep({ kind: 'stamp', id: canonical(id), before, after: patch })
     })
+  }
+
+  /** A caption (empty removes it) or the words of a text (empty keeps the old words). */
+  const relabel = (stamp: SketchStamp, value: string) => {
+    const text = value.trim()
+    if (stamp.stamp === TEXT_STAMP && !text) return
+    changeStamp(stamp.id, { label: text || null })
+  }
+
+  /** Keyboard back to the sketch (Strg+Z, Entf), without scrolling anything. */
+  const backToSketch = () => wrapRef.current?.focus({ preventScroll: true })
+
+  /** Ends typing a new text: kept when there are words, otherwise nothing happens. */
+  const finishWriting = (value: string | null, refocus = false) => {
+    const place = writingRef.current
+    if (!place) return
+    writingRef.current = null
+    setWriting(null)
+    if (refocus) backToSketch()
+    const text = value?.trim()
+    if (text) addStampHere(place.x, place.y, TEXT_STAMP, text)
   }
 
   function pushStep(step: Step) {
@@ -319,6 +355,11 @@ export function SketchCanvas({ bookId, sketch, entries, stamps, editable, focus,
   // ——— Pointer ———
 
   const down = (event: ReactPointerEvent<SVGSVGElement>) => {
+    // A click beside the text being typed only finishes it.
+    if (writingRef.current) {
+      finishWriting(newTextRef.current?.value ?? null)
+      return
+    }
     wrapRef.current?.focus({ preventScroll: true })
     event.currentTarget.setPointerCapture?.(event.pointerId)
     pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
@@ -346,7 +387,7 @@ export function SketchCanvas({ bookId, sketch, entries, stamps, editable, focus,
     } else if (tool === 'eraser') {
       gesture.current = { kind: 'erase', hits: new Set() }
       eraseAt(point)
-    } else if (tool === 'stamp') {
+    } else if (tool === 'stamp' || tool === 'text') {
       gesture.current = { kind: 'place', x: point.x, y: point.y }
     } else if (tool === 'select') {
       const hit = stampAt(localRef.current.stamps, point.x, point.y)
@@ -425,7 +466,11 @@ export function SketchCanvas({ bookId, sketch, entries, stamps, editable, focus,
       setErasing(new Set())
       erase(active.hits)
     } else if (active.kind === 'place') {
-      addStampHere(active.x, active.y)
+      if (tool === 'text') {
+        const place = { x: round(active.x), y: round(active.y) }
+        writingRef.current = place
+        setWriting(place)
+      } else addStampHere(active.x, active.y)
     } else if (active.kind === 'drag') {
       setDragged(null)
       if (active.moved && active.at) changeStamp(active.id, { x: active.at.x, y: active.at.y })
@@ -553,12 +598,23 @@ export function SketchCanvas({ bookId, sketch, entries, stamps, editable, focus,
             <Strokes strokes={local.strokes} hidden={erasing} />
             <path ref={liveRef} className="sketch-stroke sketch-live" d="" stroke={color} strokeWidth={STROKE_WIDTHS[width]} />
             {shownStamps.map((stamp) => {
+              const isText = stamp.stamp === TEXT_STAMP
               const edge = STAMP_SIZES[stamp.size]
-              const label = stamp.entryId ? names.get(stamp.entryId) : undefined
+              // A caption wins over the linked entry's name; a text is its own words.
+              const label = isText ? undefined : (stamp.label ?? (stamp.entryId ? names.get(stamp.entryId) : undefined))
+              const box = stampBox(stamp)
               return (
                 <g key={stamp.id} className={`sketch-stamp${stamp.entryId ? ' linked' : ''}`} transform={`translate(${stamp.x} ${stamp.y})`} style={{ color: stamp.color }}>
-                  <StampShape stamp={stamp.stamp} size={edge} prepared={prepared.get(stamp.stamp)} />
-                  {stamp.id === selected && tool === 'select' && <rect className="sketch-stamp-selected" x={-edge / 2 - 4} y={-edge / 2 - 4} width={edge + 8} height={edge + 8} rx={6} />}
+                  {isText ? (
+                    <text className="sketch-text" textAnchor="middle" dominantBaseline="central" fontSize={TEXT_SIZES[stamp.size]}>
+                      {stamp.label}
+                    </text>
+                  ) : (
+                    <StampShape stamp={stamp.stamp} size={edge} prepared={prepared.get(stamp.stamp)} />
+                  )}
+                  {stamp.id === selected && tool === 'select' && (
+                    <rect className="sketch-stamp-selected" x={box.left - stamp.x - 4} y={box.top - stamp.y - 4} width={box.right - box.left + 8} height={box.bottom - box.top + 8} rx={6} />
+                  )}
                   {label && (
                     <text className="sketch-stamp-label" y={edge / 2 + 12} textAnchor="middle">
                       {label}
@@ -569,7 +625,26 @@ export function SketchCanvas({ bookId, sketch, entries, stamps, editable, focus,
             })}
           </g>
         </svg>
-        {!local.strokes.length && !local.stamps.length && (
+        {writing && (
+          <input
+            ref={newTextRef}
+            className="sketch-new-text"
+            aria-label="Neuer Text"
+            style={{ left: view.x + writing.x * view.scale, top: view.y + writing.y * view.scale, color, fontSize: Math.min(40, Math.max(12, TEXT_SIZES[2] * view.scale)) }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                finishWriting(event.currentTarget.value, true)
+              } else if (event.key === 'Escape') {
+                event.preventDefault()
+                event.stopPropagation()
+                finishWriting(null, true)
+              }
+            }}
+            onBlur={(event) => finishWriting(event.currentTarget.value)}
+          />
+        )}
+        {!local.strokes.length && !local.stamps.length && !writing && (
           <p className="sketch-empty muted">{editable ? 'Mit dem Stift zeichnen, mit Stempeln Orte setzen.' : 'Diese Skizze ist noch leer.'}</p>
         )}
         {/* Laid over the top of the canvas, so the drawing does not jump when they open or close. */}
@@ -628,6 +703,35 @@ export function SketchCanvas({ bookId, sketch, entries, stamps, editable, focus,
                   </button>
                 ))}
               </span>
+              <input
+                key={`${selectedStamp.id}:${selectedStamp.label ?? ''}`}
+                className="sketch-label-field"
+                aria-label={selectedStamp.stamp === TEXT_STAMP ? 'Text' : 'Beschriftung'}
+                placeholder={selectedStamp.stamp === TEXT_STAMP ? 'Text' : 'Beschriftung …'}
+                defaultValue={selectedStamp.label ?? ''}
+                onKeyDown={(event) => {
+                  const field = event.currentTarget
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    relabel(selectedStamp, field.value)
+                    // A text is never emptied: the field shows its words again.
+                    if (selectedStamp.stamp === TEXT_STAMP && !field.value.trim()) field.value = selectedStamp.label ?? ''
+                    field.dataset.done = '1'
+                    backToSketch()
+                  } else if (event.key === 'Escape') {
+                    event.preventDefault()
+                    event.stopPropagation()
+                    field.value = selectedStamp.label ?? ''
+                    field.dataset.done = '1'
+                    backToSketch()
+                  }
+                }}
+                onBlur={(event) => {
+                  // Enter or Esc have already decided.
+                  if (event.currentTarget.dataset.done) delete event.currentTarget.dataset.done
+                  else relabel(selectedStamp, event.currentTarget.value)
+                }}
+              />
               <select aria-label="Mit Wiki-Eintrag verknüpfen" value={selectedStamp.entryId ?? ''} onChange={(event) => changeStamp(selectedStamp.id, { entryId: event.target.value || null })}>
                 <option value="">Mit Wiki-Eintrag verknüpfen …</option>
                 {sortedEntries.map((entry) => (

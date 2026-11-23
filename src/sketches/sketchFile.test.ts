@@ -74,3 +74,29 @@ describe('mergeSketch', () => {
     expect(merged.updatedAt).toBe(50)
   })
 })
+
+describe('labels', () => {
+  test('a stamp label travels after the entry; files without labels stay as they were', () => {
+    const plain = sketchFile(sketch)
+    expect(plain).not.toContain('label')
+    const labelled: Sketch = { ...sketch, stamps: [{ ...sketch.stamps[0], entryId: 'e1', label: 'Hütte am Bach' }, { ...sketch.stamps[0], id: 't1', stamp: 'text', label: 'Mühlbach', createdAt: 99 }] }
+    const text = sketchFile(labelled)
+    // After the dates, where an older version keeps an unknown field: both write the same bytes, no back and forth.
+    expect(text).toContain(`"entry":"e1","createdAt":${sketch.stamps[0].createdAt},"updatedAt":${sketch.stamps[0].updatedAt},"label":"Hütte am Bach"}`)
+    const back = parseSketch(text, sketch.id)!
+    expect(back.stamps.map((stamp) => [stamp.stamp, stamp.label])).toEqual([
+      [sketch.stamps[0].stamp, 'Hütte am Bach'],
+      ['text', 'Mühlbach'],
+    ])
+    expect(sketchFile(back)).toBe(text)
+    expect(back.stamps[0].extra).toBeUndefined()
+  })
+})
+
+test('a stamp label kept by an older version as an unknown field becomes the label again', async () => {
+  const { normalizeStamp } = await import('./sketchFile')
+  const old = { ...sketch.stamps[0], extra: { label: 'Mühlbach', later: 1 } }
+  expect(normalizeStamp(old)).toEqual({ ...sketch.stamps[0], label: 'Mühlbach', extra: { later: 1 } })
+  expect(normalizeStamp({ ...sketch.stamps[0], extra: { label: 'Mühlbach' } })).toEqual({ ...sketch.stamps[0], label: 'Mühlbach' })
+  expect(normalizeStamp(sketch.stamps[0])).toBe(sketch.stamps[0])
+})

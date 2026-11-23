@@ -1,4 +1,5 @@
 import type { Book, Sketch, SketchStamp, SketchStroke } from '../types'
+import { normalizeSketch } from '../sketches/sketchFile'
 import { announceChange, db, newId } from './connection'
 
 /** Changes the sketches of one book in a single transaction; an update returning null leaves them as they are. */
@@ -23,7 +24,8 @@ async function change(bookId: string, update: (sketches: Sketch[]) => Sketch[] |
 function changeSketch(bookId: string, id: string, update: (sketch: Sketch) => Sketch | null): Promise<boolean> {
   return change(bookId, (sketches) => {
     const index = sketches.findIndex((sketch) => sketch.id === id)
-    const next = index < 0 ? null : update(sketches[index])
+    // Labels an older version kept as unknown fields are taken over first, so a change cannot bring them back.
+    const next = index < 0 ? null : update(normalizeSketch(sketches[index]))
     if (!next) return null
     const copy = [...sketches]
     copy[index] = next
@@ -67,9 +69,9 @@ export async function addStamp(bookId: string, sketchId: string, stamp: Omit<Ske
   return added
 }
 
-export type StampPatch = Partial<Pick<SketchStamp, 'x' | 'y' | 'size' | 'color'>> & { entryId?: string | null }
+export type StampPatch = Partial<Pick<SketchStamp, 'x' | 'y' | 'size' | 'color'>> & { entryId?: string | null; label?: string | null }
 
-/** Moves, resizes, recolours or (un)links a stamp; entryId null removes the link. */
+/** Moves, resizes, recolours, (un)links or (un)labels a stamp; entryId or label null removes it. */
 export async function updateStamp(bookId: string, sketchId: string, id: string, patch: StampPatch): Promise<void> {
   await changeSketch(bookId, sketchId, (sketch) => {
     const index = sketch.stamps.findIndex((stamp) => stamp.id === id)
@@ -82,6 +84,8 @@ export async function updateStamp(bookId: string, sketchId: string, id: string, 
     if (patch.color !== undefined) next.color = patch.color
     if (patch.entryId === null) delete next.entryId
     else if (patch.entryId !== undefined) next.entryId = patch.entryId
+    if (patch.label === null || (patch.label !== undefined && !patch.label.trim())) delete next.label
+    else if (patch.label !== undefined) next.label = patch.label.trim()
     if (JSON.stringify(next) === JSON.stringify(old)) return null
     next.updatedAt = Math.max(Date.now(), old.updatedAt + 1)
     const stamps = [...sketch.stamps]

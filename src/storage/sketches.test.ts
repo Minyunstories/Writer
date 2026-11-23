@@ -70,3 +70,32 @@ test('changes to a missing sketch write nothing', async () => {
   window.removeEventListener(CHANGED_EVENT, listen)
   expect(heard).toBe(0)
 })
+
+test('a stamp label is set, changed and removed; the same label again writes nothing', async () => {
+  const book = await createBook('B')
+  const sketch = await createSketch(book.id, 'Karte')
+  const stamp = await addStamp(book.id, sketch.id, { stamp: 'builtin:house', x: 0, y: 0, size: 2, color: '#fff' })
+  await updateStamp(book.id, sketch.id, stamp.id, { label: 'Hütte am Bach' })
+  expect((await sketchOf(book.id, sketch.id)).stamps[0].label).toBe('Hütte am Bach')
+  let heard = 0
+  const listen = () => heard++
+  window.addEventListener(CHANGED_EVENT, listen)
+  await updateStamp(book.id, sketch.id, stamp.id, { label: 'Hütte am Bach' })
+  window.removeEventListener(CHANGED_EVENT, listen)
+  expect(heard).toBe(0)
+  await updateStamp(book.id, sketch.id, stamp.id, { label: null })
+  expect((await sketchOf(book.id, sketch.id)).stamps[0]).not.toHaveProperty('label')
+})
+
+test('a caption that an older version kept as an unknown field is shown and can be removed for good', async () => {
+  const { db } = await import('./connection')
+  const book = await createBook('B')
+  const sketch = await createSketch(book.id, 'Karte')
+  const stamp = await addStamp(book.id, sketch.id, { stamp: 'builtin:house', x: 0, y: 0, size: 2, color: '#fff' })
+  const stored = (await getBook(book.id))!
+  await (await db()).put('books', { ...stored, sketches: [{ ...stored.sketches![0], stamps: [{ ...stamp, extra: { label: 'Hütte am Bach' } }] }] })
+  await updateStamp(book.id, sketch.id, stamp.id, { label: null })
+  const after = (await sketchOf(book.id, sketch.id)).stamps[0]
+  expect(after).not.toHaveProperty('label')
+  expect(after.extra).toBeUndefined()
+})
