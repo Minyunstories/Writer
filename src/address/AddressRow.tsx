@@ -29,7 +29,7 @@ export function pendingText(change: AddressChange, resolved: Resolved, chapterOr
 export function sourceOf(resolved: Resolved): string {
   if (resolved.source === 'form') return 'Abweichung'
   if (resolved.source === 'rule') return `Regel: ${resolved.rankName}`
-  return 'Kein Rang festgelegt'
+  return resolved.rankGone ? 'Rang gelöscht' : 'Kein Rang festgelegt'
 }
 
 interface Props {

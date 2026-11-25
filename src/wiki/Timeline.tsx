@@ -48,6 +48,10 @@ export function Timeline({ name, chapters, mentions, onOpen }: Props) {
         const mention = byChapter.get(chapter.id)!
         const scenes = splitScenes(chapter.content)
         const sceneOf = (offset: number) => scenes.filter((scene) => scene.start <= offset).length
+        const number = sceneOf(mention.first.from)
+        const sceneName = scenes[number - 1]?.name
+        // A named scene leads with its name; the number still says where it is in the chapter.
+        const where = sceneName ? `ab „${sceneName}“ · Szene ${number} von ${scenes.length}` : `ab Szene ${number} von ${scenes.length}`
         const status = statusLabel(chapter.status)
         return (
           <li key={chapter.id} className="wiki-timeline-item">
@@ -62,7 +66,7 @@ export function Timeline({ name, chapters, mentions, onOpen }: Props) {
               <span className="wiki-timeline-text">{snippet(chapter.content, mention.first.from, mention.first.to)}</span>
               {(scenes.length > 1 || status) && (
                 <span className="muted wiki-timeline-meta">
-                  {scenes.length > 1 && `ab Szene ${sceneOf(mention.first.from)} von ${scenes.length}`}
+                  {scenes.length > 1 && where}
                   {scenes.length > 1 && status && ' · '}
                   {status}
                 </span>

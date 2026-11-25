@@ -35,7 +35,7 @@ export function personAt(
   entry: WikiEntry,
   chapterOrder: string[],
   chapterId: string | null,
-): { rank?: AddressRank; first: string; last: string } {
+): { rank?: AddressRank; rankGone?: true; first: string; last: string } {
   const person = address?.people.find((item) => item.entryId === entry.id)
   let rankId = person?.rankId
   let first = person?.first
@@ -51,7 +51,8 @@ export function personAt(
   }
   const words = entry.name.trim().split(/\s+/).filter(Boolean)
   const rank = rankId ? address?.ranks.find((item) => item.id === rankId) : undefined
-  return { ...(rank ? { rank } : {}), first: first || words[0] || '', last: last || words[words.length - 1] || '' }
+  // A rank that was deleted counts as none, but the panels say so instead of „Kein Rang festgelegt“.
+  return { ...(rank ? { rank } : rankId ? { rankGone: true as const } : {}), first: first || words[0] || '', last: last || words[words.length - 1] || '' }
 }
 
 /** Puts the names in; a missing name leaves its placeholder visible. */
@@ -78,6 +79,8 @@ export interface Resolved {
   private: string
   source: 'rule' | 'form' | 'none'
   rankName?: string
+  /** The figure's rank (here) was deleted. */
+  rankGone?: true
   notes: AddressNote[]
   /** Changes without a chapter ("noch offen") or whose chapter was deleted. */
   pending: AddressChange[]
@@ -107,13 +110,15 @@ export function resolveAddress(address: BookAddress | undefined, from: WikiEntry
     if (change.private) privateText = change.private
     if (change.note) notes.push({ source: change.label || 'Wechsel', text: change.note })
   }
-  if (!person.rank && !form) return { public: '', private: '', source: 'none', notes, pending: [] }
+  const gone = person.rankGone ? { rankGone: true as const } : {}
+  if (!person.rank && !form) return { public: '', private: '', source: 'none', ...gone, notes, pending: [] }
   const resolvedPublic = fill(publicText, person)
   return {
     public: resolvedPublic,
     private: privateText ? fill(privateText, person) : resolvedPublic,
     source: form ? 'form' : 'rule',
     ...(person.rank ? { rankName: person.rank.name } : {}),
+    ...gone,
     notes,
     pending: changes.filter((change) => at(chapterOrder, change.chapterId) < 0),
   }

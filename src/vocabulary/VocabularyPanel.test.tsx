@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { useCallback, useEffect, useState } from 'react'
 import { beforeEach, expect, test, vi } from 'vitest'
 import { createBook, createChapter, getBook, listChapters, resetDatabaseForTests } from '../storage/db'
-import { addWord, setLearner } from '../storage/vocabulary'
+import { addWord, captureWord, setLearner } from '../storage/vocabulary'
 import { createEntry, listEntries } from '../storage/wiki'
 import type { Book, Chapter, WikiEntry } from '../types'
 import { VocabularyPanel } from './VocabularyPanel'
@@ -231,4 +231,71 @@ test('a word opened from outside or with Zeigen shows even while a search hides 
   await user.click(screen.getByRole('button', { name: 'Zeigen' }))
   expect(screen.getByRole('textbox', { name: 'Wort' })).toHaveValue('vaeri')
   expect(screen.getByRole('textbox', { name: 'Übersetzung' })).toHaveValue('water')
+})
+
+test('unsaved changes in an open word are not lost without asking', async () => {
+  const user = userEvent.setup()
+  const { book, k1 } = await setup()
+  const vaeri = await addWord(book.id, { word: 'vaeri', translation: 'water' })
+  const bor = await addWord(book.id, { word: 'Bor', translation: 'stone' })
+  const { rerender } = render(<Harness bookId={book.id} chapterId={k1.id} />)
+  await user.click(await screen.findByRole('button', { name: /^vaeri/ }))
+  const translation = screen.getByRole('textbox', { name: 'Übersetzung' })
+  await user.clear(translation)
+  await user.type(translation, 'river')
+
+  // Another row: asks first; Abbrechen keeps what was typed.
+  await user.click(screen.getByRole('button', { name: /^Bor/ }))
+  const ask = screen.getByRole('alertdialog', { name: 'Änderungen verwerfen?' })
+  expect(within(ask).getByRole('button', { name: 'Abbrechen' })).toHaveFocus()
+  await user.click(within(ask).getByRole('button', { name: 'Abbrechen' }))
+  expect(screen.getByRole('textbox', { name: 'Übersetzung' })).toHaveValue('river')
+
+  // The same word asked for from the text keeps the typing as it is.
+  rerender(<Harness bookId={book.id} chapterId={k1.id} editing={{ wordId: vaeri.id, key: 1 }} />)
+  await new Promise((done) => setTimeout(done, 20))
+  expect(screen.queryByRole('alertdialog')).toBeNull()
+  expect(screen.getByRole('textbox', { name: 'Übersetzung' })).toHaveValue('river')
+
+  // Another word from the text (Strg+Umschalt+L) asks too; Verwerfen opens it.
+  rerender(<Harness bookId={book.id} chapterId={k1.id} editing={{ wordId: bor.id, key: 2 }} />)
+  await user.click(within(await screen.findByRole('alertdialog', { name: 'Änderungen verwerfen?' })).getByRole('button', { name: 'Verwerfen' }))
+  expect(screen.getByRole('textbox', { name: 'Wort' })).toHaveValue('Bor')
+  expect((await words(book.id)).find((word) => word.id === vaeri.id)?.translation).toBe('water')
+
+  // Nothing changed: no question.
+  await user.click(screen.getByRole('button', { name: '+ Neues Wort' }))
+  expect(screen.queryByRole('alertdialog')).toBeNull()
+  expect(screen.getByRole('textbox', { name: 'Wort' })).toHaveValue('')
+})
+
+test('saving sends only what was changed: a figure added meanwhile (Strg+Umschalt+L on the open word) stays', async () => {
+  const user = userEvent.setup()
+  const { book, k1, mira } = await setup()
+  await setLearner(book.id, mira.id, true)
+  const vaeri = await addWord(book.id, { word: 'vaeri', translation: 'water' })
+  const { rerender } = render(<Harness bookId={book.id} chapterId={k1.id} />)
+  await user.click(await screen.findByRole('button', { name: /^vaeri/ }))
+  const translation = screen.getByRole('textbox', { name: 'Übersetzung' })
+  await user.clear(translation)
+  await user.type(translation, 'river')
+  // As the editor does it: the marked word is taken for the learner, then asked for.
+  await captureWord(book.id, 'vaeri', { entryId: mira.id, chapterId: k1.id })
+  rerender(<Harness bookId={book.id} chapterId={k1.id} editing={{ wordId: vaeri.id, key: 1 }} />)
+  await new Promise((done) => setTimeout(done, 20))
+  await user.click(screen.getByRole('button', { name: 'Fertig' }))
+  await waitFor(async () => expect((await words(book.id)).find((word) => word.id === vaeri.id)).toMatchObject({ translation: 'river', known: [expect.objectContaining({ entryId: mira.id })] }))
+})
+
+test('after „Abbrechen“ in the question the keyboard is back in the open form', async () => {
+  const user = userEvent.setup()
+  const { book, k1 } = await setup()
+  await addWord(book.id, { word: 'vaeri', translation: 'water' })
+  await addWord(book.id, { word: 'Bor', translation: 'stone' })
+  render(<Harness bookId={book.id} chapterId={k1.id} />)
+  await user.click(await screen.findByRole('button', { name: /^vaeri/ }))
+  await user.type(screen.getByRole('textbox', { name: 'Übersetzung' }), 's')
+  await user.click(screen.getByRole('button', { name: /^Bor/ }))
+  await user.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Abbrechen' }))
+  await waitFor(() => expect(screen.getByRole('textbox', { name: 'Übersetzung' })).toHaveFocus())
 })

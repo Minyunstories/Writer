@@ -151,6 +151,9 @@ function tooltip(lookup: Lookup): Tooltip {
             replaceWith(word.text)
             if (word.item) source?.onUse?.(word.item)
           })
+          // Each word in its own column, so a hint can stand under it (on touch screens, where nothing is pointed at).
+          const cell = document.createElement('span')
+          cell.className = 'cm-mw-synonyms-item'
           const item = word.item
           if (item && source?.onToggleFavorite) {
             // A word of the collection carries its star right next to it.
@@ -177,8 +180,15 @@ function tooltip(lookup: Lookup): Tooltip {
               source.onToggleFavorite?.(item, on)
             })
             pair.append(button, star)
-            row.append(pair)
-          } else row.append(button)
+            cell.append(pair)
+          } else cell.append(button)
+          if (about) {
+            const hint = document.createElement('span')
+            hint.className = 'cm-mw-synonyms-hint'
+            hint.textContent = about
+            cell.append(hint)
+          }
+          row.append(cell)
         }
         group.append(row)
         dom.append(group)
@@ -253,6 +263,8 @@ export function synonyms(options: { load?: () => Promise<Thesaurus> } = {}): Ext
       '.cm-mw-synonyms-words button.cm-mw-synonyms-used': { opacity: 0.55 },
       '.cm-mw-synonyms-count': { marginLeft: '4px', fontSize: '11px' },
       '.cm-mw-synonyms-pair': { display: 'inline-flex', alignItems: 'center' },
+      '.cm-mw-synonyms-item': { display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-start', maxWidth: '100%' },
+      '.cm-mw-synonyms-hint': { display: 'none' },
       '.cm-mw-synonyms-words button.cm-mw-synonyms-star': {
         padding: '2px 6px',
         marginLeft: '-2px',
@@ -270,6 +282,17 @@ export function synonyms(options: { load?: () => Promise<Thesaurus> } = {}): Ext
         cursor: 'pointer',
       },
       '.cm-mw-synonyms-words button:hover': { background: 'rgba(127, 127, 127, 0.15)' },
+      // No pointing on a touch screen: the hint stands small under its word. (After the rule above.)
+      '@media (hover: none)': {
+        '.cm-mw-synonyms-hint': {
+          display: 'block',
+          maxWidth: '11rem',
+          padding: '1px 8px 0',
+          fontSize: '11px',
+          lineHeight: '1.3',
+          color: 'var(--text-muted)',
+        },
+      },
     }),
   ]
 }

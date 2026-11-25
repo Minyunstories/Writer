@@ -189,3 +189,23 @@ test('a collection word shows its hint and markers when pointed at', async () =>
   const fleet = document.querySelector<HTMLButtonElement>('button[data-word="fleet"]')!
   expect(fleet.title).toBe('flink · literary')
 })
+
+test('the hint also stands as small text under its word (shown on touch screens), outside the button', async () => {
+  const items: CollectionItem[] = [
+    { id: 'a', text: 'swift', category: 'Speed', group: 'fast', createdAt: 1, updatedAt: 1 },
+    { id: 'b', text: 'fleet', category: 'Speed', group: 'fast', note: 'flink', tags: ['Word Bank', 'literary'], createdAt: 2, updatedAt: 2 },
+    { id: 'c', text: 'brisk', category: 'Speed', group: 'fast', createdAt: 3, updatedAt: 3 },
+  ]
+  view = new EditorView({
+    state: EditorState.create({ doc: 'swift', selection: EditorSelection.single(2), extensions: [synonyms({ load: async () => thesaurus }), synonymCollection({ items: () => items, onToggleFavorite: () => {} })] }),
+    parent: document.body,
+  })
+  showSynonyms(view)
+  await wait()
+  const fleet = document.querySelector<HTMLButtonElement>('button[data-word="fleet"]')!
+  expect(fleet.textContent).toBe('fleet')
+  const item = fleet.closest('.cm-mw-synonyms-item')!
+  expect(item.querySelector('.cm-mw-synonyms-hint')?.textContent).toBe('flink · literary')
+  // A word without a hint gets no empty line.
+  expect(document.querySelector('button[data-word="brisk"]')!.closest('.cm-mw-synonyms-item')!.querySelector('.cm-mw-synonyms-hint')).toBeNull()
+})

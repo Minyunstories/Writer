@@ -46,17 +46,19 @@ export function PersonSection({ book, entry, entries, folders, chapters, chapter
     onChanged()
   }
   const savePerson = (patch: Parameters<typeof setPerson>[2]) => attempt(() => setPerson(book.id, entry.id, patch, order))
-  const saveChanges = (changes: (Omit<AddressPersonChange, 'id'> & { id?: string })[]) => savePerson({ changes })
+  // Built on the stored list, not on this render's: two quick edits must not undo each other.
+  const editChanges = (edit: (current: AddressPersonChange[]) => (Omit<AddressPersonChange, 'id'> & { id?: string })[]) => savePerson({ changes: edit })
   const changes = person?.changes ?? []
-  const updateChange = (id: string, patch: Partial<AddressPersonChange>) => saveChanges(changes.map((change) => (change.id === id ? { ...change, ...patch } : change)))
+  const updateChange = (id: string, patch: Partial<AddressPersonChange>) => editChanges((current) => current.map((change) => (change.id === id ? { ...change, ...patch } : change)))
   const done = (changed: boolean) => {
     setEditing(null)
     if (changed) onChanged()
   }
   const isEditing = (from: string, to: string) => editing?.from === from && editing.to === to
 
-  const rankOptions = (
+  const rankOptions = (current?: string) => (
     <>
+      {current && !ranks.some((rank) => rank.id === current) && <option value={current}>Rang gelöscht</option>}
       {ranks.map((rank) => (
         <option key={rank.id} value={rank.id}>
           {rank.name}
@@ -81,9 +83,9 @@ export function PersonSection({ book, entry, entries, folders, chapters, chapter
       <div className="address-person">
         <label className="address-field">
           Rang
-          <select value={person?.rankId && ranks.some((rank) => rank.id === person.rankId) ? person.rankId : ''} onChange={(event) => void savePerson({ rankId: event.target.value || null })}>
+          <select value={person?.rankId ?? ''} onChange={(event) => void savePerson({ rankId: event.target.value || null })}>
             <option value="">Kein Rang</option>
-            {rankOptions}
+            {rankOptions(person?.rankId)}
           </select>
         </label>
         <label className="address-field">
@@ -119,7 +121,7 @@ export function PersonSection({ book, entry, entries, folders, chapters, chapter
             Rang
             <select value={change.rankId ?? ''} onChange={(event) => void updateChange(change.id, { rankId: event.target.value || undefined })}>
               <option value="">unverändert</option>
-              {rankOptions}
+              {rankOptions(change.rankId)}
             </select>
           </label>
           <label className="address-field">
@@ -130,7 +132,7 @@ export function PersonSection({ book, entry, entries, folders, chapters, chapter
             Nachname
             <input key={`l-${change.id}-${change.last ?? ''}`} defaultValue={change.last ?? ''} onBlur={(event) => event.target.value.trim() !== (change.last ?? '') && void updateChange(change.id, { last: event.target.value })} />
           </label>
-          <button type="button" className="ghost icon danger address-change-remove" aria-label="Änderung entfernen" onClick={() => void saveChanges(changes.filter((item) => item.id !== change.id))}>
+          <button type="button" className="ghost icon danger address-change-remove" aria-label="Änderung entfernen" onClick={() => void editChanges((current) => current.filter((item) => item.id !== change.id))}>
             ×
           </button>
         </div>
@@ -147,7 +149,7 @@ export function PersonSection({ book, entry, entries, folders, chapters, chapter
             Rang
             <select value={adding.rankId} onChange={(event) => setAdding({ ...adding, rankId: event.target.value })}>
               <option value="">unverändert</option>
-              {rankOptions}
+              {rankOptions()}
             </select>
           </label>
           <label className="address-field">
@@ -165,7 +167,7 @@ export function PersonSection({ book, entry, entries, folders, chapters, chapter
               onClick={() => {
                 const next = adding
                 setAdding(null)
-                void saveChanges([...changes, { chapterId: next.chapterId, rankId: next.rankId || undefined, first: next.first, last: next.last }])
+                void editChanges((current) => [...current, { chapterId: next.chapterId, rankId: next.rankId || undefined, first: next.first, last: next.last }])
               }}
             >
               Hinzufügen

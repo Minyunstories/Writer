@@ -2,11 +2,14 @@ import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } fr
 
 function Backdrop({ onCancel, children }: { onCancel: () => void; children: ReactNode }) {
   useEffect(() => {
+    // Caught first and marked as used: Esc closes only the dialog, focus mode stays on.
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onCancel()
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      onCancel()
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
   }, [onCancel])
 
   return (

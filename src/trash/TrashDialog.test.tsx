@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, expect, test, vi } from 'vitest'
-import { db, resetDatabaseForTests } from '../storage/connection'
+import { SYNCED_EVENT, db, resetDatabaseForTests } from '../storage/connection'
 import { createBook, createChapter } from '../storage/db'
 import { listTrash, trashChapter, trashEntry } from '../storage/trash'
 import { createEntry } from '../storage/wiki'
@@ -79,4 +79,46 @@ test('Esc and ✕ close', async () => {
   fireEvent.keyDown(document.body, { key: 'Escape' })
   await user.click(screen.getByRole('button', { name: 'Schließen' }))
   expect(onClose).toHaveBeenCalledTimes(2)
+})
+
+test('after a sync run the list is current: what the other device restored is gone', async () => {
+  const { book, dialog } = await setup()
+  const [zwei] = (await listTrash(book.id)).filter((item) => item.title === 'Zwei')
+  // As if the other device had restored it and the sync run had brought that over.
+  await (await db()).delete('trash', zwei.id)
+  window.dispatchEvent(new Event(SYNCED_EVENT))
+  await waitFor(() => expect(within(dialog).queryByText('Zwei')).toBeNull())
+  expect(within(dialog).getByText('Pascal')).toBeInTheDocument()
+})
+
+test('a restore that finds nothing any more says so and shows the current list', async () => {
+  const { book, user, dialog, onRestored } = await setup()
+  const [zwei] = (await listTrash(book.id)).filter((item) => item.title === 'Zwei')
+  await (await db()).delete('trash', zwei.id)
+  await user.click(screen.getByRole('button', { name: '„Zwei“ wiederherstellen' }))
+  expect(await within(dialog).findByRole('alert')).toBeInTheDocument()
+  await waitFor(() => expect(within(dialog).queryByText('Zwei')).toBeNull())
+  expect(onRestored).not.toHaveBeenCalled()
+})
+
+test('Esc while asking “Endgültig löschen?” only takes the question back', async () => {
+  const { user, dialog, onClose } = await setup()
+  await user.click(screen.getByRole('button', { name: '„Zwei“ endgültig löschen' }))
+  expect(within(dialog).getByText('Endgültig löschen?')).toBeInTheDocument()
+  fireEvent.keyDown(window, { key: 'Escape' })
+  expect(within(dialog).queryByText('Endgültig löschen?')).toBeNull()
+  expect(onClose).not.toHaveBeenCalled()
+  fireEvent.keyDown(window, { key: 'Escape' })
+  expect(onClose).toHaveBeenCalledTimes(1)
+})
+
+test('when a sync run takes away the item being asked about, the question goes with it and Esc closes the window', async () => {
+  const { book, user, dialog, onClose } = await setup()
+  await user.click(screen.getByRole('button', { name: '„Zwei“ endgültig löschen' }))
+  const [zwei] = (await listTrash(book.id)).filter((item) => item.title === 'Zwei')
+  await (await db()).delete('trash', zwei.id)
+  window.dispatchEvent(new Event(SYNCED_EVENT))
+  await waitFor(() => expect(within(dialog).queryByText('Zwei')).toBeNull())
+  fireEvent.keyDown(window, { key: 'Escape' })
+  expect(onClose).toHaveBeenCalledTimes(1)
 })

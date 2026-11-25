@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { TrashItem } from '../types'
+import { SYNCED_EVENT } from '../storage/connection'
 import { daysLeft, deleteTrash, listTrash, restoreTrash } from '../storage/trash'
 import { useRestoreFocus } from '../ui/useRestoreFocus'
 import './trash.css'
@@ -26,7 +27,10 @@ export function TrashDialog({ bookId, onRestored, onClose }: Props) {
 
   const load = useCallback(async () => {
     try {
-      setItems(await listTrash(bookId))
+      const list = await listTrash(bookId)
+      setItems(list)
+      // A question about something that is gone (e.g. restored on the other device) goes too.
+      setAsking((id) => (id && list.some((item) => item.id === id) ? id : null))
     } catch {
       setFailed(true)
     }
@@ -34,18 +38,26 @@ export function TrashDialog({ bookId, onRestored, onClose }: Props) {
 
   useEffect(() => {
     void load()
+    // A sync run may bring restores and deletions from the other device.
+    const reload = () => void load()
+    window.addEventListener(SYNCED_EVENT, reload)
+    return () => window.removeEventListener(SYNCED_EVENT, reload)
   }, [load])
 
   const windowRef = useRef<HTMLDivElement>(null)
   useRestoreFocus(windowRef)
 
   // Esc closes only this window: caught first, so focus mode and the like stay as they are.
+  // While “Endgültig löschen?” is asked, Esc only takes the question back.
+  const askingRef = useRef(asking)
+  askingRef.current = asking
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return
       event.preventDefault()
       event.stopPropagation()
-      onClose()
+      if (askingRef.current) setAsking(null)
+      else onClose()
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
@@ -55,11 +67,13 @@ export function TrashDialog({ bookId, onRestored, onClose }: Props) {
     setFailed(false)
     try {
       const result = await restoreTrash(item.id)
-      if (result) onRestored(result)
-      else setFailed(true)
+      if (result) return onRestored(result)
+      setFailed(true)
     } catch {
       setFailed(true)
     }
+    // Perhaps it is gone already (restored or deleted on the other device): show what is there now.
+    await load()
   }
 
   const remove = async (item: TrashItem) => {

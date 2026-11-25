@@ -1,8 +1,8 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useCallback, useEffect, useState } from 'react'
 import { beforeEach, expect, test } from 'vitest'
-import { addRank, saveForm, setPerson, updateRank } from '../storage/address'
+import { addRank, deleteRank, saveForm, setPerson, updateRank } from '../storage/address'
 import { createBook, createChapter, getBook, listChapters, resetDatabaseForTests } from '../storage/db'
 import { setModule } from '../storage/modules'
 import { createEntry, createFolder, listEntries, listFolders } from '../storage/wiki'
@@ -142,4 +142,35 @@ test('entries outside the figure folder get no section', async () => {
   expect(screen.queryByRole('region', { name: 'Anreden' })).not.toBeInTheDocument()
   rerender(<Harness bookId={book.id} entryId={lea.id} />)
   expect(await screen.findByRole('region', { name: 'Anreden' })).toBeInTheDocument()
+})
+
+test('a deleted rank shows as „Rang gelöscht“: in the rank, in a change and in the rows', async () => {
+  const { book, lea, mira, duchess, lady, king, k2, order } = await setup()
+  await setPerson(book.id, lea.id, { rankId: duchess.id, changes: [{ chapterId: k2.id, rankId: king.id }] }, order)
+  await setPerson(book.id, mira.id, { rankId: lady.id }, order)
+  await deleteRank(book.id, king.id)
+  await deleteRank(book.id, duchess.id)
+  render(<Harness bookId={book.id} entryId={lea.id} chapterId={k2.id} />)
+  const section = await screen.findByRole('region', { name: 'Anreden' })
+  const rank = within(section).getAllByRole('combobox', { name: 'Rang' })
+  expect((rank[0] as HTMLSelectElement).selectedOptions[0].textContent).toBe('Rang gelöscht')
+  const change = within(section).getByRole('group', { name: 'Änderung ab Kapitel 2' })
+  expect((within(change).getByRole('combobox', { name: 'Rang' }) as HTMLSelectElement).selectedOptions[0].textContent).toBe('Rang gelöscht')
+  // How Mira addresses Lea: Lea's rank is gone, which the row says.
+  const others = within(section).getByRole('list', { name: 'Wie andere Lea Brandt ansprechen' })
+  expect(within(others).getByText('Rang gelöscht')).toBeInTheDocument()
+})
+
+test('two quick edits of a change both stay (the second does not undo the first)', async () => {
+  const { book, lea, duchess, king, k1, k2, order } = await setup()
+  await setPerson(book.id, lea.id, { rankId: duchess.id, changes: [{ chapterId: k2.id, rankId: king.id }] }, order)
+  render(<Harness bookId={book.id} entryId={lea.id} />)
+  const section = await screen.findByRole('region', { name: 'Anreden' })
+  const change = await within(section).findByRole('group', { name: 'Änderung ab Kapitel 2' })
+  // Both before the panel has reloaded.
+  fireEvent.change(within(change).getByRole('combobox', { name: 'Ab Kapitel' }), { target: { value: k1.id } })
+  const first = within(change).getByRole('textbox', { name: 'Vorname' })
+  fireEvent.change(first, { target: { value: 'Leah' } })
+  fireEvent.blur(first)
+  await waitFor(async () => expect((await addressOf(book.id)).people[0].changes).toEqual([expect.objectContaining({ chapterId: k1.id, rankId: king.id, first: 'Leah' })]))
 })

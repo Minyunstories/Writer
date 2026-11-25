@@ -104,10 +104,17 @@ test('no rank and no form gives none', () => {
   expect(resolveAddress(book({}), mira, tom, order, 'c1')).toMatchObject({ source: 'none', public: '', private: '' })
 })
 
-test('a deleted rank counts as no rank', () => {
+test('a deleted rank counts as no rank, but is said to be deleted', () => {
   const address = book({ people: [{ entryId: 'lea', rankId: 'rX', changes: [], updatedAt: 1 }] })
   expect(personAt(address, lea, order, 'c1').rank).toBeUndefined()
-  expect(resolveAddress(address, mira, lea, order, 'c1').source).toBe('none')
+  expect(personAt(address, lea, order, 'c1').rankGone).toBe(true)
+  expect(resolveAddress(address, mira, lea, order, 'c1')).toMatchObject({ source: 'none', rankGone: true })
+  // No rank at all is not a deleted one.
+  expect(resolveAddress(book({}), mira, tom, order, 'c1').rankGone).toBeUndefined()
+  // A change to a deleted rank, from a chapter on.
+  const later = book({ people: [{ entryId: 'lea', rankId: 'r1', changes: [{ id: 'x', chapterId: 'c2', rankId: 'rX' }], updatedAt: 1 }] })
+  expect(resolveAddress(later, mira, lea, order, 'c1')).toMatchObject({ source: 'rule', rankName: 'Duchess' })
+  expect(resolveAddress(later, mira, lea, order, 'c2')).toMatchObject({ source: 'none', rankGone: true })
 })
 
 test('reordered chapters: changes follow the chapter', () => {

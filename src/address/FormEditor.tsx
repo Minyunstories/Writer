@@ -69,7 +69,7 @@ export function FormEditor({ book, from, to, chapters, chapterId, onDone }: Prop
   return (
     <div className="address-editor" role="group" aria-label={heading}>
       <h4 className="address-editor-heading">{heading}</h4>
-      <p className="address-rule">{person.rank ? `Regel: ${person.rank.name} – ${rulePublic}` : 'Kein Rang festgelegt'}</p>
+      <p className="address-rule">{person.rank ? `Regel: ${person.rank.name} – ${rulePublic}` : person.rankGone ? 'Rang gelöscht' : 'Kein Rang festgelegt'}</p>
       <div className="address-editor-fields">
         <label className="address-field">
           Öffentlich / dienstlich

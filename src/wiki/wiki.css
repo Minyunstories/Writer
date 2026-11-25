@@ -1,6 +1,8 @@
 .wiki-entry {
   container: entry / inline-size;
   display: grid;
+  /* One column that may shrink: a long chapter title must not make the entry wider than a phone. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 1.3em;
   padding: 1.25rem clamp(1rem, 4vw, 2rem) 4rem;
   width: 100%;
@@ -40,6 +42,7 @@
 
 .wiki-field {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 0.5em;
 }
 
@@ -217,6 +220,7 @@ button.wiki-arrange.on {
   margin: 0;
   padding: 0;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 2px;
 }
 
@@ -860,6 +864,7 @@ button.wiki-add-block {
   padding: 0 0 0 1.1rem;
   position: relative;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 0.5rem;
 }
 
@@ -891,6 +896,7 @@ button.wiki-add-block {
 .wiki-timeline-card {
   width: 100%;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 0.25rem;
   text-align: left;
   padding: 0.5rem 0.7rem;

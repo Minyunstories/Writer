@@ -38,11 +38,22 @@ export const MIN_DRAWER = 140
 export const MAX_DRAWER = 600
 const DEFAULT_DRAWER = 260
 
-const clamp = (value: number) => Math.min(MAX_DRAWER, Math.max(MIN_DRAWER, Math.round(value)))
+const clamp = (value: number, max = MAX_DRAWER) => Math.min(max, Math.max(MIN_DRAWER, Math.round(value)))
 
-/** The height of the module drawer, remembered on this device. */
+/** At most about 60 % of the window, so a small window keeps room for the text (never below the minimum). */
+const windowMax = () => Math.max(MIN_DRAWER, Math.min(MAX_DRAWER, Math.round(window.innerHeight * 0.6)))
+
+/** The height of the module drawer, remembered on this device; it shrinks with a small window and grows back. */
 export function useDrawerHeight(): [number, (height: number) => void] {
   const [height, setHeight] = useStored<number>('mw:drawer-height', DEFAULT_DRAWER)
-  const change = useCallback((next: number) => setHeight(clamp(next)), [setHeight])
-  return [clamp(height), change]
+  const [max, setMax] = useState(windowMax)
+  useEffect(() => {
+    const onResize = () => setMax(windowMax())
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+  // Dragging starts from the height shown, so the limit of the window is also the limit of the drag.
+  // Pulling up against that limit keeps a larger chosen height for when the window is large again.
+  const change = useCallback((next: number) => setHeight(next >= max ? Math.max(clamp(height), max) : clamp(next, max)), [setHeight, max, height])
+  return [clamp(height, max), change]
 }

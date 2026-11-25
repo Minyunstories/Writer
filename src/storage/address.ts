@@ -88,7 +88,8 @@ type PersonChangeInput = { id?: string; chapterId: string; rankId?: string; firs
 export async function setPerson(
   bookId: string,
   entryId: string,
-  patch: { rankId?: string | null; first?: string; last?: string; changes?: PersonChangeInput[] },
+  /** changes: the whole list, or how to change the stored one (so quick edits build on each other). */
+  patch: { rankId?: string | null; first?: string; last?: string; changes?: PersonChangeInput[] | ((current: AddressPersonChange[]) => PersonChangeInput[]) },
   chapterOrder: string[],
 ): Promise<void> {
   await change(bookId, (address) => {
@@ -98,7 +99,8 @@ export async function setPerson(
     else if (patch.rankId) next.rankId = patch.rankId
     next = setTexts(next, { first: patch.first, last: patch.last })
     if (patch.changes) {
-      const changes = patch.changes.flatMap((input): AddressPersonChange[] => {
+      const inputs = typeof patch.changes === 'function' ? patch.changes(current.changes) : patch.changes
+      const changes = inputs.flatMap((input): AddressPersonChange[] => {
         if (!input.chapterId) return []
         const before = current.changes.find((item) => item.id === input.id)
         const item = setTexts<AddressPersonChange>({ ...(before?.extra ? { extra: before.extra } : {}), id: input.id || newId(), chapterId: input.chapterId }, { rankId: input.rankId, first: input.first, last: input.last })

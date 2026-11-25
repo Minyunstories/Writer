@@ -641,7 +641,11 @@ export function SketchCanvas({ bookId, sketch: stored, entries, stamps, editable
                 finishWriting(null, true)
               }
             }}
-            onBlur={(event) => finishWriting(event.currentTarget.value)}
+            onBlur={(event) => {
+              // Switching windows (Alt+Tab) is no decision: the text waits, still open.
+              if (!document.hasFocus()) return
+              finishWriting(event.currentTarget.value)
+            }}
           />
         )}
         {!local.strokes.length && !local.stamps.length && !writing && (
@@ -727,9 +731,16 @@ export function SketchCanvas({ bookId, sketch: stored, entries, stamps, editable
                   }
                 }}
                 onBlur={(event) => {
+                  const field = event.currentTarget
+                  // Switching windows (Alt+Tab) is no decision: nothing half-typed is saved.
+                  if (!document.hasFocus()) return
                   // Enter or Esc have already decided.
-                  if (event.currentTarget.dataset.done) delete event.currentTarget.dataset.done
-                  else relabel(selectedStamp, event.currentTarget.value)
+                  if (field.dataset.done) delete field.dataset.done
+                  else {
+                    relabel(selectedStamp, field.value)
+                    // As with Enter: a text is never emptied, so the field shows its words again.
+                    if (selectedStamp.stamp === TEXT_STAMP && !field.value.trim()) field.value = selectedStamp.label ?? ''
+                  }
                 }}
               />
               <select aria-label="Mit Wiki-Eintrag verknüpfen" value={selectedStamp.entryId ?? ''} onChange={(event) => changeStamp(selectedStamp.id, { entryId: event.target.value || null })}>

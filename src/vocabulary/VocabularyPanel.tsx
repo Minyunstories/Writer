@@ -38,6 +38,9 @@ const EMPTY = 'Noch keine Wörter. Markiere ein Wort im Text und drücke Strg+Um
 /** The vocabulary module in the drawer: the word list, who knows what, and editing. */
 export function VocabularyPanel({ book, entries, chapters, chapterId, mentioned, viewer, onViewer, editing, onChanged }: Props) {
   const allWords = book.vocabulary?.words ?? []
+  // The newest list, for a word opened only after the question „Änderungen verwerfen?“.
+  const wordsRef = useRef(allWords)
+  wordsRef.current = allWords
   const learners = activeLearners(book.vocabulary, entries)
   const learnerIds = new Set(learners.map((learner) => learner.id))
   // A remembered figure who is no longer learning (or no longer exists): show all words.
@@ -52,29 +55,45 @@ export function VocabularyPanel({ book, entries, chapters, chapterId, mentioned,
   const [focus, setFocus] = useState<'word' | 'translation' | null>(null)
   const [wordMissing, setWordMissing] = useState(false)
   const [confirming, setConfirming] = useState(false)
+  /** What to open once the writer agrees to drop the unsaved changes. */
+  const [discarding, setDiscarding] = useState<(() => void) | null>(null)
+  /** The form as it was opened, to tell whether anything was changed. */
+  const opened = useRef<Draft | null>(null)
   const [failed, setFailed] = useState(false)
   const wordRef = useRef<HTMLInputElement>(null)
   const translationRef = useRef<HTMLInputElement>(null)
   const formRef = useRef<HTMLDivElement>(null)
 
-  const openNew = () => {
-    setDraft({ id: null, word: '', translation: '', note: '', known: shownViewer ? [{ entryId: shownViewer, chapterId }] : [], added: [] })
-    setWordMissing(false)
-    setFocus('word')
-  }
-  const openWord = (word: VocabWord, focusOn: 'word' | 'translation' = 'word') => {
-    // A word the search hides could not show its form: clear the search.
-    if (!searchWords([word], query).length) setQuery('')
-    setDraft({
-      id: word.id,
-      word: word.word,
-      translation: word.translation,
-      note: word.note ?? '',
-      known: word.known.map(({ entryId, chapterId: from }) => ({ entryId, chapterId: from })),
-      added: [],
-    })
+  const show = (next: Draft, focusOn: 'word' | 'translation') => {
+    opened.current = next
+    setDraft(next)
     setWordMissing(false)
     setFocus(focusOn)
+  }
+  const openNew = () => show({ id: null, word: '', translation: '', note: '', known: shownViewer ? [{ entryId: shownViewer, chapterId }] : [], added: [] }, 'word')
+  const openWord = (asked: VocabWord, focusOn: 'word' | 'translation' = 'word') => {
+    // As it is now (a sync run may have changed it while the question was open).
+    const word = wordsRef.current.find((item) => item.id === asked.id) ?? asked
+    // A word the search hides could not show its form: clear the search.
+    if (!searchWords([word], query).length) setQuery('')
+    show(
+      {
+        id: word.id,
+        word: word.word,
+        translation: word.translation,
+        note: word.note ?? '',
+        known: word.known.map(({ entryId, chapterId: from }) => ({ entryId, chapterId: from })),
+        added: [],
+      },
+      focusOn,
+    )
+  }
+  const content = (item: Draft) => JSON.stringify([item.word, item.translation, item.note, item.known])
+  const changed = () => !!draft && !!opened.current && content(draft) !== content(opened.current)
+  /** Opens something else; asks first when the open form has unsaved changes. */
+  const leaveFor = (next: () => void) => {
+    if (changed()) setDiscarding(() => next)
+    else next()
   }
 
   // A request from outside, e.g. a word just taken from the text. Waits until the word has arrived.
@@ -83,13 +102,15 @@ export function VocabularyPanel({ book, entries, chapters, chapterId, mentioned,
     if (!editing || handled.current === editing.key) return
     if (editing.wordId === null) {
       handled.current = editing.key
-      openNew()
+      leaveFor(openNew)
       return
     }
     const word = allWords.find((item) => item.id === editing.wordId)
     if (!word) return
     handled.current = editing.key
-    openWord(word, 'translation')
+    // Already open with changes: keep them, just go to the translation.
+    if (draft?.id === word.id && changed()) setFocus('translation')
+    else leaveFor(() => openWord(word, 'translation'))
     // Only a new request or newly arrived words matter here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing, allWords])
@@ -124,8 +145,29 @@ export function VocabularyPanel({ book, entries, chapters, chapterId, mentioned,
       return
     }
     const fields = { word: draft.word, translation: draft.translation, note: draft.note, known: draft.known }
-    const done = await attempt(() => (draft.id ? updateWord(book.id, draft.id, fields) : addWord(book.id, fields)))
+    const done = await attempt(() => (draft.id ? updateWord(book.id, draft.id, changedFields(draft)) : addWord(book.id, fields)))
     if (done) setDraft(null)
+  }
+  /**
+   * Only what was changed in the form: whatever came in meanwhile (a figure added with Strg+Umschalt+L,
+   * a sync run) stays. Figures: those added or removed here, applied to the newest stored list.
+   */
+  const changedFields = (current: Draft) => {
+    const before = opened.current
+    const all = { word: current.word, translation: current.translation, note: current.note, known: current.known }
+    if (!before || before.id !== current.id) return all
+    const fields: Partial<typeof all> = {}
+    if (current.word !== before.word) fields.word = current.word
+    if (current.translation !== before.translation) fields.translation = current.translation
+    if (current.note !== before.note) fields.note = current.note
+    if (JSON.stringify(current.known) !== JSON.stringify(before.known)) {
+      const stored = wordsRef.current.find((word) => word.id === current.id)?.known ?? before.known
+      const mine = new Set(current.known.map((item) => item.entryId))
+      const removed = new Set(before.known.filter((item) => !mine.has(item.entryId)).map((item) => item.entryId))
+      const others = stored.filter((item) => !mine.has(item.entryId) && !removed.has(item.entryId)).map(({ entryId, chapterId: from }) => ({ entryId, chapterId: from }))
+      fields.known = [...current.known, ...others]
+    }
+    return fields
   }
   const remove = async () => {
     setConfirming(false)
@@ -312,7 +354,7 @@ export function VocabularyPanel({ book, entries, chapters, chapterId, mentioned,
           </button>
         )}
         <span className="vocab-bar-space" />
-        <button type="button" className="ghost vocab-new" title="Neues Wort (oder Text markieren und Strg+Umschalt+L)" onClick={openNew}>
+        <button type="button" className="ghost vocab-new" title="Neues Wort (oder Text markieren und Strg+Umschalt+L)" onClick={() => leaveFor(openNew)}>
           + Neues Wort
         </button>
       </div>
@@ -365,7 +407,7 @@ export function VocabularyPanel({ book, entries, chapters, chapterId, mentioned,
             const hint = hintOf(word)
             return (
               <li key={word.id}>
-                <button type="button" className={`vocab-row${hint ? ' is-faded' : ''}`} onClick={() => openWord(word)}>
+                <button type="button" className={`vocab-row${hint ? ' is-faded' : ''}`} onClick={() => leaveFor(() => openWord(word))}>
                   <span className="vocab-word">{word.word}</span>
                   <span className="vocab-translation">{word.translation}</span>
                   {(word.note || hint) && (
@@ -379,6 +421,24 @@ export function VocabularyPanel({ book, entries, chapters, chapterId, mentioned,
             )
           })}
         </ul>
+      )}
+
+      {discarding && (
+        <ConfirmDialog
+          message="Änderungen verwerfen?"
+          detail={draft?.word.trim() ? `„${draft.word.trim()}“ ist noch nicht gespeichert.` : 'Das neue Wort ist noch nicht gespeichert.'}
+          confirmLabel="Verwerfen"
+          onConfirm={() => {
+            const next = discarding
+            setDiscarding(null)
+            next()
+          }}
+          onCancel={() => {
+            setDiscarding(null)
+            // Back to the form, so typing goes on where it was.
+            setFocus('translation')
+          }}
+        />
       )}
 
       {confirming && draft?.id && (
